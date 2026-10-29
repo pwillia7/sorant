@@ -11,6 +11,7 @@ that model can see your images, and how to skip it.
 
 - [The prompt is rewritten before the model sees it](#the-prompt-is-rewritten-before-the-model-sees-it)
 - [Choosing the rewrite model](#choosing-the-rewrite-model)
+- [Running the rewrite on the ComfyUI machine](#running-the-rewrite-on-the-comfyui-machine)
 - [Sending a prompt unrewritten](#sending-a-prompt-unrewritten)
 
 ## The prompt is rewritten before the model sees it
@@ -25,7 +26,7 @@ rewrite as well, so it can describe what is actually in frame — those use
 `VercelAIGatewayDescribeImage`, which is the same node with an `IMAGE` input.
 Both name their inputs `prompt` and `system_prompt` and return the text on
 output 0, which is what lets everything else here treat them as one thing. Everything in this
-section is about the five video graphs; the music one runs the same machinery
+section is about the H3 graphs; the music one runs the same machinery
 against a different format, and is described under [Music](workflows.md#music).
 
 **Every director writes MiniMax H3's own structured output format**, which the
@@ -287,6 +288,45 @@ or that would be left with a broken link once a text-only model converted it.
 for no clear reason.** That is usually a refusal, and a refusal is about the
 model, not about you: switch to another and try again. `pnpm check:nodes`
 verifies every offered id against the live dropdown on your own install.
+
+## Running the rewrite on the ComfyUI machine
+
+The rewrite does not have to use the gateway. From the header's Gateway
+button, beside the key, it can be set to run on **This ComfyUI machine**
+instead: no account, no key, and no hosted model's content policy — a director
+that refuses to describe the shot is a run that never starts, and that is the
+gateway's usual failure. The choice is per browser, not per workflow, and
+travels with each run as a mode; while it is on, **Rewrite model** leaves the
+form, since it would be choosing a model nothing uses.
+
+`local-director.ts` does the swap, per run: every gateway director node in the
+graph becomes ComfyUI's own `TextGenerate`, with the same system prompt and the
+same pictures where the director is shown any. It is **in-process** rather
+than a llama.cpp or Ollama server beside ComfyUI, and everything follows from
+that. The card is full during a render, so a director cannot stay resident
+next to the video models; loaded through `CLIPLoader`, it is a model ComfyUI's
+memory manager knows about and evicts before the video models load. A separate
+server would be memory ComfyUI cannot see.
+
+The model is Heretic's uncensored **Gemma 4 12B, int8** (6 refusals in 100,
+against 99 for the stock model), downloaded with
+`pnpm models:download --extras local-director` into `text_encoders/`. It can
+see, so the graphs that show their director a picture keep doing so. The file
+is found by **pattern, not name**, because downloads mangle the spaces in the
+upstream filename. An LTX text-encoder packaging of the same weights also
+matches, but only when nothing better is installed: it writes the same briefs
+in about 80 seconds against 20.
+
+The price is speed and some reliability. A full brief takes about 20 seconds
+on a 3090 cold, against ten or twenty on the gateway, and Gemma follows the
+long priority rules less closely than the gateway's best models. Its long JSON
+replies — the music video outline — sometimes come back malformed, which the
+app reads as far as it can and says so. On a 12 GB card it may not fit beside
+ComfyUI's working memory at all; see the
+[troubleshooting](setup.md#troubleshooting) rows.
+
+`pnpm check:nodes` reports whether this ComfyUI can run it: a `TextGenerate`
+new enough to take a system prompt, and the model file.
 
 ## Sending a prompt unrewritten
 

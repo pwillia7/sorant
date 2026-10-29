@@ -83,7 +83,7 @@ Six packs. All but the first install from ComfyUI Manager by name.
 
 | Pack | Needed by |
 | --- | --- |
-| [comfyui-vercel-ai-gateway](https://github.com/pwillia7/comfyui-vercel-ai-gateway) — Manager → **Install via Git URL** | every workflow that generates: all five video ones and Music |
+| [comfyui-vercel-ai-gateway](https://github.com/pwillia7/comfyui-vercel-ai-gateway) — Manager → **Install via Git URL** | every workflow that rewrites a prompt: all the H3 ones, Music video's planner, and Music |
 | [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) | Remix, Extend, and the SageAttention switch |
 | [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) | anything that reads a clip: Remix, Extend, a reference clip, Upscale |
 | [ComfyUI_Nvidia_VFX_Nodes](https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes) — Manager: "ComfyUI Nvidia VFX Nodes" | Upscale |
@@ -188,14 +188,14 @@ are values inside the graphs rather than choices in the UI.
 
 | File | Folder under `models/` | Size | Needed by |
 | --- | --- | ---: | --- |
-| `minimax_h3_fl2va_pruned_int8_convrot.safetensors` | `diffusion_models/` | 21.0 GB | Text to Video, Image to Video, Extend |
-| `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` | `text_encoders/` | 15.7 GB | all five video workflows |
-| `minimax_h3_video_vae_fp16.safetensors` | `vae/` | 5.2 GB | all five video workflows |
-| `minimax_h3_audio_vae_fp32.safetensors` | `vae/` | 0.6 GB | all five video workflows |
+| `minimax_h3_fl2va_pruned_int8_convrot.safetensors` | `diffusion_models/` | 21.0 GB | Text to Video, Text to Image, Image to Video, Extend |
+| `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` | `text_encoders/` | 15.7 GB | every H3 workflow |
+| `minimax_h3_video_vae_fp16.safetensors` | `vae/` | 5.2 GB | every H3 workflow |
+| `minimax_h3_audio_vae_fp32.safetensors` | `vae/` | 0.6 GB | every H3 video workflow (not Text to Image) |
 | `minimax_h3_turbo_v4_step600_ema.safetensors` | `loras/` | 0.8 GB | the Turbo switch (on by default) |
 | | | | |
-| `minimax_h3_ref2va_pruned_int8_convrot.safetensors` | `diffusion_models/` | 21.0 GB | Reference to Video, Remix |
-| `minimax_h3_ref2va_bf16.safetensors` | `diffusion_models/` | 66.3 GB | Reference to Video with a soundtrack, voice or clip attached; Remix at 4 steps |
+| `minimax_h3_ref2va_pruned_int8_convrot.safetensors` | `diffusion_models/` | 21.0 GB | Reference to Video, Remix, Music video |
+| `minimax_h3_ref2va_bf16.safetensors` | `diffusion_models/` | 66.3 GB | Reference to Video with a soundtrack, voice or clip attached; Music video; Remix at 4 steps |
 | `qwen3vl_32b_minimax_h3_bf16.safetensors` | `text_encoders/` | 51.5 GB | the same runs as the file above |
 | | | | |
 | `minimax_music3_dit_fp16.safetensors` | `diffusion_models/` | 4.9 GB | Music |

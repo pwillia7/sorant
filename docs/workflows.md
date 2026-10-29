@@ -11,6 +11,8 @@ with the overview table, then jump to the one you are using.
 - [Image to video](#image-to-video)
 - [Remix](#remix)
 - [Extend](#extend)
+- [Text to Image](#text-to-image)
+- [Music video](#music-video)
 - [Create video, from a finished track](#create-video-from-a-finished-track)
 - [A voice, as a reference of its own](#a-voice-as-a-reference-of-its-own)
 - [One voice, one speaker](#one-voice-one-speaker)
@@ -26,20 +28,23 @@ with the overview table, then jump to the one you are using.
 
 ## Overview
 
-Five target **MiniMax H3** and produce a video with a generated audio track.
-They share sampling, timing and encoding controls via `minimax-common.ts`.
+Six target **MiniMax H3** and produce a video with a generated audio track;
+Text to Image runs the same model and stops at a still. They share sampling,
+timing and encoding controls via `minimax-common.ts`.
 
 | Workflow | Output size comes from |
 | --- | --- |
 | `minimax-h3` — text to video | Aspect ratio + megapixels (`ResolutionSelector`) |
+| `minimax-h3-image` — text to image | Aspect ratio + megapixels, 2.5 MP by default and up to 4 |
 | `minimax-h3-i2v` — image to video | The uploaded image, rescaled by `ImageScaleToTotalPixels` |
 | `minimax-h3-ref` — reference to video | Aspect ratio + megapixels (`ResolutionSelector`) |
 | `minimax-h3-ref2v` — remix | The source clip's frames, measured by `GetImageSizeAndCount` — length included |
 | `minimax-h3-extend` — extend | The source clip's **last frame**, measured by `GetImageSize` (whichever seam the run takes) |
+| `music-video` — music video | Aspect ratio, applied to every scene; each scene is a `minimax-h3-ref` run |
 | `upscale` — upscale | The **Output size** control, applied to the clip's short side |
 | `image-edit` — the Edit button | The picture's own shape, at 1 MP |
 
-The sixth, `minimax-music3`, is a different model family and the only one that
+`minimax-music3` is a different model family and the only one that
 produces no picture at all — see [Music](#music). It shares the director
 machinery and nothing else, and none of the switches below apply to it.
 
@@ -212,6 +217,58 @@ Two consequences worth knowing before changing anything:
   it the director knows the clip only from its last frame and re-describes the
   people from that alone, drifting a little further each pass. Like the tail,
   it only applies to the clip it was written about.
+
+## Text to Image
+
+`minimax-h3-image` is the Text to Video graph made to stop at a still. H3 has
+no image mode, so a still is the **first frame of the shortest clip it makes**
+— five frames, two latents. One latent would be a true single frame, but H3's
+VAE decodes one on its own dark and banded on builds before ComfyUI 0.40, and
+the core latent nodes still floor the length at five frames; two decode
+cleanly on any version for a second or two more.
+
+The sampling is its own, not Text to Video's. Turbo at full strength gives a
+still an oversaturated, crunchy look, so it runs the Turbo LoRA at **0.38,
+`er_sde`, 20 steps** — about 50 seconds at 2.5 MP on a 3090. A still also
+wants more pixels than a frame of video: past H3's ~1 MP video canvas it keeps
+gaining detail, so the size control defaults to 2.5 MP and goes to 4. Its director,
+`STILL_DIRECTOR`, writes H3's three fields for one static frame with silence
+for the sound.
+
+## Music video
+
+`music-video` makes a video for a whole song from one idea and up to four
+reference pictures. It is not one long take extended over and over: every
+scene is a fresh **Reference to Video** run with the song locked in under it,
+and nothing carries between scenes except the pictures, so there is nothing to
+drift. What holds them together is the plan.
+
+1. **Scenes.** The browser decodes the song, finds its beats and loudness
+   (`src/lib/music-video/beats.ts`), and cuts it into scenes of 4–9 seconds on
+   the strongest beats near each target length (`scenes.ts`).
+2. **The outline.** The graph runs once with `MUSIC_VIDEO_PLANNER`: shown the
+   pictures, each scene's place in the song and its loudness, and the lyrics
+   if there are any, it returns a JSON outline — a concept, then per scene the
+   part of the song, whether anyone sings, the place and what happens. A
+   second director in the same run describes the cast **from the pictures
+   alone**, so every scene
+   gets the same description of who is in it.
+3. **The shots.** `SHOT_WRITER` then writes each scene's shot in a call of its
+   own, shown the whole outline. One reply for every shot got the scene count
+   wrong on four plans in six and came back as broken JSON; a shot written
+   alone is plain text with nothing to parse. Each scene's outline line can be
+   edited in the panel and just that shot rewritten.
+4. **The scenes** render as Reference to Video runs, the song under each one.
+   Redo keeps every take, and the take used is picked under the scene. Scenes
+   whose runs were lost track of — a ComfyUI restart, a dropped connection —
+   can be found again on the machine by their file order and length
+   (`recover.ts`).
+5. **The join.** `music-video-stitch` trims each scene to its window, joins the
+   encoded clips without decoding them (`ConcatenateVideo`), and lays one read
+   of the song over the whole thing, so the audio has no seams.
+
+A music video then upscales scene by scene with RTX Video — see
+[Upscale](#upscale).
 
 ## Create video, from a finished track
 
@@ -956,16 +1013,20 @@ at 800 px on a 3090.
 ## Edit image
 
 Every picture control has an **Edit** button. Type what should change, press
-Enter, and about 20 seconds later the edited picture is in the slot. The strip
+Enter, and about a minute later the edited picture is in the slot. The strip
 of versions under it is undo and redo, **Hold to compare** shows the original,
 and **Another take** re-rolls the last change.
 
 It is FLUX.1 Kontext dev on ComfyUI's core nodes, and it is not in the workflow
 picker. The choices behind it, all measured on a 3090:
 
-- **8 steps, not the template's 20.** They were indistinguishable on portraits
-  and objects, and it is 18 seconds warm instead of 44. Cold — straight after an
-  H3 run — it is 25–32 seconds.
+- **20 steps of ER-SDE on the Beta schedule, guidance 2.5** — not the
+  template's Euler. In a same-seed grid on a portrait (2026-10-21), Euler at 8
+  or 20 steps redrew the man as somebody else with Kontext's smooth, contrasty
+  polish; ER-SDE kept his face, skin tone and texture. It costs about a minute
+  a run where 8 Euler steps took 18 seconds, plus 10–15 seconds cold. Guidance,
+  steps, sampler, schedule and **Redraw** (denoise) are adjustable behind the
+  settings button on the edit bar (`image-edit-settings.ts`).
 - **fp8 weights**, cast on load, so the model fits beside its T5 encoder on a
   24 GB card.
 - **The picture keeps its shape.** It is scaled to 1 MP on a 16 px grid rather

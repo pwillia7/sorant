@@ -187,7 +187,7 @@ present; `git pull` updates one. Some packs have no `requirements.txt`.
 
 | Pack | Repository | Needed by |
 | --- | --- | --- |
-| Vercel AI Gateway | `https://github.com/pwillia7/comfyui-vercel-ai-gateway` | every generating workflow — the five video ones and Music |
+| Vercel AI Gateway | `https://github.com/pwillia7/comfyui-vercel-ai-gateway` | every workflow that rewrites a prompt — all the H3 ones, Music video's planner, and Music |
 | KJNodes | `https://github.com/kijai/ComfyUI-KJNodes` | Remix, Extend, the SageAttention switch |
 | VideoHelperSuite | `https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite` | Remix, Extend, a reference clip, Upscale |
 | Nvidia VFX Nodes | `https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes` | Upscale — **see below for its pip install** |

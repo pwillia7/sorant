@@ -14,7 +14,8 @@ switch does something you did not expect, or you want to change one.
 
 ## Turbo, SageAttention and Spectrum are modes, not more workflows
 
-All five video workflows offer a **Turbo**
+Every H3 workflow you pick and run directly — the five video ones and Text to
+Image; a music video's scenes take Reference to Video's — offers a **Turbo**
 switch in the settings panel, **on by default**. It splices a
 `MiniMaxH3TurboLoRA` node between the graph's `UNETLoader` and
 everything that reads it — in practice `BasicScheduler` and `BasicGuider`, both
@@ -82,7 +83,7 @@ rather than finishing a run that looks subtly wrong.
 
 ### The patches
 
-Under the Turbo switch are three more. **All five video workflows offer the first
+Under the Turbo switch are three more. **The same six offer the first
 two. SageAttention starts on; Spectrum starts off, because its forecast steps
 leave visible faults in too many takes:**
 
@@ -94,7 +95,7 @@ leave visible faults in too many takes:**
 - **Spectrum** splices `SpectrumApplyMiniMaxH3`, which forecasts sampler steps
   from the ones already taken instead of computing every one in full.
 
-**Use additional content LoRA** is the third, on **all five** video graphs, and it
+**Use additional content LoRA** is the third, on **the same six**, and it
 starts **off**, because it is a look rather than a way of running the model. It splices ComfyUI core's
 `LoraLoaderModelOnly` directly behind the turbo LoRA, holding whichever LoRA is
 picked from the dropdown under it. It needs no node pack, only the files in
