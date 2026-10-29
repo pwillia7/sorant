@@ -8,9 +8,13 @@ import { analyseSong } from "@/lib/music-video/beats";
 import { lostScenes, recoverScenes } from "@/lib/music-video/recover";
 import {
   composeLook,
+  outlined,
+  outlineShot,
   parsePlan,
+  readShots,
   sceneList,
   sceneValues,
+  shotRequest,
   type MusicVideoProject,
   type ProjectScene,
 } from "@/lib/music-video/project";
@@ -269,38 +273,105 @@ export function useMusicVideo({
   );
 
   // The plan arriving. Read off the plan job's brief, which is the planner's
-  // reply, and folded into the scenes — once, since every edit after that is
-  // the user's.
+  // outline, and sent straight back to have each scene's shot written from
+  // it — once, since every edit after that is the user's.
   const planJob = project?.planPromptId ? byId.get(project.planPromptId) : undefined;
+  const shotsJob = project?.shotsPromptId ? byId.get(project.shotsPromptId) : undefined;
+  // Which plan's shots have been asked for, so the effect firing again before
+  // the submission returns does not ask twice.
+  const shotsAskedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!project || !planJob || project.scenes.some((scene) => scene.shot)) return;
+    if (!project || !planJob || !workflow) return;
+    if (project.shotsPromptId || project.scenes.some((scene) => scene.shot)) return;
     if (planJob.phase === "done") {
+      if (shotsAskedFor.current === planJob.promptId) return;
       const briefs = planJob.briefs ?? {};
       const reply = briefs[PLAN_BRIEF] ?? Object.values(briefs)[0] ?? "";
       const plan = parsePlan(reply, project.scenes.length);
       const look = composeLook(briefs[CAST_BRIEF], plan.look, project.values, MUSIC_VIDEO_PICTURES);
-      const shots = plan.shots;
+
+      // A plan with its shots already in it — the shape the planner wrote
+      // before shots were their own step — needs nothing more.
+      if (plan.shots.some((shot) => shot)) {
+        setProject({
+          ...project,
+          look,
+          scenes: project.scenes.map((scene, index) => ({ ...scene, shot: plan.shots[index] })),
+        });
+        jobs.remove(planJob.promptId);
+        return;
+      }
       // Finished but unreadable would otherwise read as still planning, for
       // ever: the step waits for a scene with a shot.
-      if (!shots.some((shot) => shot.trim())) {
+      if (!plan.outline.some(outlined)) {
         setError("The plan came back in a form that could not be read. Plan it again.");
         setProject({ ...project, planPromptId: undefined });
         jobs.remove(planJob.promptId);
         return;
       }
-      setProject({
+
+      const next: MusicVideoProject = {
         ...project,
         look,
-        scenes: project.scenes.map((scene, index) => ({ ...scene, shot: shots[index] })),
-      });
+        concept: plan.concept,
+        scenes: project.scenes.map((scene, index) => ({ ...scene, ...plan.outline[index] })),
+      };
+      shotsAskedFor.current = planJob.promptId;
+      setProject(next);
       // The plan is a step, not a result: it has no file, and a history entry
       // that never shows anything is clutter.
       jobs.remove(planJob.promptId);
+      void jobs
+        .submit(
+          workflow,
+          {
+            ...next.values,
+            prompt: String(next.values.prompt ?? "").trim() || "A performance video for this song.",
+            scene_list: sceneList(next.scenes),
+            scene_outline: shotRequest(next),
+          },
+          { localDirector: modes.localDirector, musicVideo: tagFor(next, "plan") },
+        )
+        .then((promptId) => {
+          setProject((previous) =>
+            previous?.id !== next.id
+              ? previous
+              : promptId
+                ? { ...previous, shotsPromptId: promptId }
+                : // Not queued: the outline stands in for the shots.
+                  {
+                    ...previous,
+                    scenes: previous.scenes.map((scene) => ({ ...scene, shot: outlineShot(scene) })),
+                  },
+          );
+        });
     } else if (failed(planJob)) {
       setError(planJob.error ?? "The plan did not come back. Try again.");
       setProject({ ...project, planPromptId: undefined });
     }
-  }, [project, planJob, jobs]);
+  }, [project, planJob, jobs, workflow, modes.localDirector]);
+
+  // The shots arriving. A scene the writers left blank gets its outline line,
+  // which is something to render or edit rather than an empty box.
+  useEffect(() => {
+    if (!project || !shotsJob || project.scenes.some((scene) => scene.shot)) return;
+    const done = shotsJob.phase === "done";
+    if (!done && !failed(shotsJob)) return;
+    const shots = done ? readShots(shotsJob.briefs ?? {}, project.scenes.length) : [];
+    if (!done) {
+      setError(
+        `${shotsJob.error ?? "The shots were not written."} Each scene has its line of the outline instead — edit them, or plan again.`,
+      );
+    }
+    setProject({
+      ...project,
+      scenes: project.scenes.map((scene, index) => ({
+        ...scene,
+        shot: shots[index] || outlineShot(scene),
+      })),
+    });
+    jobs.remove(shotsJob.promptId);
+  }, [project, shotsJob, jobs]);
 
   const stitchJob = project?.stitchPromptId ? byId.get(project.stitchPromptId) : undefined;
   const final = stitchJob?.phase === "done" ? stitchJob : undefined;
@@ -315,7 +386,7 @@ export function useMusicVideo({
     if (final) return "done";
     if (stitchJob && !failed(stitchJob)) return "stitching";
     if (!project.scenes.some((scene) => scene.shot)) {
-      return project.planPromptId ? "planning" : "idle";
+      return project.planPromptId || project.shotsPromptId ? "planning" : "idle";
     }
     const sceneJobs = project.scenes.map(jobFor);
     if (sceneJobs.every((job) => job?.phase === "done")) return "rendered";

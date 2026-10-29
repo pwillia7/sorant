@@ -188,19 +188,26 @@ const MAX_LENGTH = 4096;
 export function applyLocalRewrite(graph: ComfyGraph, file: string): void {
   const roots = terminals(graph);
   let converted = false;
+  // One loader for every director in the graph, named after the first. A
+  // loader each would load the model once per director and hold every copy
+  // until the run ends: twice for the music video's plan, and once per scene
+  // for the run that writes its shots.
+  let loader: string | undefined;
 
   for (const [id, node] of Object.entries(graph)) {
     if (!REWRITE_CLASSES.includes(node.class_type)) continue;
 
-    const loader = `${id}:local-loader`;
     const system = `${id}:local-system`;
-    graph[loader] = {
-      class_type: LOCAL_LOADER_CLASS,
-      // The type only picks among encoders that share an architecture; a
-      // generating model is recognised from its weights whichever is given.
-      inputs: { clip_name: file, type: "ltxv" },
-      _meta: { title: "Load Local Director" },
-    };
+    if (!loader) {
+      loader = `${id}:local-loader`;
+      graph[loader] = {
+        class_type: LOCAL_LOADER_CLASS,
+        // The type only picks among encoders that share an architecture; a
+        // generating model is recognised from its weights whichever is given.
+        inputs: { clip_name: file, type: "ltxv" },
+        _meta: { title: "Load Local Director" },
+      };
+    }
 
     const instruction = node.inputs.system_prompt;
     const systemLink: [string, number] | undefined = Array.isArray(instruction)

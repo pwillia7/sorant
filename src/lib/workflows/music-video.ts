@@ -4,9 +4,7 @@ import {
   aspectRatioParam,
   directorTarget,
   leadingReferences,
-  lookBlock,
   lookParam,
-  referenceFacets,
   referenceKeep,
   referenceSlot,
   type MinimaxNodeIds,
@@ -17,6 +15,8 @@ import {
   MUSIC_VIDEO_PICTURES,
   PLAN_BRIEF,
   SCENES_HEADING,
+  SHOT_BRIEF,
+  type ShotRequest,
 } from "@/lib/music-video/scenes";
 import type { ParamDef, ParamValue, WorkflowDef } from "./types";
 
@@ -24,8 +24,10 @@ import type { ParamDef, ParamValue, WorkflowDef } from "./types";
  * A music video from a whole song and one prompt.
  *
  * This graph only plans. The browser cuts the song into scenes on its beats
- * (src/lib/music-video/), this run writes what happens in each of them, and
- * then every scene is a Reference to Video run of its own with the song locked
+ * (src/lib/music-video/), and this graph runs twice: once to outline what
+ * happens in each scene, then again with that outline to write each scene's
+ * shot, a call per scene (see `SHOT_WRITER`). Then every scene is a Reference
+ * to Video run of its own with the song locked
  * in under it, followed by a stitch that joins them and lays the song over the
  * top (music-video-stitch.ts). See `scenes`.
  *
@@ -55,53 +57,74 @@ const ids: Pick<MinimaxNodeIds, "director"> = { director: DIRECTOR_NODE };
 const batchInput = (index: number) => `images.image${index - 1}`;
 
 
-export const MUSIC_VIDEO_PLANNER = `You are the director of a music video, planning it scene by scene before anything is shot.
+export const MUSIC_VIDEO_PLANNER = `You are the director of a music video, laying out the whole video against the song before anyone writes a shot.
 
-You are given the user's idea for the video, the scenes the song has already been cut into — each with its place in the song and how loud the song is across it — and, when there are any, the reference pictures of who or what the video is about. You may also be given the song's lyrics.
+You are given the user's idea for the video, the scenes the song has already been cut into — each with its place in the song, its length and how loud the song is across it — and, when there are any, reference pictures. You may also be given the song's lyrics.
 
-You cannot hear the song. Each scene will be generated separately by a video model that can: the song is laid under every scene, and whoever performs in it performs to the real vocal. Your job is what is on screen.
+You cannot hear the song. Each scene will be generated separately by a video model that can: the song is laid under every scene. A writer will later turn each of your lines into a full shot, seeing your whole outline but writing one scene at a time — so your outline is what makes the scenes one video.
 
 Return ONLY a JSON object, with no markdown fence and nothing before or after it:
 
-{"concept":"...","look":"...","scenes":[{"shot":"..."},{"shot":"..."}]}
+{"concept":"...","look":"...","scenes":[{"scene":1,"part":"...","sings":false,"place":"...","happens":"..."}]}
 
-"concept" comes first and is for you: three to five sentences on the video as a whole — what it is about, the handful of places it moves through and in what order, and what the chorus scenes become. Write it before any scene, then hold every scene to it.
+"concept": three to five sentences on the video as a whole — what it is about, how it opens, how it builds, how it ends, and the places it moves through in order.
 
-Exactly one scene entry per scene you were given, in the same order. Each "shot" is three to five sentences, written as a direction to a filmmaker in plain present-tense English, and covers four things:
+Then exactly one entry per scene you were given, in the same order:
 
-- The place, made specific: what kind of place it is, the time of day, the light and where it comes from, and two or three concrete things in it.
-- What the subject does: one clear action with a physical detail — what their hands are doing, what they hold, what they look at, how they move.
-- The camera: the framing (close-up, mid, wide), the angle, and at most one move.
-- One image that makes this scene unlike the others: a prop, a colour, weather, a crowd, something happening behind the subject.
+"scene": its number in the scene list. The last entry's number is the number of scenes — no more, no fewer.
 
-Each scene is read on its own by a model that sees nothing else of the plan, so every shot names its place in full. Never write "the same room", "again" or "continues".
+"part": where in the song the scene falls — intro, verse, pre-chorus, chorus, bridge, instrumental or outro. Read the lyrics' section labels in order against the scenes' times and loudness: a song usually spends 10 to 20 seconds on an intro, 20 to 40 on a verse and 15 to 30 on a chorus. Without lyrics, judge from loudness and position.
 
-A weak shot: "The singer performs in front of a brick wall. The camera is still."
-A strong one: "A narrow alley behind a laundromat at dusk, steam drifting from a vent under a buzzing orange sodium lamp. The singer leans back against the wet brick, singing up toward the light, a paper cup of red soda sweating in one hand. A low wide shot pushes slowly toward him as a stray cat pads past in the foreground."
+"sings": true only when someone on screen should be singing or rapping in this scene. False in the intro, instrumental breaks and outro, and whenever the subject is busy with something else. Follow the user's idea on how much they perform: when it says "occasionally", most scenes are false.
 
-WHAT MAKES A GOOD PLAN
+"place": the place, made specific in a few words — what kind of place, the exact spot in it, the time of day, the light ("the back alley of a laundromat at dusk, under a sodium lamp"). Every scene's place is worded afresh. When several scenes share one world — a city, a house, a game — each names a different spot in it (a rooftop, a kitchen doorway, a flooded underpass) and different light, so that no two places read alike.
 
-One video, not a collection of clips. Decide on a concept that fits the user's idea and the lyrics — a story, a journey, a performance in a place, a contrast between two worlds — and let every scene be a moment of it, in order. The first scenes establish it and the last ones resolve it.
+"happens": one sentence — what the subject does, and the one thing that makes this scene unlike every other (a prop, a gag, a colour, weather, something behind them). The event, not the camera.
 
-Use what the user gave you. Every concrete thing in the idea — each place, prop, colour, activity, period detail and supporting character — should appear somewhere in the plan, spread across the scenes rather than piled into one. When the idea describes how the footage looks (film stock, lenses, a decade), use those camera choices in the shots. When the idea is mostly about the sound of the song, invent the places and the story from its mood and its words.
+WHAT MAKES A GOOD OUTLINE
 
-Follow the song's shape. The loudness of each scene is the one thing you know about the music: quiet scenes are intimate, still or atmospheric; loud ones are big, moving, performed. A run of loud scenes in the middle is a chorus — make it the video's peak, and when a chorus comes back, let it echo the first one in a new way.
+One video, not a collection of clips. Its first scenes set up the concept, the middle builds it, and the last ones resolve it. When the idea tells a story, tell that story in order, and give its key moments — a turning point, a reveal, an ending — a scene each.
 
-Vary the coverage. Close-ups, mid shots and wide shots; a moving camera and a still one; performance to camera and moments where the subject is doing something else. Two scenes in a row should not look alike, and no two shots should open with the same words. Unless the idea keeps to one place, use at least four different places across the video, and do not spend more than three scenes in a row in one of them. When it does keep to one, move around it: different corners, different light, different things in it.
+Use what the user gave you. Every concrete thing in the idea — each place, prop, colour, activity, period detail, gag and supporting character — should appear somewhere in the outline, spread across the scenes rather than piled into one, and none used more than twice.
 
-Keep the subject consistent. The references define who they are and what they wear, and every scene receives the same pictures, so do not describe their face, hair or clothes in a shot, and do not change them from one shot to the next. Refer to the subject plainly — "the singer", "the woman", "the dog" — never by a picture label.
+Follow the song's shape. Quiet scenes are intimate, still or atmospheric; loud ones are big, moving, performed. The choruses are the video's peaks; when a chorus comes back, echo the first one in a new place or a new way.
 
-Performance. When the subject is a singer and the scene is one where they would be singing, say they sing or rap — to camera, to someone, to themselves — and how, with a specific gesture or movement. When they are not singing, give them something to do in the place. Never write lyrics or dialogue into a shot.
+No two scenes are the same event, and no two place lines are the same words. Unless the idea keeps to one place, use at least four different places across the video and spend no more than three scenes in a row in one of them.
 
-Each scene is short — the length you are given, usually four to nine seconds. One clear action per scene, and at most one camera move. Scenes are separated by hard cuts, so a scene does not need to begin where the last one ended.
-
-No captions, titles, credits or on-screen text, and no other recognisable people, unless the user asks for them.
+Refer to the subject plainly — "the singer", "the woman", or the name the user gives them — never by a picture label, and never describe their face, hair or clothes.
 
 THE LOOK
 
-How the people in the pictures look is written up separately, from the pictures alone, and handed word for word to every scene so that nobody changes costume at a cut. That covers whatever each picture is set to keep. "look" is for what a picture releases instead: when one is set to keep only who someone is, what they wear is the scene's to choose — so choose it here, once, for the whole video, in one or two concrete sentences ("The man in <Picture 1> wears ..."). Take it from the user's idea when the idea says, and keep it the same in every scene.
+How the people in the pictures look is written up separately, from the pictures alone. "look" is only for what a picture releases: when one is set to keep only who someone is, choose what they wear here, once, for the whole video, in one or two concrete sentences ("The man in <Picture 1> wears ..."). When every picture keeps everything, or there are no pictures, "look" is an empty string.`;
 
-When every picture keeps everything, or there are no pictures, "look" is an empty string.`;
+/**
+ * One scene's shot, from the outline.
+ *
+ * Its own call per scene, after the plan, rather than every shot in the plan's
+ * one reply. Tested on three users' ideas on the local director (2026-10-29):
+ * the one long reply got the scene count wrong on four plans in six, wrote
+ * shorter shots the further it got into the song, and is the reply that has
+ * come back as broken JSON. An outline is a third the length, and a shot
+ * written on its own is plain text with nothing to parse. What holds the
+ * scenes together is that each writer is shown the whole outline.
+ */
+export const SHOT_WRITER = `You write one scene of a music video as a direction to a filmmaker.
+
+You are given the user's idea for the whole video, the director's outline of every scene, and which scene is yours. Write only yours. A video model will generate it on its own, seeing nothing but your words, the reference pictures and the song under it.
+
+Return only the shot: three to five full, flowing sentences of plain present-tense English, with no heading, label, list or quotation marks. Cover:
+- The place, made specific: what kind of place it is, the time of day, where the light comes from, and two or three concrete things in it.
+- What the subject does: one clear physical action — what their hands do, what they hold, where they look, how they move.
+- The camera: the framing, the angle and at most one move, in a full sentence of its own wording — never a fragment like "Medium shot, static."
+- The one thing the outline gives this scene that no other scene has.
+
+Follow the outline's line for your scene: its place and what happens. The outline's words are notes, not text to copy: describe the place in your own words, with what is there and how it is lit, rather than repeating its line. Take details for it from the user's idea — props, period, effects, how the footage looks — but only ones that belong to this moment. Do not reuse the props, gags or images the outline gives to other scenes.
+
+When your scene sings, say the subject sings or raps, and to whom, with a gesture. When it does not, do not mention singing, rapping, lyrics or their mouth at all.
+
+Your scene is read on its own, so name its place in full. Never write "the same", "again", "still", "now", "returns" or "continues", and do not refer to other scenes. Do not describe anyone's face, hair or clothes: the pictures define them. Refer to the subject plainly — "the singer", "the woman", or the name the user gives them — and never write a picture label such as <Picture 1>. Never write lyrics or dialogue. No captions, titles or credits unless the user's idea asks for them.
+
+Begin with whatever makes the scene vivid — the place, an object, the action, something moving through the frame — not with the framing.`;
 
 /**
  * How the people in the pictures look, written once for the whole video.
@@ -123,7 +146,9 @@ Return only the description, as plain text with no heading, list or markdown: on
 
 Be concrete and exact about what you can see: skin, hair and facial hair, build and apparent age; every garment with its colour, pattern and cut; hats, glasses, jewellery and anything carried. Do not spell out lettering or logos: say there is lettering, where, and in what colour. The video model reads the words off the picture itself, and a misreading written here would compete with them in every scene. Describe only what is visible. Do not guess at what is out of frame, and do not name the person, the setting, the mood or the style of the picture.
 
-Describe how they look, never what they are doing. Leave out pose, gesture, expression and where their hands are: every scene is a different moment, and anything you write here is repeated in all of them.`;
+Describe how they look, never what they are doing. Leave out pose, gesture, expression and where their hands are: every scene is a different moment, and anything you write here is repeated in all of them.
+
+A picture may have no person or character in it at all — a place, a game screen, an object. Write nothing for that picture: no paragraph, and no note that there is nobody in it.`;
 
 /** What to describe in each picture, by what the picture is set to keep. */
 function castBlock(values: Record<string, ParamValue>): string {
@@ -143,6 +168,39 @@ function castBlock(values: Record<string, ParamValue>): string {
   return lines.length ? `THE PICTURES
 
 ${lines.join("\n")}` : "";
+}
+
+/**
+ * What each picture is for, as the planner and the shot writers need it.
+ *
+ * Not the scene director's own reference block, which the planner used to be
+ * sent: that one is written for a director filling in `subject_definitions`
+ * and `retention_analysis`, neither of which a plan has, and it cannot say the
+ * one thing a plan needs — that a picture with no one in it, a game screen or
+ * a place, is something to put in the shots rather than somebody to cast.
+ */
+function picturesBlock(values: Record<string, ParamValue>): string {
+  const filled = leadingReferences(values, REF_NODES.length);
+  const lines: string[] = [];
+  for (let index = 1; index <= filled; index += 1) {
+    const says = {
+      everything: "whoever is in it, kept exactly as they are — face, hair and clothes. Do not describe them.",
+      identity:
+        "who is in it, kept as they are; what they wear is the video's to choose (see the look).",
+      costume: "what is worn in it, put onto whoever the scene casts.",
+      style: "a style: how the video looks, not anything in it.",
+    }[referenceKeep(values, index)];
+    lines.push(`<Picture ${index}>: ${says}`);
+  }
+  return lines.length
+    ? `THE PICTURES
+
+Every scene is given these same pictures.
+
+${lines.join("\n")}
+
+A picture with no one in it shows a place, an object or a look: put what it shows into the scenes where it belongs.`
+    : "";
 }
 
 /**
@@ -166,6 +224,53 @@ const LYRICS_PARAM = "song_lyrics";
 
 /** The scene list the browser wrote from cutting the song. See `sceneList`. */
 const SCENES_PARAM = "scene_list";
+
+/**
+ * The outline, handed back once the plan has come in. Set, it makes this run
+ * write a shot for every scene instead of planning. See `finalize`.
+ */
+const OUTLINE_PARAM = "scene_outline";
+
+/** The shot writer's instruction for one scene of an outline. */
+function shotSystem(
+  outline: ShotRequest,
+  index: number,
+  values: Record<string, ParamValue>,
+): string {
+  const scene = outline.scenes[index];
+  const lines = outline.scenes
+    .map(
+      (s, i) =>
+        `${i + 1}. [${s.part}${s.sings ? ", sings" : ""}] ${s.place} — ${s.happens}`,
+    )
+    .join("\n");
+  return [
+    SHOT_WRITER,
+    picturesBlock(values),
+    `THE VIDEO\n\n${outline.concept}`,
+    `THE OUTLINE\n\n${lines}`,
+    `YOUR SCENE
+
+Scene ${index + 1} of ${outline.scenes.length}: ${scene.timing}.
+Part: ${scene.part}. Sings: ${scene.sings ? "yes" : "no"}.
+Place: ${scene.place}
+What happens: ${scene.happens}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function readOutline(values: Record<string, ParamValue>): ShotRequest | null {
+  const raw = String(values[OUTLINE_PARAM] ?? "").trim();
+  if (!raw) return null;
+  try {
+    const outline = JSON.parse(raw) as ShotRequest;
+    if (Array.isArray(outline.scenes) && outline.scenes.length > 0) return outline;
+  } catch {
+    // Falls through to the refusal below.
+  }
+  throw new ParamError("The outline to write the shots from could not be read. Plan again.", "prompt");
+}
 
 /** Last, after the lyrics: it is what the reply has to match one for one. */
 const scenesBlock = (values: Record<string, ParamValue>) => String(values[SCENES_PARAM] ?? "");
@@ -221,7 +326,7 @@ const graph: ComfyGraph = {
 const director = directorTarget(
   ids,
   MUSIC_VIDEO_PLANNER,
-  [referenceFacets(REF_NODES.length), lookBlock, lyricsBlock, scenesBlock],
+  [picturesBlock, lyricsBlock, scenesBlock],
   // No length block: the planner is not writing one clip of a known length,
   // and each scene's own length is in the scene list.
   () => "",
@@ -283,6 +388,17 @@ const params: ParamDef[] = [
     default: "",
     // About sixty characters a scene; this is several hundred scenes.
     maxLength: 20000,
+    targets: [director],
+  },
+  {
+    id: OUTLINE_PARAM,
+    label: "Outline",
+    type: "written",
+    default: "",
+    // Two or three hundred characters a scene, with its line of the list.
+    maxLength: 60000,
+    // Through the planner's node, which `finalize` turns into the writers:
+    // each one's instruction is built from this there.
     targets: [director],
   },
   ...REF_NODES.flatMap((node, position) =>
@@ -425,6 +541,34 @@ export const musicVideo: WorkflowDef = {
         reference_image_2: "b.png",
       },
     },
+    {
+      name: "writing the shots, with a picture",
+      values: {
+        reference_audio: "song.mp3",
+        prompt: "x",
+        scene_list: `${SCENES_HEADING}\n1.\n2.`,
+        reference_image_1: "a.png",
+        scene_outline: JSON.stringify({
+          concept: "x",
+          scenes: [
+            { part: "intro", sings: false, place: "a", happens: "b", timing: "0:00.0–0:05.0 (5.0 s), loudness quiet" },
+            { part: "chorus", sings: true, place: "c", happens: "d", timing: "0:05.0–0:10.0 (5.0 s), loudness loud" },
+          ],
+        } satisfies ShotRequest),
+      },
+    },
+    {
+      name: "writing the shots, no pictures",
+      values: {
+        reference_audio: "song.mp3",
+        prompt: "x",
+        scene_list: `${SCENES_HEADING}\n1.`,
+        scene_outline: JSON.stringify({
+          concept: "x",
+          scenes: [{ part: "intro", sings: false, place: "a", happens: "b", timing: "0:00.0–0:05.0 (5.0 s), loudness quiet" }],
+        } satisfies ShotRequest),
+      },
+    },
   ],
 
   finalize(graph, values) {
@@ -447,6 +591,27 @@ export const musicVideo: WorkflowDef = {
         "The song has not been cut into scenes yet. Load it again and wait for the scene list.",
         "reference_audio",
       );
+    }
+
+    // The second run of a plan: the outline has come back, and this one
+    // writes each scene's shot from it, a writer per scene. Each is the
+    // planner's node over again — the same model, the same pictures, the same
+    // idea as its prompt — with its own instruction.
+    const outline = readOutline(values);
+    if (outline) {
+      const template = graph[DIRECTOR_NODE];
+      outline.scenes.forEach((_, index) => {
+        const node = structuredClone(template);
+        node.inputs.system_prompt = shotSystem(outline, index, values);
+        // One shot, not a plan.
+        node.inputs.max_tokens = 1024;
+        node._meta = { title: `AI Gateway - ${SHOT_BRIEF} ${index + 1}` };
+        graph[`shot${index + 1}`] = node;
+      });
+      delete graph[DIRECTOR_NODE];
+      // The look was settled with the outline.
+      delete graph[CAST_NODE];
+      delete graph[CAST_PROMPT_NODE];
     }
   },
 };

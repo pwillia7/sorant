@@ -202,6 +202,14 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                       {clock(scene.start)}–{clock(scene.end)}
                     </span>
                     <span>{(scene.end - scene.start).toFixed(1)} s</span>
+                    {scene.part ? (
+                      <span
+                        title="Where the planner thinks this scene falls in the song, and whether anyone sings in it. It cannot hear the song, so it is a guess from the lyrics and the loudness."
+                      >
+                        {scene.part}
+                        {scene.sings ? " · sings" : ""}
+                      </span>
+                    ) : null}
                     <SceneStatus job={job} />
                     {job && (job.phase === "done" || ["error", "cancelled", "unknown"].includes(job.phase)) ? (
                       <Button

@@ -1,6 +1,14 @@
 import { leadingReferences, referenceKeep } from "@/lib/workflows/minimax-common";
 import type { ParamValue } from "@/lib/workflows/types";
-import { clock, renderSeconds, SCENES_HEADING, type SceneWindow } from "./scenes";
+import {
+  clock,
+  renderSeconds,
+  SCENES_HEADING,
+  shotBrief,
+  type OutlineScene,
+  type SceneWindow,
+  type ShotRequest,
+} from "./scenes";
 
 /**
  * One music video in progress, as the browser keeps it.
@@ -21,6 +29,13 @@ export interface MusicVideoProject {
   values: Record<string, ParamValue>;
   /** The planning run, while it is running and after. */
   planPromptId?: string;
+  /**
+   * The run that writes each scene's shot from the outline, once the plan is
+   * in. Absent on a project planned before shots were written separately.
+   */
+  shotsPromptId?: string;
+  /** The planner's few sentences on the whole video, which every shot is written against. */
+  concept?: string;
   scenes: ProjectScene[];
   /**
    * How the referenced subjects look, fixed once for the whole video: the
@@ -74,8 +89,8 @@ export const MUSIC_VIDEO_FRAME_RATES = [
   { multiplier: 2, label: "48 fps", timeFactor: { 1080: 1.7, 2160: 1.6 } },
 ] as const;
 
-export interface ProjectScene extends SceneWindow {
-  /** What happens in it: the planner's, until someone edits it. */
+export interface ProjectScene extends SceneWindow, Partial<OutlineScene> {
+  /** What happens in it: written from the outline, until someone edits it. */
   shot: string;
   /** The job that rendered it, if it has been submitted. */
   promptId?: string;
@@ -94,10 +109,7 @@ export interface ProjectScene extends SceneWindow {
  * it counted against the idea's limit, so an idea well under it was refused.
  */
 export function sceneList(scenes: SceneWindow[]): string {
-  const lines = scenes.map((scene, index) => {
-    const seconds = (scene.end - scene.start).toFixed(1);
-    return `${index + 1}. ${clock(scene.start)}–${clock(scene.end)} (${seconds} s), loudness ${describeEnergy(scene.energy)}`;
-  });
+  const lines = scenes.map((scene, index) => `${index + 1}. ${sceneLine(scene)}`);
   return `${SCENES_HEADING}
 
 The song is cut into ${scenes.length} scenes:
@@ -112,56 +124,156 @@ function describeEnergy(energy: number): string {
   return "very loud";
 }
 
+/** One scene's line of the scene list. */
+export function sceneLine(scene: SceneWindow): string {
+  const seconds = (scene.end - scene.start).toFixed(1);
+  return `${clock(scene.start)}–${clock(scene.end)} (${seconds} s), loudness ${describeEnergy(scene.energy)}`;
+}
+
+export interface Plan {
+  look: string;
+  concept: string;
+  /** One per scene, in order; blank where the reply had nothing for it. */
+  outline: OutlineScene[];
+  /**
+   * Finished shots, from a reply in the shape the planner used to write — a
+   * `shot` per scene. A plan with these needs no shots written.
+   */
+  shots: string[];
+}
+
 /**
- * The scene list out of the planner's reply.
+ * The outline out of the planner's reply.
  *
  * Forgiving about everything but the count: a fence around the JSON, a
  * sentence before it, a trailing comma — all things a model does — are got
  * past. So is JSON broken partway: the local director once wrote a stray quote
  * after one shot of twenty-seven (`.","},{"shot":`), and one bad scene threw
- * away the other twenty-six. When the whole will not parse, each shot is read
- * out of the reply on its own. A reply with the wrong number of scenes is padded or cut rather than
- * refused, since every scene is editable before anything renders and an empty
- * one says plainly what is missing.
+ * away the other twenty-six. When the whole will not parse, each entry is read
+ * out of the reply on its own.
+ *
+ * Each entry is placed by its own `scene` number where it has one, so a reply
+ * that skipped or doubled a scene puts the rest where they belong rather than
+ * one along. Before the planner numbered them it got the count wrong on four
+ * plans in six, and every scene after the slip was planned for the wrong
+ * stretch of the song. A reply with too few is padded and one with too many is
+ * cut, since every scene is editable before anything renders and an empty one
+ * says plainly what is missing.
  */
-export function parsePlan(
-  reply: string,
-  count: number,
-): { look: string; shots: string[] } {
+export function parsePlan(reply: string, count: number): Plan {
   const start = reply.indexOf("{");
   const end = reply.lastIndexOf("}");
-  let shots: string[] = [];
+  let entries: Record<string, unknown>[] = [];
   let look = "";
+  let concept = "";
   if (start !== -1 && end > start) {
     const body = reply.slice(start, end + 1).replace(/,\s*([}\]])/g, "$1");
     try {
       const parsed = JSON.parse(body) as {
         look?: unknown;
-        scenes?: Array<{ shot?: unknown } | string>;
+        concept?: unknown;
+        scenes?: Array<Record<string, unknown> | string>;
       };
-      shots = (parsed.scenes ?? []).map((scene) =>
-        typeof scene === "string" ? scene : String(scene?.shot ?? ""),
+      entries = (parsed.scenes ?? []).map((scene) =>
+        typeof scene === "string" ? { shot: scene } : (scene ?? {}),
       );
       look = typeof parsed.look === "string" ? parsed.look.trim() : "";
+      concept = typeof parsed.concept === "string" ? parsed.concept.trim() : "";
     } catch {
-      shots = [...body.matchAll(/"shot"\s*:\s*"((?:[^"\\]|\\.)*)"/g)].map((match) =>
-        unescapeJson(match[1]),
-      );
-      const found = body.match(/"look"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-      look = found ? unescapeJson(found[1]).trim() : "";
+      entries = readEntries(body);
+      look = stringField(body, "look");
+      concept = stringField(body, "concept");
     }
   }
-  if (shots.length === 0) {
+  if (entries.length === 0) {
     // Not JSON at all: one scene per numbered line, if it numbered them.
-    shots = reply
+    entries = reply
       .split("\n")
       .map((line) => line.match(/^\s*\d+[.)]\s*(.+)$/)?.[1] ?? "")
-      .filter(Boolean);
+      .filter(Boolean)
+      .map((shot) => ({ shot }));
   }
+
+  const placed: Array<Record<string, unknown> | undefined> = new Array(count);
+  const numbered = entries.every((entry) => Number.isInteger(entry.scene));
+  entries.forEach((entry, index) => {
+    const at = numbered ? Number(entry.scene) - 1 : index;
+    if (at >= 0 && at < count && !placed[at]) placed[at] = entry;
+  });
+
+  const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
   return {
     look,
-    shots: Array.from({ length: count }, (_, index) => (shots[index] ?? "").trim()),
+    concept,
+    outline: Array.from(placed, (entry) => ({
+      part: text(entry?.part),
+      sings: entry?.sings === true,
+      place: text(entry?.place),
+      happens: text(entry?.happens),
+    })),
+    shots: Array.from(placed, (entry) => text(entry?.shot)),
   };
+}
+
+/**
+ * Each scene entry of a reply whose JSON is broken, read field by field.
+ * An entry runs from one `"scene":` (or `"shot":`, in the older shape) to the
+ * next.
+ */
+function readEntries(body: string): Record<string, unknown>[] {
+  const marker = /"scene"\s*:\s*\d+/.test(body) ? /"scene"\s*:\s*\d+/g : /"shot"\s*:/g;
+  const starts = [...body.matchAll(marker)].map((match) => match.index ?? 0);
+  return starts.map((at, index) => {
+    const chunk = body.slice(at, starts[index + 1] ?? body.length);
+    const scene = chunk.match(/"scene"\s*:\s*(\d+)/);
+    return {
+      ...(scene ? { scene: Number(scene[1]) } : {}),
+      part: stringField(chunk, "part"),
+      sings: /"sings"\s*:\s*true/.test(chunk),
+      place: stringField(chunk, "place"),
+      happens: stringField(chunk, "happens"),
+      shot: stringField(chunk, "shot"),
+    };
+  });
+}
+
+function stringField(body: string, name: string): string {
+  const found = body.match(new RegExp(`"${name}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`));
+  return found ? unescapeJson(found[1]).trim() : "";
+}
+
+/** Whether the outline has anything to write a shot from. */
+export const outlined = (scene: OutlineScene) => Boolean(scene.place || scene.happens);
+
+/** What a scene says when no shot was written for it: its outline line. */
+export function outlineShot(scene: Partial<OutlineScene>): string {
+  return [scene.place, scene.happens]
+    .map((part) => part?.trim().replace(/[.\s]+$/, ""))
+    .filter(Boolean)
+    .map((part) => `${part!.charAt(0).toUpperCase()}${part!.slice(1)}.`)
+    .join(" ");
+}
+
+/** The outline as the plan graph takes it back, to write the shots from. */
+export function shotRequest(project: MusicVideoProject): string {
+  const request: ShotRequest = {
+    concept: project.concept ?? "",
+    scenes: project.scenes.map((scene) => ({
+      part: scene.part ?? "",
+      sings: scene.sings === true,
+      place: scene.place ?? "",
+      happens: scene.happens ?? "",
+      timing: sceneLine(scene),
+    })),
+  };
+  return JSON.stringify(request);
+}
+
+/** Each scene's shot, out of the writing run's briefs; blank where it wrote none. */
+export function readShots(briefs: Record<string, string>, count: number): string[] {
+  return Array.from({ length: count }, (_, index) =>
+    (briefs[shotBrief(index)] ?? "").trim().replace(/^"|"$/g, ""),
+  );
 }
 
 /**
@@ -240,7 +352,15 @@ export function composeLook(
     const keep = referenceKeep(values, index);
     if (keep === "identity" || keep === "costume") releases = true;
   }
-  return [cast?.trim(), releases ? planned.trim() : ""].filter(Boolean).join("\n\n");
+  // Told to write nothing for a picture with nobody in it, the local
+  // describer has still written "There is no man in this picture." — which
+  // would then be handed to every scene as how someone looks.
+  const described = (cast ?? "")
+    .split(/\n\s*\n/)
+    .filter((paragraph) => !/\b(is|are) no (one|body|person|people|man|woman|character)\b|\bnobody\b/i.test(paragraph))
+    .join("\n\n")
+    .trim();
+  return [described, releases ? planned.trim() : ""].filter(Boolean).join("\n\n");
 }
 
 /** A JSON string's contents, as written between its quotes. */

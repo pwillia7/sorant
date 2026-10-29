@@ -31,6 +31,36 @@ export const SCENES_HEADING = "THE SCENES";
 export const PLAN_BRIEF = "Plan Scenes";
 export const CAST_BRIEF = "Describe Cast";
 
+/**
+ * The title each scene's shot comes back under, numbered from 1: "Write Shot
+ * 7". See `shotBrief`.
+ */
+export const SHOT_BRIEF = "Write Shot";
+export const shotBrief = (index: number) => `${SHOT_BRIEF} ${index + 1}`;
+
+/** What the planner's outline says about one scene. */
+export interface OutlineScene {
+  /** Where in the song it falls, as the planner reads it: "intro", "chorus". */
+  part: string;
+  /**
+   * Whether anyone on screen sings in it. The planner's guess — it cannot hear
+   * the song — from the lyrics' sections and the loudness.
+   */
+  sings: boolean;
+  place: string;
+  happens: string;
+}
+
+/**
+ * The outline, as the plan graph is handed it back to write the shots from.
+ * Each scene carries its line of the scene list, so the writer knows its
+ * length and loudness without the list.
+ */
+export interface ShotRequest {
+  concept: string;
+  scenes: Array<OutlineScene & { timing: string }>;
+}
+
 /** How many reference pictures a music video takes. The plan graph has a loader per slot. */
 export const MUSIC_VIDEO_PICTURES = 4;
 
