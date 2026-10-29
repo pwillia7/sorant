@@ -181,7 +181,7 @@ export async function POST(request: Request) {
 
     const clientId = crypto.randomUUID();
     const result = await queuePrompt(graph, clientId, {
-      front: workflow.tool === true,
+      front: workflow.tool === true || workflow.jumpsQueue?.(resolved) === true,
     });
 
     return Response.json({

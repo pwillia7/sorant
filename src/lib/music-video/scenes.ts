@@ -59,6 +59,17 @@ export interface OutlineScene {
 export interface ShotRequest {
   concept: string;
   scenes: Array<OutlineScene & { timing: string }>;
+  /**
+   * Which scenes to write, from 0, when not all of them: one scene rewritten
+   * from its edited line, with the rest of the outline still there for it to
+   * be written against.
+   */
+  only?: number[];
+  /**
+   * Added to the writers' seed. A rewrite of an unchanged line would otherwise
+   * be the same request, and ComfyUI would hand back the cached shot.
+   */
+  take?: number;
 }
 
 /** How many reference pictures a music video takes. The plan graph has a loader per slot. */

@@ -519,6 +519,10 @@ export const musicVideo: WorkflowDef = {
   params,
   scenes: { workflow: "minimax-h3-ref", stitch: "music-video-stitch" },
 
+  // Writing shots is a minute of text, and a rewrite is asked for while the
+  // video's own scenes may be queued: neither should wait behind them.
+  jumpsQueue: (values) => String(values[OUTLINE_PARAM] ?? "").trim() !== "",
+
   /** A finished song's "Music video" button. Nothing carries: see ClipTarget. */
   clipTarget: {
     action: "musicvideo",
@@ -554,6 +558,24 @@ export const musicVideo: WorkflowDef = {
             { part: "intro", sings: false, place: "a", happens: "b", timing: "0:00.0–0:05.0 (5.0 s), loudness quiet" },
             { part: "chorus", sings: true, place: "c", happens: "d", timing: "0:05.0–0:10.0 (5.0 s), loudness loud" },
           ],
+        } satisfies ShotRequest),
+      },
+    },
+    {
+      name: "rewriting one shot",
+      values: {
+        reference_audio: "song.mp3",
+        prompt: "x",
+        scene_list: `${SCENES_HEADING}\n1.\n2.`,
+        reference_image_1: "a.png",
+        scene_outline: JSON.stringify({
+          concept: "x",
+          scenes: [
+            { part: "intro", sings: false, place: "a", happens: "b", timing: "0:00.0–0:05.0 (5.0 s), loudness quiet" },
+            { part: "chorus", sings: true, place: "c", happens: "d", timing: "0:05.0–0:10.0 (5.0 s), loudness loud" },
+          ],
+          only: [1],
+          take: 7,
         } satisfies ShotRequest),
       },
     },
@@ -600,11 +622,14 @@ export const musicVideo: WorkflowDef = {
     const outline = readOutline(values);
     if (outline) {
       const template = graph[DIRECTOR_NODE];
+      const seed = (Number(template.inputs.seed) || 0) + (outline.take ?? 0);
       outline.scenes.forEach((_, index) => {
+        if (outline.only && !outline.only.includes(index)) return;
         const node = structuredClone(template);
         node.inputs.system_prompt = shotSystem(outline, index, values);
         // One shot, not a plan.
         node.inputs.max_tokens = 1024;
+        node.inputs.seed = seed + index;
         node._meta = { title: `AI Gateway - ${SHOT_BRIEF} ${index + 1}` };
         graph[`shot${index + 1}`] = node;
       });

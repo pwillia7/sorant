@@ -616,6 +616,13 @@ export interface WorkflowDef {
    */
   tool?: boolean;
   /**
+   * Which runs of a pickable graph are queued ahead of anything pending, the
+   * way a tool's are: seconds of work someone is waiting on. The music video's
+   * shot writing — a rewrite of one scene is asked for while that video's
+   * scenes are still queued, and would otherwise wait behind every one of them.
+   */
+  jumpsQueue?: (values: Record<string, ParamValue>) => boolean;
+  /**
    * Set when a run needs the ComfyUI machine's RAM more than it needs the
    * models and results earlier runs left cached there. The generate route
    * asks ComfyUI to drop both before queueing it.

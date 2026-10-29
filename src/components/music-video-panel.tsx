@@ -11,7 +11,7 @@ import {
 import { clock } from "@/lib/music-video/scenes";
 import { Badge, Dot, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
-import { TextArea } from "./ui/inputs";
+import { TextArea, TextInput, Toggle } from "./ui/inputs";
 
 /**
  * The music video's own stage: the scene list, each scene's take as it
@@ -191,6 +191,7 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
             {scenes.map((scene, index) => {
               const job = jobs[index];
               const clip = sceneClip(job);
+              const busy = job?.phase === "queued" || job?.phase === "running";
               return (
                 <li
                   key={`${scene.start}-${index}`}
@@ -203,9 +204,7 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                     </span>
                     <span>{(scene.end - scene.start).toFixed(1)} s</span>
                     {scene.part ? (
-                      <span
-                        title="Where the planner thinks this scene falls in the song, and whether anyone sings in it. It cannot hear the song, so it is a guess from the lyrics and the loudness."
-                      >
+                      <span title="Where the planner thinks this scene falls in the song. It cannot hear the song, so it is a guess from the lyrics and the loudness.">
                         {scene.part}
                         {scene.sings ? " · sings" : ""}
                       </span>
@@ -231,10 +230,19 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                         rows={3}
                         maxLength={2000}
                         // Editable except while its take is in the queue: the
-                        // run has already been handed what it said.
-                        disabled={job?.phase === "queued" || job?.phase === "running"}
+                        // run has already been handed what it said. And while
+                        // the shot is being rewritten, which would replace it.
+                        disabled={busy || Boolean(scene.rewritePromptId)}
                         onChange={(value) => video.editShot(index, value)}
                       />
+                      {scene.place || scene.happens ? (
+                        <SceneOutline
+                          index={index}
+                          scene={scene}
+                          disabled={busy}
+                          video={video}
+                        />
+                      ) : null}
                     </div>
                     {clip ? (
                       <video
@@ -554,5 +562,84 @@ function FinishedVideo({
         </a>
       </div>
     </div>
+  );
+}
+
+/**
+ * A scene's line of the planner's outline, under its shot: where it is, what
+ * happens, whether anyone sings — and a button that writes the shot again
+ * from it. Editing the line leaves the shot alone until then, so a hand-edited
+ * shot is never replaced by surprise.
+ */
+function SceneOutline({
+  index,
+  scene,
+  disabled,
+  video,
+}: {
+  index: number;
+  scene: NonNullable<MusicVideoController["project"]>["scenes"][number];
+  disabled: boolean;
+  video: MusicVideoController;
+}) {
+  const rewriting = Boolean(scene.rewritePromptId);
+  return (
+    <details className="group mt-2">
+      <summary className="cursor-pointer list-none text-[12px] text-fg-subtle hover:text-fg-muted">
+        <span className="mr-1.5 inline-block transition-transform group-open:rotate-90">›</span>
+        Outline
+      </summary>
+      <div className="mt-2 flex flex-col gap-2">
+        <label className="text-[12px] text-fg-muted" htmlFor={`scene-${index}-place`}>
+          Where
+        </label>
+        <TextInput
+          id={`scene-${index}-place`}
+          value={scene.place ?? ""}
+          disabled={disabled || rewriting}
+          onChange={(place) => video.editOutline(index, { place })}
+        />
+        <label className="text-[12px] text-fg-muted" htmlFor={`scene-${index}-happens`}>
+          What happens
+        </label>
+        <TextInput
+          id={`scene-${index}-happens`}
+          value={scene.happens ?? ""}
+          disabled={disabled || rewriting}
+          onChange={(happens) => video.editOutline(index, { happens })}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <Toggle
+            id={`scene-${index}-sings`}
+            checked={scene.sings === true}
+            disabled={disabled || rewriting}
+            describedBy={`scene-${index}-sings-help`}
+            onChange={(sings) => video.editOutline(index, { sings })}
+          />
+          <label className="text-[12px] text-fg" htmlFor={`scene-${index}-sings`}>
+            Sings
+          </label>
+          <Button
+            variant="quiet"
+            size="xs"
+            className="ml-auto"
+            disabled={disabled || rewriting}
+            onClick={() => void video.rewriteShot(index)}
+          >
+            {rewriting ? (
+              <>
+                <Spinner /> Rewriting…
+              </>
+            ) : (
+              "Rewrite shot"
+            )}
+          </Button>
+        </div>
+        <p id={`scene-${index}-sings-help`} className="text-[12px] leading-snug text-fg-subtle">
+          Off for an instrumental stretch: a mouth moving to words where there is no voice looks wrong. Changes here
+          take effect when the shot is rewritten.
+        </p>
+      </div>
+    </details>
   );
 }

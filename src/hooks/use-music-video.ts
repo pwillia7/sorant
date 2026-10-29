@@ -67,6 +67,13 @@ export interface MusicVideoController {
   /** Cut the song and ask for a plan. */
   plan: () => Promise<void>;
   editShot: (index: number, shot: string) => void;
+  /** Change a scene's outline line. Its shot changes only when rewritten. */
+  editOutline: (
+    index: number,
+    patch: Partial<Pick<ProjectScene, "place" | "happens" | "sings">>,
+  ) => void;
+  /** Write one scene's shot again from its outline line. */
+  rewriteShot: (index: number) => Promise<void>;
   editLook: (look: string) => void;
   /** Queue every scene that has no job, or whose job failed. */
   renderAll: () => Promise<void>;
@@ -273,22 +280,21 @@ export function useMusicVideo({
   );
 
   // The plan arriving. Read off the plan job's brief, which is the planner's
-  // outline, and sent straight back to have each scene's shot written from
-  // it — once, since every edit after that is the user's.
+  // outline, and folded into the scenes — once, since every edit after that
+  // is the user's. The shots are written from it next, below.
   const planJob = project?.planPromptId ? byId.get(project.planPromptId) : undefined;
   const shotsJob = project?.shotsPromptId ? byId.get(project.shotsPromptId) : undefined;
-  // Which plan's shots have been asked for, so the effect firing again before
-  // the submission returns does not ask twice.
-  const shotsAskedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!project || !planJob || !workflow) return;
-    if (project.shotsPromptId || project.scenes.some((scene) => scene.shot)) return;
+    if (!project || !planJob) return;
+    if (project.scenes.some((scene) => scene.shot || outlined(scene))) return;
     if (planJob.phase === "done") {
-      if (shotsAskedFor.current === planJob.promptId) return;
       const briefs = planJob.briefs ?? {};
       const reply = briefs[PLAN_BRIEF] ?? Object.values(briefs)[0] ?? "";
       const plan = parsePlan(reply, project.scenes.length);
       const look = composeLook(briefs[CAST_BRIEF], plan.look, project.values, MUSIC_VIDEO_PICTURES);
+      // The plan is a step, not a result: it has no file, and a history entry
+      // that never shows anything is clutter.
+      jobs.remove(planJob.promptId);
 
       // A plan with its shots already in it — the shape the planner wrote
       // before shots were their own step — needs nothing more.
@@ -298,7 +304,6 @@ export function useMusicVideo({
           look,
           scenes: project.scenes.map((scene, index) => ({ ...scene, shot: plan.shots[index] })),
         });
-        jobs.remove(planJob.promptId);
         return;
       }
       // Finished but unreadable would otherwise read as still planning, for
@@ -306,50 +311,62 @@ export function useMusicVideo({
       if (!plan.outline.some(outlined)) {
         setError("The plan came back in a form that could not be read. Plan it again.");
         setProject({ ...project, planPromptId: undefined });
-        jobs.remove(planJob.promptId);
         return;
       }
-
-      const next: MusicVideoProject = {
+      setProject({
         ...project,
         look,
         concept: plan.concept,
         scenes: project.scenes.map((scene, index) => ({ ...scene, ...plan.outline[index] })),
-      };
-      shotsAskedFor.current = planJob.promptId;
-      setProject(next);
-      // The plan is a step, not a result: it has no file, and a history entry
-      // that never shows anything is clutter.
-      jobs.remove(planJob.promptId);
-      void jobs
-        .submit(
-          workflow,
-          {
-            ...next.values,
-            prompt: String(next.values.prompt ?? "").trim() || "A performance video for this song.",
-            scene_list: sceneList(next.scenes),
-            scene_outline: shotRequest(next),
-          },
-          { localDirector: modes.localDirector, musicVideo: tagFor(next, "plan") },
-        )
-        .then((promptId) => {
-          setProject((previous) =>
-            previous?.id !== next.id
-              ? previous
-              : promptId
-                ? { ...previous, shotsPromptId: promptId }
-                : // Not queued: the outline stands in for the shots.
-                  {
-                    ...previous,
-                    scenes: previous.scenes.map((scene) => ({ ...scene, shot: outlineShot(scene) })),
-                  },
-          );
-        });
+      });
     } else if (failed(planJob)) {
       setError(planJob.error ?? "The plan did not come back. Try again.");
       setProject({ ...project, planPromptId: undefined });
     }
-  }, [project, planJob, jobs, workflow, modes.localDirector]);
+  }, [project, planJob, jobs]);
+
+  /** One run of the plan graph that writes shots from the outline: all of them, or one. */
+  const submitShots = useCallback(
+    (current: MusicVideoProject, rewrite?: { scene: number; take: number }) =>
+      workflow
+        ? jobs.submit(
+            workflow,
+            {
+              ...current.values,
+              prompt: String(current.values.prompt ?? "").trim() || "A performance video for this song.",
+              scene_list: sceneList(current.scenes),
+              scene_outline: shotRequest(current, rewrite),
+            },
+            { localDirector: modes.localDirector, musicVideo: tagFor(current, "plan") },
+          )
+        : Promise.resolve(null),
+    [workflow, jobs, modes.localDirector],
+  );
+
+  // An outline with no shots and nothing writing them: send it to be written.
+  // Its own step rather than part of the plan's arrival, so a reload between
+  // the two — the outline kept, the submission lost — picks up here.
+  const shotsAskedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!project || project.shotsPromptId || !workflow) return;
+    if (project.scenes.some((scene) => scene.shot) || !project.scenes.some(outlined)) return;
+    if (shotsAskedFor.current === project.id) return;
+    shotsAskedFor.current = project.id;
+    const id = project.id;
+    void submitShots(project).then((promptId) => {
+      setProject((previous) =>
+        previous?.id !== id
+          ? previous
+          : promptId
+            ? { ...previous, shotsPromptId: promptId }
+            : // Not queued: the outline stands in for the shots.
+              {
+                ...previous,
+                scenes: previous.scenes.map((scene) => ({ ...scene, shot: outlineShot(scene) })),
+              },
+      );
+    });
+  }, [project, workflow, submitShots]);
 
   // The shots arriving. A scene the writers left blank gets its outline line,
   // which is something to render or edit rather than an empty box.
@@ -372,6 +389,52 @@ export function useMusicVideo({
     });
     jobs.remove(shotsJob.promptId);
   }, [project, shotsJob, jobs]);
+
+  // A scene's shot rewritten from its line arriving, into that scene alone.
+  useEffect(() => {
+    if (!project) return;
+    project.scenes.forEach((scene, index) => {
+      const job = scene.rewritePromptId ? byId.get(scene.rewritePromptId) : undefined;
+      if (!job || (job.phase !== "done" && !failed(job))) return;
+      const shot = job.phase === "done" ? readShots(job.briefs ?? {}, project.scenes.length)[index] : "";
+      if (!shot) setError(job.error ?? `Scene ${index + 1}'s shot was not rewritten.`);
+      setProject((previous) =>
+        previous
+          ? {
+              ...previous,
+              scenes: previous.scenes.map((s, i) =>
+                i === index ? { ...s, shot: shot || s.shot, rewritePromptId: undefined } : s,
+              ),
+            }
+          : previous,
+      );
+      jobs.remove(job.promptId);
+    });
+  }, [project, byId, jobs]);
+
+  /** Write one scene's shot again from its outline line, as it reads now. */
+  const rewriteShot = useCallback(
+    async (index: number) => {
+      if (!project || project.scenes[index]?.rewritePromptId) return;
+      setError(null);
+      const promptId = await submitShots(project, {
+        scene: index,
+        take: Math.floor(Math.random() * 1_000_000),
+      });
+      if (!promptId) return;
+      setProject((previous) =>
+        previous?.id !== project.id
+          ? previous
+          : {
+              ...previous,
+              scenes: previous.scenes.map((scene, i) =>
+                i === index ? { ...scene, rewritePromptId: promptId } : scene,
+              ),
+            },
+      );
+    },
+    [project, submitShots],
+  );
 
   const stitchJob = project?.stitchPromptId ? byId.get(project.stitchPromptId) : undefined;
   const final = stitchJob?.phase === "done" ? stitchJob : undefined;
@@ -473,6 +536,21 @@ export function useMusicVideo({
         : previous,
     );
   }, []);
+
+  /** Change a scene's outline line: where it is, what happens, whether anyone sings. */
+  const editOutline = useCallback(
+    (index: number, patch: Partial<Pick<ProjectScene, "place" | "happens" | "sings">>) => {
+      setProject((previous) =>
+        previous
+          ? {
+              ...previous,
+              scenes: previous.scenes.map((scene, i) => (i === index ? { ...scene, ...patch } : scene)),
+            }
+          : previous,
+      );
+    },
+    [],
+  );
 
   /** How the subjects look in every scene. Read by each scene as it is sent. */
   const editLook = useCallback((look: string) => {
@@ -758,6 +836,8 @@ export function useMusicVideo({
     jobFor,
     plan,
     editShot,
+    editOutline,
+    rewriteShot,
     editLook,
     renderAll,
     redo,

@@ -94,6 +94,8 @@ export interface ProjectScene extends SceneWindow, Partial<OutlineScene> {
   shot: string;
   /** The job that rendered it, if it has been submitted. */
   promptId?: string;
+  /** The run rewriting its shot from its outline line, while it runs. */
+  rewritePromptId?: string;
   /** How many times it has been put back after a transient gateway failure. */
   retries?: number;
   /** The job that upscaled its clip, if the video has been upscaled. */
@@ -243,7 +245,7 @@ function stringField(body: string, name: string): string {
 }
 
 /** Whether the outline has anything to write a shot from. */
-export const outlined = (scene: OutlineScene) => Boolean(scene.place || scene.happens);
+export const outlined = (scene: Partial<OutlineScene>) => Boolean(scene.place || scene.happens);
 
 /** What a scene says when no shot was written for it: its outline line. */
 export function outlineShot(scene: Partial<OutlineScene>): string {
@@ -255,8 +257,12 @@ export function outlineShot(scene: Partial<OutlineScene>): string {
 }
 
 /** The outline as the plan graph takes it back, to write the shots from. */
-export function shotRequest(project: MusicVideoProject): string {
+export function shotRequest(
+  project: MusicVideoProject,
+  rewrite?: { scene: number; take: number },
+): string {
   const request: ShotRequest = {
+    ...(rewrite ? { only: [rewrite.scene], take: rewrite.take } : {}),
     concept: project.concept ?? "",
     scenes: project.scenes.map((scene) => ({
       part: scene.part ?? "",
