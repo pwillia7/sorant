@@ -2,6 +2,11 @@
  * Checks a ComfyUI install against what the registered workflows actually need.
  *
  *   pnpm check:nodes
+ *   pnpm check:nodes --workflows minimax-h3,minimax-music3
+ *
+ * `--workflows` takes the same list `models:download` does, so an install set
+ * up for some workflows passes without the files of the ones it left out.
+ * Without it, every workflow is checked.
  *
  * `check:workflows` proves the definitions agree with their own graphs, which
  * is a question this repo can answer alone. This one asks the question it
@@ -42,8 +47,37 @@ function packageOf(pythonModule: string | undefined): string {
   return pythonModule.split(".")[1] ?? "unknown";
 }
 
+/**
+ * The workflow ids after `--workflows`, or undefined for all of them. Takes
+ * "a,b" and "a b", as `models:download` does: PowerShell turns an unquoted a,b
+ * into separate arguments.
+ */
+function parseWorkflows(argv: string[]): string[] | undefined {
+  const values: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--") continue;
+    if (argv[i] !== "--workflows") {
+      console.error(`Unknown argument: ${argv[i]}`);
+      process.exit(2);
+    }
+    while (i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
+      values.push(...argv[++i].split(/[,\s]+/).filter(Boolean));
+    }
+  }
+  if (values.length === 0 || values.includes("all")) return undefined;
+  const known = WORKFLOWS.map((w) => w.id);
+  for (const id of values) {
+    if (!known.includes(id)) {
+      console.error(`Unknown workflow "${id}". Known: ${known.join(", ")}`);
+      process.exit(2);
+    }
+  }
+  return values;
+}
+
 async function main() {
   loadEnvFiles();
+  const only = parseWorkflows(process.argv.slice(2));
 
   if (!process.env.COMFY_URL) {
     console.error(
@@ -58,10 +92,10 @@ async function main() {
   // which sends people hunting for node packs they already have.
   await systemStats();
 
-  const { classes, models } = collect();
+  const { classes, models } = collect(only);
   console.log(
     `Checking ${classes.size} node classes and ${models.size} model files ` +
-      `against ${process.env.COMFY_URL}\n`,
+      `${only ? `for ${only.join(", ")} ` : ""}against ${process.env.COMFY_URL}\n`,
   );
 
   // Sequential on purpose: a cold ComfyUI answers /object_info slowly, and
@@ -226,6 +260,7 @@ async function main() {
   console.log("\nDropdown fallbacks");
   const thinFallbacks: string[] = [];
   for (const workflow of WORKFLOWS) {
+    if (only && !only.includes(workflow.id)) continue;
     for (const param of workflow.params) {
       if (param.type !== "select" || !param.optionsFrom) continue;
       if (param.optionsFrom.mode === "restrict") continue;

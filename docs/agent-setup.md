@@ -73,7 +73,8 @@ Setup progress:
 - [ ] 5 Password        gate: ComfyUI-Login on, password set, token in .env.local
 - [ ] 6 Reachability    (deploy only, ask first) gate: the public HTTPS
                         address answers 401 bare, 200 with the token
-- [ ] 7 Local verify    gate: `pnpm check:nodes` exits 0, a prompt rewrite is
+- [ ] 7 Local verify    gate: `pnpm check:nodes --workflows <their set>` exits 0,
+                        a prompt rewrite is
                         set up, `pnpm smoke` passes
 - [ ] 8 Deploy          (ask first) gate: `pnpm smoke --url <deployment>` passes
 - [ ] 9 Report          (optional, ask first) issue filed or declined
@@ -129,8 +130,10 @@ starts, then carry on.
 **Hardware.** Tested on Windows, ComfyUI 0.38 and later, an RTX 3090 (24 GB) and
 64 GB of RAM. ComfyUI's Dynamic VRAM (NVIDIA, Windows and Linux, not WSL)
 streams weights from RAM, so VRAM limits speed and frame size rather than
-whether a model loads: 16 GB should run the default 0.5 MP frame size; 12 GB has
-a community report of 864×480, 5 s with Turbo on a 3060. Below 12 GB, AMD or
+whether a model loads: 16 GB should run the default 0.5 MP frame size. 12 GB
+works, with more care: two 3060 reports, 864×480 5 s with Turbo in about
+4.5 minutes, and on Linux 544×960 5 s in about 14 minutes with the local
+director — the latter only after the 12 GB rows in the troubleshooting table. Below 12 GB, AMD or
 Apple: say it is unsupported. The full table is in
 [`setup.md`](setup.md#how-much-vram).
 
@@ -238,10 +241,13 @@ If NuGet has no package for that exact version, copy the two folders from
 another install of the same version, and say so. `pnpm smoke` in Phase 7 is
 what proves SageAttention actually works; `check:nodes` only sees the node.
 
-**Edit the launch line once, now, before the restart.** Add `--vram-headroom 3`
-(keeps Dynamic VRAM from paging into a full card on Windows,
-Comfy-Org/ComfyUI#15360, at no cost in speed) and `--max-upload-size 100` (the
-app's upload ceiling). Do not add `--listen`: Caddy and Funnel connect to localhost, and
+**Edit the launch line once, now, before the restart.** Add
+`--max-upload-size 100` (the app's upload ceiling), and on **Windows only**
+`--vram-headroom 3`. That keeps Dynamic VRAM from filling the card, which on
+Windows does not fail but pages into shared system memory and stalls
+(Comfy-Org/ComfyUI#15360), at no cost in speed. Linux has no such fallback (a
+full card is an out-of-memory error), so there the flag only takes 3 GB away
+from the run: leave it off. Do not add `--listen`: Caddy and Funnel connect to localhost, and
 `--listen` exposes ComfyUI to the whole network. Do not add
 `--enable-cors-header` with a specific origin (see troubleshooting). Keep the
 `--port` it has.
@@ -562,7 +568,7 @@ as the normal way to run.
 **Then check, start the app, and run the test generation yourself:**
 
 ```bash
-pnpm check:nodes            # exit 0: every class and required model is there
+pnpm check:nodes --workflows minimax-h3,minimax-music3   # the set from Phase 3; exit 0
 pnpm check:workflows        # the app's own definitions; needs no ComfyUI
 pnpm dev                    # in the background
 pnpm smoke --director local # or --director gateway, matching their choice
@@ -570,7 +576,9 @@ pnpm smoke --director local # or --director gateway, matching their choice
 
 `check:nodes` asks ComfyUI for every node class, model file and dropdown option
 the workflows use, names the pack behind each missing class, and reports whether
-the gateway pack can see a key. Exit **0**: everything required is there. **1**:
+the gateway pack can see a key. Pass `--workflows` the same list you gave
+`models:download` in Phase 3; without it every workflow is checked, and the
+files of the ones they left out fail it. If they took them all, leave it off. Exit **0**: everything required is there. **1**:
 something is missing — fix it from its output, mapping classes to packs in
 Phase 2. **2**: it could not ask at all — ComfyUI not running, wrong
 `COMFY_URL`, or the token rejected (check the `\$` escaping first).
@@ -765,7 +773,11 @@ there; do not deploy the app first.
 On the ComfyUI machine:
 
 1. Check out the target: `git pull --ff-only` (or `git checkout <tag>`), then
-   `pnpm install`. Local changes in the clone: stop and ask.
+   `pnpm install`. Local changes in the clone: stop and ask — except
+   `src/lib/workflows/generated/`, which `pnpm sync:models` and every local
+   build rewrite from the live gateway catalog. Discard that with
+   `git checkout -- src/lib/workflows/generated/` and pull; the release carries
+   its own copy, and the next build regenerates it anyway.
 2. Node packs: `git pull` in each pack the diff points at — in
    `custom_nodes/` — and reinstall its requirements with ComfyUI's own Python,
    as in Phase 2. A pack not yet installed: install it as in Phase 2. When the
@@ -775,13 +787,14 @@ On the ComfyUI machine:
    download.
 4. ComfyUI itself, if the release notes say so.
 5. Restart ComfyUI from its launch script (ask first — it may be rendering).
-   Gate: `pnpm check:nodes` exits 0, and `pnpm smoke` passes against a local
-   `pnpm dev`.
+   Gate: `pnpm check:nodes` exits 0 (with `--workflows` for the set the
+   person uses), and `pnpm smoke` passes against a local `pnpm dev`.
 
 ### U4 — The app
 
 1. If not already done in U3: `git pull --ff-only` (or check out the tag) and
-   `pnpm install`.
+   `pnpm install` — discarding a regenerated `src/lib/workflows/generated/`
+   first, as in U3.
 2. Deploy to the **existing** project. On a machine that has deployed before,
    `vercel deploy --prod`. On one that has not, `vercel link` first and pick the
    existing project — never create a second one. Its environment variables and
@@ -814,7 +827,10 @@ On the ComfyUI machine:
 | Only the **Edit** button fails | One of the FLUX Kontext files; `models:download --workflows image-edit` |
 | Fails at the rewrite, no key | Set up a rewrite — Phase 7. Either a gateway key, or the local director chosen in the app |
 | Fails at the rewrite, no reason | Usually a refusal. Change **Rewrite model**, or use the local director |
-| Rewrite refused: model not in the list | The gateway retired it. `pnpm sync:models`, then commit the regenerated file |
+| Rewrite refused: model not in the list | The gateway retired it. Redeploy: the build runs `pnpm sync:models`. Never commit the regenerated file in a person's clone — it blocks the next `git pull` |
+| `check:nodes` fails only on models for workflows they did not choose | Run it with `--workflows` and the set from Phase 3 |
+| 12 GB card, Linux: `illegal memory access`, Xid errors in `dmesg`, or a ComfyUI that will not let go of its port | Dynamic VRAM on a small card. Add `--disable-dynamic-vram`; if Xid errors continue, the `comfy-kitchen` CUDA backend is the next suspect. Then leave ComfyUI at its normal VRAM policy with `--reserve-vram 1.5` rather than `--lowvram` |
+| 12 GB card: the local director takes an hour, or fails `Expected a cuda device, but got: cpu` | `--lowvram` has put Gemma on the CPU (the error is a ComfyUI bug on that path). Drop `--lowvram`; if it still does not fit, use the gateway rewrite instead |
 | "The local director is chosen but … is not in" | `models:download --extras local-director`, or switch back to the gateway |
 | Large uploads fail deployed, work locally | No Blob store — Phase 8 |
 | A job shows as **Lost** | ComfyUI restarted and dropped its history |
@@ -827,7 +843,8 @@ tells "cannot connect" from "connected but refused".
 
 ## Done when
 
-- `pnpm check:nodes` exits 0 against the `COMFY_URL` the app uses.
+- `pnpm check:nodes` (with `--workflows` for a partial set) exits 0 against
+  the `COMFY_URL` the app uses.
 - `pnpm smoke` has passed locally, and — if deploying — against the deployment.
 - ComfyUI-Login is on, and the public URL refuses a request without the token.
 - The deployment asks for `APP_ACCESS_TOKEN` before anything else.

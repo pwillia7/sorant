@@ -55,7 +55,7 @@ memory for the video itself has to be on the card.
 | --- | --- |
 | **24 GB** | Everything, up to the app's limits — 1 MP frames, 20-second clips. Tested here on an RTX 3090. |
 | **16 GB** | Should run every workflow at the default **Frame size** (0.5 MP). Slower than 24 GB, since more of each model streams from RAM. Untested here. If a run fails out of memory, lower **Frame size** or **Duration** first. |
-| **12 GB** | Someone else ran H3 Text to Video on an RTX 3060 at 864×480 for 5 seconds with Turbo, in about 4.5 minutes. Keep to the default frame size or below, and short clips. |
+| **12 GB** | Two RTX 3060 reports: 864×480 for 5 seconds with Turbo in about 4.5 minutes, and on Linux the default 544×960 for 5 seconds in about 14 minutes with the local director. The second needed Dynamic VRAM off and no `--lowvram` — see [Troubleshooting](#troubleshooting). Keep to the default frame size or below, and short clips; the gateway rewrite is the easier choice. |
 | **Under 12 GB** | Not recommended. |
 
 What helps on a smaller card:
@@ -261,7 +261,9 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrDdiDelay /
 ```
 
 Also add `--vram-headroom 3` to ComfyUI's launch line. It stops dynamic VRAM
-paging into a full card, a separate Windows failure, at no cost in speed.
+paging into a full card, a separate Windows failure, at no cost in speed. Leave
+it off on Linux: a full card there is an out-of-memory error, not a stall, so
+the flag would only hold back 3 GB.
 
 ---
 
@@ -457,6 +459,7 @@ locally, fails in production", or the reverse.
 
 ```bash
 pnpm check:nodes       # asks your ComfyUI for every pack, model file and key the app needs
+                       # add --workflows minimax-h3,... if you downloaded only some
 pnpm check:workflows   # checks the app's own workflow definitions; needs no ComfyUI
 pnpm dev
 ```
@@ -533,6 +536,8 @@ Hover over it, or open the release notes, to see which kind of update it is:
 - **App-only.** Nothing changes on the ComfyUI machine. From any machine with a
   clone: `git pull`, `pnpm install`, `vercel deploy --prod` (run `vercel link`
   first and pick your existing project if that machine has never deployed).
+  If `git pull` refuses over `src/lib/workflows/generated/`, a local build
+  rewrote it: `git checkout -- src/lib/workflows/generated/` and pull again.
   If you deploy from GitHub instead, use **Sync fork** on your fork.
 - **ComfyUI machine changes.** The release notes list them under **ComfyUI
   machine changes**: a node pack to install or update, a model file to
@@ -564,7 +569,10 @@ README for the prompt to paste.
 | Fails at the rewrite: no key | Switch the rewrite to **This ComfyUI machine** from the header's Gateway button, or set a key there — see [where prompts are rewritten](#where-prompts-are-rewritten) |
 | First run fails with `tcc.exe … returned non-zero exit status 1` (Windows portable) | The portable Python has no `Include` and `libs` folders, which SageAttention's compiler needs. Copy both from the NuGet `python` package of exactly the same version — the [agent runbook](agent-setup.md#phase-2--custom-node-packs) has the commands. Don't just turn SageAttention off |
 | Fails at the rewrite, no clear reason | Usually the model refused. Pick a different **Rewrite model** and retry |
-| Rewrite says the model is not in the list | The gateway retired it. Run `pnpm sync:models` and commit the result |
+| Rewrite says the model is not in the list | The gateway retired it. Redeploy — the build runs `pnpm sync:models`. Don't commit the regenerated file in your clone; it blocks the next `git pull` |
+| `check:nodes` fails only on models for workflows you skipped | Run it as `pnpm check:nodes --workflows <the ones you downloaded>` |
+| 12 GB card on Linux: `illegal memory access`, Xid errors, a ComfyUI that hangs on to its port | Add `--disable-dynamic-vram` to the launch line, and use `--reserve-vram 1.5` rather than `--lowvram` |
+| 12 GB card: the local rewrite takes an hour, or fails `Expected a cuda device, but got: cpu` | `--lowvram` put Gemma on the CPU. Drop it, or use the gateway rewrite |
 | "The local director is chosen but … is not in" | The Gemma file is not in `models/text_encoders/`, or switch the rewrite back to the gateway |
 | Only the **Edit** button fails | One of the four FLUX Kontext files — `pnpm check:nodes` names it |
 | Large uploads fail when deployed | No Blob store — see [step 4](#4-deploy-to-vercel) |

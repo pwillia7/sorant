@@ -59,7 +59,12 @@ export interface ClassNeed extends Need {
   inputs: Set<string>;
 }
 
-export function collect() {
+/**
+ * Every class and file the workflows need, or only the ones `ids` names — an
+ * install set up for some workflows is asked about those, not failed over the
+ * files of the ones it left out.
+ */
+export function collect(ids?: readonly string[]) {
   const classes = new Map<string, ClassNeed>();
   /** filename -> which loader input it has to appear in. */
   const models = new Map<string, { loader: string; input: string } & Need>();
@@ -72,6 +77,7 @@ export function collect() {
   }
 
   for (const workflow of WORKFLOWS) {
+    if (ids && !ids.includes(workflow.id)) continue;
     // Each mode's graph as well as the stored one. Both are modes rather than
     // second workflows, so the nodes they splice in — and the LoRA files turbo
     // and the style switch name — appear in no graph on disk, and they are
