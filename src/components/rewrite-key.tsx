@@ -4,11 +4,6 @@ import { useCallback, useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { PasswordInput, Select } from "@/components/ui/inputs";
-import {
-  freeModelsExist,
-  modelsForTier,
-  type GatewayTier,
-} from "@/lib/workflows/rewrite-model";
 import { Modal } from "@/components/ui/modal";
 import {
   LOCAL_DIRECTOR_MODELS,
@@ -51,8 +46,6 @@ interface Gateway {
  * set it is a quiet way back in to change it.
  */
 export function RewriteKeyButton({
-  tier,
-  onTierChange,
   engine,
   onEngineChange,
   localDirector,
@@ -61,8 +54,6 @@ export function RewriteKeyButton({
   rewriteModel,
   onRewriteModelChange,
 }: {
-  tier: GatewayTier;
-  onTierChange: (tier: GatewayTier) => void;
   engine: DirectorEngine;
   onEngineChange: (engine: DirectorEngine) => void;
   localDirector: string;
@@ -95,7 +86,7 @@ export function RewriteKeyButton({
    * It used to hide itself unless the pack was installed, which was right when
    * the only thing behind it was the key: with no `config.json` to write to
    * there was nothing to offer. It stopped being right once the modal also held
-   * which models the picker shows — that is a preference stored in this
+   * which model writes the briefs — that is a preference stored in this
    * browser, and it needs neither the pack, nor a key, nor ComfyUI to be
    * answering. Gating it on any of those made it vanish exactly when this
    * machine is offline, which is most of the time on some setups.
@@ -116,7 +107,7 @@ export function RewriteKeyButton({
     engine === "local"
       ? "The prompt rewrite runs on the ComfyUI machine"
       : !installed
-        ? "Which models the prompt rewrite offers"
+        ? "Which model the prompt rewrite runs on"
         : configured
           ? "Change the key the prompt rewrite runs on"
           : "No rewrite key set — generations will fail until one is";
@@ -153,8 +144,6 @@ export function RewriteKeyButton({
         onClose={() => setOpen(false)}
         gateway={gateway}
         onSaved={setGateway}
-        tier={tier}
-        onTierChange={onTierChange}
         engine={engine}
         onEngineChange={onEngineChange}
         localDirector={localDirector}
@@ -172,8 +161,6 @@ function RewriteKeyModal({
   onClose,
   gateway,
   onSaved,
-  tier,
-  onTierChange,
   engine,
   onEngineChange,
   localDirector,
@@ -186,8 +173,6 @@ function RewriteKeyModal({
   onClose: () => void;
   gateway: Gateway | null;
   onSaved: (next: Gateway) => void;
-  tier: GatewayTier;
-  onTierChange: (tier: GatewayTier) => void;
   engine: DirectorEngine;
   onEngineChange: (engine: DirectorEngine) => void;
   localDirector: string;
@@ -418,56 +403,23 @@ function RewriteKeyModal({
         </p>
       ) : null}
 
-      {/*
-        Which kind of key this is, which the app has no way of finding out — the
-        key lives on the ComfyUI host and the status route answers with a
-        boolean. It changes nothing about the key and nothing about the run; all
-        it does is decide which models the Rewrite model picker offers.
-      */}
       {engine === "gateway" && rewritePicker && rewriteModel ? (
         /*
           The model, for every workflow at once: it was a control on each
           form, so a model that refused a shot on one was still the model on
-          the next. Here beside the tier, which is what narrows it.
+          the next. Each option carries its price, "free" included, which is
+          all a key with no card on it needs to choose by.
         */
         <Field
           id={`${id}-model`}
           label="Rewrite model"
-          help="Writes the brief for every workflow — it never touches the video. Priced in dollars per million words out. Switch models if one refuses a shot; a retry goes out on the new one. The ones under “writes blind” cannot be shown your images, so on a workflow that uses pictures they write from your words alone — the video model still gets the picture either way."
+          help="Writes the brief for every workflow — it never touches the video. Priced in dollars per million words out; a key with no card on it gets $5 of credit a month, and the ones marked free cost nothing against it. Switch models if one refuses a shot; a retry goes out on the new one. The ones under “writes blind” cannot be shown your images, so on a workflow that uses pictures they write from your words alone — the video model still gets the picture either way."
         >
           <Select
             id={`${id}-model`}
             value={rewriteModel}
             onChange={onRewriteModelChange}
             options={rewritePicker.options}
-          />
-        </Field>
-      ) : null}
-
-      {engine === "gateway" ? (
-        <Field
-          id={`${id}-tier`}
-          label="What kind of key is it?"
-          help={
-            freeModelsExist()
-              ? "A team with no card on it still gets $5 of credit a month, so a paid model is not refused — it is billed against an allowance that runs out. Say free to be offered only the models that cost nothing."
-              : "Nothing in the gateway's catalog is free today, so free changes nothing for now — the answer is kept and takes effect when one appears. A team with no card still gets $5 of credit a month."
-          }
-        >
-          <Select
-            id={`${id}-tier`}
-            value={tier}
-            onChange={(next) => onTierChange(next as GatewayTier)}
-            options={[
-              {
-                value: "paid",
-                label: `Paid — every model (${modelsForTier("paid").length})`,
-              },
-              {
-                value: "free",
-                label: `Free credits only — no-cost models (${modelsForTier("free").length})`,
-              },
-            ]}
           />
         </Field>
       ) : null}

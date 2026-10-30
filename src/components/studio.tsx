@@ -50,12 +50,10 @@ import {
   hydrateTurbo,
   mergeWithDefaults,
   readStoredDirectorEngine,
-  readStoredGatewayTier,
   readStoredLocalDirector,
   readStoredLowVram,
   readStoredRewriteModel,
   writeStoredDirectorEngine,
-  writeStoredGatewayTier,
   writeStoredLocalDirector,
   writeStoredLowVram,
   writeStoredParams,
@@ -69,11 +67,7 @@ import {
 } from "@/lib/param-storage";
 import { workflowLabel } from "@/lib/workflows/modes";
 import type { DirectorEngine } from "@/lib/workflows/local-director";
-import {
-  REWRITE_MODEL,
-  tierParams,
-  type GatewayTier,
-} from "@/lib/workflows/rewrite-model";
+import { REWRITE_MODEL } from "@/lib/workflows/rewrite-model";
 import {
   compactReferenceSlots,
   isReferenceImage,
@@ -260,13 +254,13 @@ export function Studio() {
 }
 
 function Workbench({
-  workflows: offered,
+  workflows,
   problems,
 }: {
   workflows: WorkflowSummary[];
   problems?: string[];
 }) {
-  const [selectedId, setSelectedId] = useState(offered[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState(workflows[0]?.id ?? "");
   const jobs = useJobs();
   const health = useHealth();
   const compat = useCompat(
@@ -274,28 +268,6 @@ function Workbench({
   );
   const updates = useUpdates();
   const [statusOpen, setStatusOpen] = useState(false);
-
-  /**
-   * Which kind of gateway key this browser says it holds, and the workflows as
-   * that answer leaves them — the rewrite picker narrowed to the models a free
-   * key can be spent on, everything else untouched.
-   *
-   * Read lazily for the same reason as the block below: Workbench only mounts
-   * after the client-side load, so there is no server render to mismatch.
-   *
-   * Applied here rather than server-side because the key is not the install's:
-   * two people pointed at the same ComfyUI can hold different ones, and the
-   * app never sees either.
-   */
-  const [gatewayTier, setGatewayTier] = useState(readStoredGatewayTier);
-  const workflows = useMemo(
-    () =>
-      offered.map((workflow) => ({
-        ...workflow,
-        params: tierParams(workflow.params, gatewayTier),
-      })),
-    [offered, gatewayTier],
-  );
 
   // Both of these are read lazily rather than in an effect: Workbench only
   // mounts after the client-side load, so there is no server render to
@@ -393,12 +365,11 @@ function Workbench({
    * rerun goes out on today's choice and not the old run's. See `REWRITE_MODEL`.
    *
    * What it offers is the picker a workflow would have drawn: the live
-   * catalog's, narrowed to the key's tier. Taken from a graph that shows its
-   * director a picture where there is one, since that is the list that says
-   * which models can see. A choice that list no longer has — retired, or
-   * outside the tier — falls back to the picker's default, as does no choice
-   * at all: the forms' stored values are the old default written back on every
-   * load, not something anyone chose.
+   * catalog's. Taken from a graph that shows its director a picture where
+   * there is one, since that is the list that says which models can see. A
+   * choice that list no longer has — retired since — falls back to the
+   * picker's default, as does no choice at all: the forms' stored values are
+   * the old default written back on every load, not something anyone chose.
    */
   const rewritePicker = useMemo(() => {
     const pickers = workflows.flatMap((workflow) =>
@@ -588,37 +559,6 @@ function Workbench({
       }));
     },
     [modesFor, modeKey, picked],
-  );
-
-  /**
-   * Saying which kind of key this is re-narrows the rewrite picker, so every
-   * workflow's stored model has to be checked against what it now offers.
-   *
-   * Every workflow rather than the selected one, unlike the turbo handler above:
-   * the picker is on all of them, and a stored model that stopped being offered
-   * would otherwise sit unnoticed until that workflow was next opened. See
-   * `clampValues`, which is what drops it.
-   */
-  const onGatewayTierChange = useCallback(
-    (tier: GatewayTier) => {
-      setGatewayTier(tier);
-      writeStoredGatewayTier(tier);
-      setValuesByWorkflow((previous) => {
-        const next = { ...previous };
-        for (const workflow of offered) {
-          const narrowed = {
-            ...workflow,
-            params: tierParams(workflow.params, tier),
-          };
-          next[workflow.id] = clampValues(
-            effectiveWorkflow(narrowed, turboByWorkflow[workflow.id]),
-            previous[workflow.id] ?? {},
-          );
-        }
-        return next;
-      });
-    },
-    [offered, turboByWorkflow],
   );
 
   /**
@@ -1263,8 +1203,6 @@ function Workbench({
               update={updates.info?.latest?.version}
             />
             <RewriteKeyButton
-              tier={gatewayTier}
-              onTierChange={onGatewayTierChange}
               engine={directorEngine}
               onEngineChange={onDirectorEngineChange}
               localDirector={localDirector}
@@ -1648,7 +1586,7 @@ function Workbench({
         health={health}
         compat={compat}
         updates={updates}
-        workflows={offered}
+        workflows={workflows}
       />
 
       {settingsJob ? (

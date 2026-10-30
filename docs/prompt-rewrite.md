@@ -225,31 +225,19 @@ hypothetical: MiniMax retired the free tier of M3 and the list lost it. The
 curation — which families, and why those — is in
 `src/lib/workflows/rewrite-catalog.ts`.
 
-**What kind of key is it?**, in the key modal, narrows that list. A Vercel team
+Each option carries its price, and the free ones say **free**. A Vercel team
 with no card on it still gets $5 of credit a month, so a paid model is not
-*refused* on a free key — it is billed against an allowance that runs out
-mid-month and then fails a run. Saying **free** offers only the models that cost
-nothing.
+*refused* on such a key — it is billed against an allowance that runs out
+mid-month and then fails a run — and someone who would rather not find that out
+at generation time picks a free one. (There used to be a separate **What kind
+of key is it?** setting that hid the paid ones; with the list in the same
+dialog, the labels do that job.)
 
-It is a statement, not a discovery: the key lives on the ComfyUI host and the
-status route answers with a boolean, so the app cannot tell. That also makes it
-a per-browser setting rather than a per-install one — two people pointed at the
-same ComfyUI can hold different keys — which is why the narrowing happens in the
-browser and not when the workflow is built.
-
-It is answerable whether or not a key has been set from this app, and whether or
-not ComfyUI is answering at all. The key may well have been set on the ComfyUI
-machine instead — `AI_GATEWAY_API_KEY` in that machine's environment does the
-same job and takes precedence over the file — in which case this app never sees
-a key being set and has no business asking for one before it will take an
-answer. So only the *key* half of that modal waits on the pack; the picker
-setting is a preference in this browser and is offered on its own.
-
-Narrowing is abandoned rather than applied whenever it would empty the picker —
-a dropdown with nothing in it is worse than one offering more than was asked
-for. That has been the state at times, when every model in the catalog cost
-something; at the last `sync:models` one was free, so **free** narrows the
-picker to that one.
+The picker is a preference in this browser, so it is offered whether or not a
+key has been set from this app and whether or not ComfyUI is answering — the
+key may well have been set on the ComfyUI machine instead, through
+`AI_GATEWAY_API_KEY` in its environment, which takes precedence over the file.
+Only the *key* half of the dialog waits on the pack.
 
 **Every model is offered on every workflow, and half of them cannot see.** On
 the four graphs that show their director a picture — the upload, the last frame
