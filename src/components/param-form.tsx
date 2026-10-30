@@ -77,7 +77,10 @@ export function ParamForm({
         const shown = groupParams.filter((param) => paramVisible(param, values));
         const advanced = shown.filter((param) => param.advanced);
         const visible = shown.filter((param) => open || !param.advanced);
-        if (visible.length === 0) return null;
+        // Nothing at all to show, rather than nothing until the disclosure is
+        // opened: a group of only advanced controls still draws its heading
+        // and the disclosure, or there is no way to reach them.
+        if (shown.length === 0) return null;
 
         return (
           // min-w-0 restates the globals.css rule at the call site: fieldset's

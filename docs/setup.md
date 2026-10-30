@@ -568,7 +568,7 @@ README for the prompt to paste.
 | A run fails naming a node class | `pnpm check:nodes` — a pack is missing |
 | Fails at the rewrite: no key | Switch the rewrite to **This ComfyUI machine** from the header's Gateway button, or set a key there — see [where prompts are rewritten](#where-prompts-are-rewritten) |
 | First run fails with `tcc.exe … returned non-zero exit status 1` (Windows portable) | The portable Python has no `Include` and `libs` folders, which SageAttention's compiler needs. Copy both from the NuGet `python` package of exactly the same version — the [agent runbook](agent-setup.md#phase-2--custom-node-packs) has the commands. Don't just turn SageAttention off |
-| Fails at the rewrite, no clear reason | Usually the model refused. Pick a different **Rewrite model** and retry |
+| Fails at the rewrite, no clear reason | Usually the model refused. Pick a different **Rewrite model** behind the header's Gateway button and retry |
 | Rewrite says the model is not in the list | The gateway retired it. Redeploy — the build runs `pnpm sync:models`. Don't commit the regenerated file in your clone; it blocks the next `git pull` |
 | `check:nodes` fails only on models for workflows you skipped | Run it as `pnpm check:nodes --workflows <the ones you downloaded>` |
 | 12 GB card on Linux: `illegal memory access`, Xid errors, a ComfyUI that hangs on to its port | Add `--disable-dynamic-vram` to the launch line, and use `--reserve-vram 1.5` rather than `--lowvram` |

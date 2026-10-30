@@ -19,6 +19,7 @@ import {
 } from "@/lib/jobs";
 import { notify } from "@/lib/notifications";
 import { workflowLabel, type RunModes } from "@/lib/workflows/modes";
+import { REWRITE_MODEL } from "@/lib/workflows/rewrite-model";
 import type { ParamValue, WorkflowSummary } from "@/lib/workflows/types";
 
 const POLL_INTERVAL_MS = 1500;
@@ -86,6 +87,11 @@ export interface JobsController {
       lowVram?: boolean;
       /** Write the brief on the ComfyUI machine with this local model id. */
       localDirector?: string;
+      /**
+       * Write the brief with this gateway model, on a workflow that has one —
+       * chosen for the app rather than on the form. See `REWRITE_MODEL`.
+       */
+      rewriteModel?: string;
       /** The generation whose clip this one was made from, if any. */
       derivedFrom?: string;
       /** The music video this run is part of. See `Job.musicVideo`. */
@@ -365,12 +371,22 @@ export function useJobs(): JobsController {
       options?: RunModes & {
         lowVram?: boolean;
         localDirector?: string;
+        rewriteModel?: string;
         derivedFrom?: string;
         musicVideo?: MusicVideoTag;
       },
     ) => {
       const turbo = Boolean(options?.turbo);
       const asked = options?.patches ?? [];
+      // Over whatever the values carry, which may be a stored form's or an
+      // old run's: the model is the app's now, and a retry after a refusal is
+      // exactly the run that has to go out on the new one.
+      const params =
+        options?.rewriteModel &&
+        !options.localDirector &&
+        workflow.params.some((param) => param.id === REWRITE_MODEL)
+          ? { ...values, [REWRITE_MODEL]: options.rewriteModel }
+          : values;
       setSubmitting(true);
       setSubmitError(null);
       setSubmitErrorField(null);
@@ -380,7 +396,7 @@ export function useJobs(): JobsController {
           method: "POST",
           body: JSON.stringify({
             workflowId: workflow.id,
-            params: values,
+            params,
             turbo,
             patches: asked,
             lowVram: Boolean(options?.lowVram),

@@ -826,7 +826,7 @@ On the ComfyUI machine:
 | A run fails naming a node class | `pnpm check:nodes` — a pack is missing |
 | Only the **Edit** button fails | One of the FLUX Kontext files; `models:download --workflows image-edit` |
 | Fails at the rewrite, no key | Set up a rewrite — Phase 7. Either a gateway key, or the local director chosen in the app |
-| Fails at the rewrite, no reason | Usually a refusal. Change **Rewrite model**, or use the local director |
+| Fails at the rewrite, no reason | Usually a refusal. Change **Rewrite model** behind the header's Gateway button, or use the local director |
 | Rewrite refused: model not in the list | The gateway retired it. Redeploy: the build runs `pnpm sync:models`. Never commit the regenerated file in a person's clone — it blocks the next `git pull` |
 | `check:nodes` fails only on models for workflows they did not choose | Run it with `--workflows` and the set from Phase 3 |
 | 12 GB card, Linux: `illegal memory access`, Xid errors in `dmesg`, or a ComfyUI that will not let go of its port | Dynamic VRAM on a small card. Add `--disable-dynamic-vram`; if Xid errors continue, the `comfy-kitchen` CUDA backend is the next suspect. Then leave ComfyUI at its normal VRAM policy with `--reserve-vram 1.5` rather than `--lowvram` |

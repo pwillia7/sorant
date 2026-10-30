@@ -154,6 +154,30 @@ export function writeStoredLocalDirector(id: string): void {
   }
 }
 
+/**
+ * Which gateway model writes the briefs, for every workflow at once. It was a
+ * control on each form, and a model that refused a shot on one was then the
+ * model on the next, to be found and changed again there. Null until chosen:
+ * the studio then takes the one a form was last left on. See `REWRITE_MODEL`.
+ */
+const REWRITE_MODEL_KEY = "sorant-rewrite-model";
+
+export function readStoredRewriteModel(): string | null {
+  try {
+    return localStorage.getItem(REWRITE_MODEL_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeStoredRewriteModel(id: string): void {
+  try {
+    localStorage.setItem(REWRITE_MODEL_KEY, id);
+  } catch {
+    // As above.
+  }
+}
+
 export function readStoredLowVram(): boolean {
   try {
     return localStorage.getItem(LOW_VRAM_KEY) === "on";

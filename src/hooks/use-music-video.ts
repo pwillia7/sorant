@@ -143,7 +143,7 @@ interface Options {
   stitchWorkflow: WorkflowSummary | undefined;
   upscaleWorkflow: WorkflowSummary | undefined;
   values: Record<string, ParamValue>;
-  modes: RunModes & { lowVram?: boolean; localDirector?: string };
+  modes: RunModes & { lowVram?: boolean; localDirector?: string; rewriteModel?: string };
   jobs: JobsController;
   /** Whether ComfyUI is answering, so lost upscales can be sent again. */
   online: boolean;
@@ -372,10 +372,14 @@ export function useMusicVideo({
               scene_list: sceneList(current.scenes),
               scene_outline: shotRequest(current, rewrite),
             },
-            { localDirector: modes.localDirector, musicVideo: tagFor(current, "plan") },
+            {
+              localDirector: modes.localDirector,
+              rewriteModel: modes.rewriteModel,
+              musicVideo: tagFor(current, "plan"),
+            },
           )
         : Promise.resolve(null),
-    [workflow, jobs, modes.localDirector],
+    [workflow, jobs, modes.localDirector, modes.rewriteModel],
   );
 
   // An outline with no shots and nothing writing them: send it to be written.
@@ -550,7 +554,11 @@ export function useMusicVideo({
           prompt: String(values.prompt ?? "").trim() || "A performance video for this song.",
           scene_list: sceneList(windows),
         },
-        { localDirector: modes.localDirector, musicVideo: tagFor(next, "plan") },
+        {
+              localDirector: modes.localDirector,
+              rewriteModel: modes.rewriteModel,
+              musicVideo: tagFor(next, "plan"),
+            },
       );
       if (!promptId) return;
       setProject({ ...next, planPromptId: promptId });
@@ -559,7 +567,7 @@ export function useMusicVideo({
     } finally {
       setBusy(null);
     }
-  }, [workflow, values, jobs, modes.localDirector]);
+  }, [workflow, values, jobs, modes.localDirector, modes.rewriteModel]);
 
   const editShot = useCallback((index: number, shot: string) => {
     setProject((previous) =>

@@ -53,11 +53,13 @@ import {
   readStoredGatewayTier,
   readStoredLocalDirector,
   readStoredLowVram,
+  readStoredRewriteModel,
   writeStoredDirectorEngine,
   writeStoredGatewayTier,
   writeStoredLocalDirector,
   writeStoredLowVram,
   writeStoredParams,
+  writeStoredRewriteModel,
   writeStoredAlternateBase,
   writeStoredLora,
   writeStoredTier,
@@ -66,11 +68,12 @@ import {
   writeStoredTurbo,
 } from "@/lib/param-storage";
 import { workflowLabel } from "@/lib/workflows/modes";
+import type { DirectorEngine } from "@/lib/workflows/local-director";
 import {
-  directorParams,
-  type DirectorEngine,
-} from "@/lib/workflows/local-director";
-import { tierParams, type GatewayTier } from "@/lib/workflows/rewrite-model";
+  REWRITE_MODEL,
+  tierParams,
+  type GatewayTier,
+} from "@/lib/workflows/rewrite-model";
 import {
   compactReferenceSlots,
   isReferenceImage,
@@ -382,6 +385,42 @@ function Workbench({
   useEffect(() => {
     writeStoredParams(valuesByWorkflow);
   }, [valuesByWorkflow]);
+
+  /**
+   * Which gateway model writes the briefs, for every workflow — set in the
+   * key's dialog beside where the rewrite runs, rather than on each form. Like
+   * the local model: about the setup rather than the shot, so a retry or a
+   * rerun goes out on today's choice and not the old run's. See `REWRITE_MODEL`.
+   *
+   * What it offers is the picker a workflow would have drawn: the live
+   * catalog's, narrowed to the key's tier. Taken from a graph that shows its
+   * director a picture where there is one, since that is the list that says
+   * which models can see. A choice that list no longer has — retired, or
+   * outside the tier — falls back to the first a form was left on, then to the
+   * picker's default.
+   */
+  const rewritePicker = useMemo(() => {
+    const pickers = workflows.flatMap((workflow) =>
+      workflow.params.flatMap((param) =>
+        param.id === REWRITE_MODEL && param.type === "select" ? [param] : [],
+      ),
+    );
+    return pickers.find((param) => param.options.some((option) => option.group)) ?? pickers[0];
+  }, [workflows]);
+  const [chosenRewriteModel, setChosenRewriteModel] = useState(readStoredRewriteModel);
+  const rewriteModel = useMemo(() => {
+    if (!rewritePicker) return undefined;
+    const offeredIds = new Set(rewritePicker.options.map((option) => option.value));
+    const fromForms = Object.values(valuesByWorkflow).map((values) => values[REWRITE_MODEL]);
+    const candidate = [chosenRewriteModel, ...fromForms, rewritePicker.default].find(
+      (id): id is string => typeof id === "string" && offeredIds.has(id),
+    );
+    return candidate ?? rewritePicker.options[0]?.value;
+  }, [rewritePicker, chosenRewriteModel, valuesByWorkflow]);
+  const onRewriteModelChange = useCallback((id: string) => {
+    setChosenRewriteModel(id);
+    writeStoredRewriteModel(id);
+  }, []);
 
   useEffect(() => {
     writeStoredTurbo(turboByWorkflow);
@@ -981,7 +1020,7 @@ function Workbench({
       ? workflows.find((workflow) => workflow.clipTarget?.action === "upscale")
       : undefined,
     values,
-    modes: { ...modes, lowVram, localDirector: runDirector },
+    modes: { ...modes, lowVram, localDirector: runDirector, rewriteModel },
     jobs,
     online: health?.reachable === true && health.authorized !== false,
   });
@@ -1013,6 +1052,7 @@ function Workbench({
       ...modes,
       lowVram,
       localDirector: runDirector,
+      rewriteModel,
       // Only meaningful on the workflow the clip was actually loaded into, and
       // only for the hand-off that put it there.
       derivedFrom:
@@ -1031,7 +1071,7 @@ function Workbench({
         stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
       );
     }
-  }, [selected, values, jobs, clipSource, modes, lowVram, runDirector, musicVideo]);
+  }, [selected, values, jobs, clipSource, modes, lowVram, runDirector, rewriteModel, musicVideo]);
 
   /**
    * Run a failed generation again, exactly as it was.
@@ -1054,10 +1094,10 @@ function Workbench({
    * it came from rather than appearing as an unrelated entry beside it.
    *
    * Nothing here is clever about *why* it failed. A run that died because the
-   * rewrite model refused the shot will refuse it again, and the way out of
-   * that one is a different model — which is what `Reuse settings` and the form
-   * are for. What this is for is the other kind: the box was offline, it ran
-   * out of memory, something fell over between here and there.
+   * rewrite model refused the shot needs a different model, chosen in the
+   * key's dialog — and the retry then goes out on it, since the model is the
+   * session's like the local director. The other kind of failure is the box
+   * offline, out of memory, something fallen over between here and there.
    */
   const retry = useCallback(
     (job: Job) => {
@@ -1078,6 +1118,7 @@ function Workbench({
         alternateBase: restored.alternateBase,
         lowVram,
         localDirector: runDirector,
+        rewriteModel,
         derivedFrom: job.derivedFrom,
         musicVideo: job.musicVideo,
       });
@@ -1091,7 +1132,7 @@ function Workbench({
         );
       }
     },
-    [jobs, workflows, lowVram, runDirector],
+    [jobs, workflows, lowVram, runDirector, rewriteModel],
   );
 
   /**
@@ -1126,6 +1167,7 @@ function Workbench({
         alternateBase: restored.alternateBase,
         lowVram,
         localDirector: runDirector,
+        rewriteModel,
         derivedFrom: job.derivedFrom,
         musicVideo: job.musicVideo,
       });
@@ -1139,7 +1181,7 @@ function Workbench({
         );
       }
     },
-    [jobs, reuseSettings, lowVram, runDirector],
+    [jobs, reuseSettings, lowVram, runDirector, rewriteModel],
   );
 
   /** Withheld where the workflow that made the run is no longer registered. */
@@ -1227,6 +1269,9 @@ function Workbench({
               onEngineChange={onDirectorEngineChange}
               localDirector={localDirector}
               onLocalDirectorChange={onLocalDirectorChange}
+              rewritePicker={rewritePicker}
+              rewriteModel={rewriteModel}
+              onRewriteModelChange={onRewriteModelChange}
             />
             <NotifyToggle />
             <ThemeToggle />
@@ -1418,7 +1463,9 @@ function Workbench({
                   // control kept across the switch keeps its local state, so
                   // one workflow's upload error would show on the other's.
                   key={selected.id}
-                  params={directorParams(selected.params, directorEngine)}
+                  // The rewrite model is chosen for the whole app, in the
+                  // key's dialog; see `rewriteModel`.
+                  params={selected.params.filter((param) => param.id !== REWRITE_MODEL)}
                   values={values}
                   onChange={onParamChange}
                   fieldError={fieldError}

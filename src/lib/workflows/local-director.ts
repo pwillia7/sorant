@@ -1,10 +1,6 @@
 import type { ComfyGraph } from "@/lib/comfy";
 import { pruneUnreachable, terminals } from "./director";
-import {
-  REWRITE_CLASSES,
-  REWRITE_IMAGE_INPUT,
-  REWRITE_MODEL,
-} from "./rewrite-model";
+import { REWRITE_CLASSES, REWRITE_IMAGE_INPUT } from "./rewrite-model";
 
 /**
  * Where the prompt rewrite runs: on the Vercel AI Gateway, or on the ComfyUI
@@ -36,23 +32,6 @@ import {
  */
 export type DirectorEngine = "gateway" | "local";
 
-/**
- * The params to draw, with the gateway's model picker taken off while the
- * director runs locally — it would be choosing a model nothing uses.
- *
- * Applied where the form is drawn rather than to the workflow itself: the
- * stored values are clamped against the workflow's params, so dropping the
- * picker there would forget the gateway model the moment someone tried the
- * local one, and switching back would land on the default.
- */
-export function directorParams<T extends { id: string }>(
-  params: T[],
-  engine: DirectorEngine,
-): T[] {
-  return engine === "local"
-    ? params.filter((param) => param.id !== REWRITE_MODEL)
-    : params;
-}
 
 /** A language model the box can run as a director, found by its filename. */
 export interface LocalDirectorModel {

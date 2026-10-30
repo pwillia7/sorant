@@ -207,9 +207,12 @@ Two consequences:
 
 ## Choosing the rewrite model
 
-**Rewrite model**, under the prompt box on every workflow, picks which model
-expands what you type. It never touches the video — that is always MiniMax H3 —
-and it disappears from the form when the rewrite is switched off.
+**Rewrite model**, in the dialog behind the header's Gateway button, picks
+which model expands what you type — one choice for every workflow, kept per
+browser. It never touches the video — that is always MiniMax H3. A retry or a
+rerun goes out on the current choice rather than the old run's, so a refused
+shot is fixed by switching model there and pressing Retry. Each run still
+records the model it used, in its settings.
 
 The list is, per provider family, the newest model that can be shown a picture
 and the newest that cannot — usually the same model, in which case the family
@@ -297,7 +300,7 @@ instead: no account, no key, and no hosted model's content policy — a director
 that refuses to describe the shot is a run that never starts, and that is the
 gateway's usual failure. The choice is per browser, not per workflow, and
 travels with each run as a mode; while it is on, **Rewrite model** leaves the
-form, since it would be choosing a model nothing uses.
+dialog, since it would be choosing a model nothing uses.
 
 `local-director.ts` does the swap, per run: every gateway director node in the
 graph becomes ComfyUI's own `TextGenerate`, with the same system prompt and the

@@ -16,6 +16,10 @@ import {
   type DirectorEngine,
 } from "@/lib/workflows/local-director";
 import { api } from "@/lib/client";
+import type { ClientParam } from "@/lib/workflows/types";
+
+/** The rewrite model picker a workflow declares, as the dialog draws it. */
+type RewritePicker = Extract<ClientParam, { type: "select" }>;
 
 interface Gateway {
   installed: boolean;
@@ -53,6 +57,9 @@ export function RewriteKeyButton({
   onEngineChange,
   localDirector,
   onLocalDirectorChange,
+  rewritePicker,
+  rewriteModel,
+  onRewriteModelChange,
 }: {
   tier: GatewayTier;
   onTierChange: (tier: GatewayTier) => void;
@@ -60,6 +67,10 @@ export function RewriteKeyButton({
   onEngineChange: (engine: DirectorEngine) => void;
   localDirector: string;
   onLocalDirectorChange: (id: string) => void;
+  /** Absent until the workflows are in. */
+  rewritePicker: RewritePicker | undefined;
+  rewriteModel: string | undefined;
+  onRewriteModelChange: (id: string) => void;
 }) {
   const [gateway, setGateway] = useState<Gateway | null>(null);
   const [open, setOpen] = useState(false);
@@ -148,6 +159,9 @@ export function RewriteKeyButton({
         onEngineChange={onEngineChange}
         localDirector={localDirector}
         onLocalDirectorChange={onLocalDirectorChange}
+        rewritePicker={rewritePicker}
+        rewriteModel={rewriteModel}
+        onRewriteModelChange={onRewriteModelChange}
       />
     </>
   );
@@ -164,6 +178,9 @@ function RewriteKeyModal({
   onEngineChange,
   localDirector,
   onLocalDirectorChange,
+  rewritePicker,
+  rewriteModel,
+  onRewriteModelChange,
 }: {
   open: boolean;
   onClose: () => void;
@@ -175,6 +192,9 @@ function RewriteKeyModal({
   onEngineChange: (engine: DirectorEngine) => void;
   localDirector: string;
   onLocalDirectorChange: (id: string) => void;
+  rewritePicker: RewritePicker | undefined;
+  rewriteModel: string | undefined;
+  onRewriteModelChange: (id: string) => void;
 }) {
   const id = useId();
   const [key, setKey] = useState("");
@@ -269,7 +289,7 @@ function RewriteKeyModal({
         help={
           engine === "local"
             ? "By an uncensored model on your ComfyUI machine, loaded and unloaded around the video model. It has had its refusals trained out, so it writes the briefs the hosted models decline, and it can see your images — but it adds about twenty seconds to every run."
-            : "By a hosted model on the Vercel AI Gateway, chosen per workflow under Rewrite model. Fast, but every one of them has a content policy, and a refused brief is a run that never starts."
+            : "By a hosted model on the Vercel AI Gateway, chosen below for every workflow. Fast, but every one of them has a content policy, and a refused brief is a run that never starts."
         }
       >
         <Select
@@ -404,6 +424,26 @@ function RewriteKeyModal({
         boolean. It changes nothing about the key and nothing about the run; all
         it does is decide which models the Rewrite model picker offers.
       */}
+      {engine === "gateway" && rewritePicker && rewriteModel ? (
+        /*
+          The model, for every workflow at once: it was a control on each
+          form, so a model that refused a shot on one was still the model on
+          the next. Here beside the tier, which is what narrows it.
+        */
+        <Field
+          id={`${id}-model`}
+          label="Rewrite model"
+          help="Writes the brief for every workflow — it never touches the video. Priced in dollars per million words out. Switch models if one refuses a shot; a retry goes out on the new one. The ones under “writes blind” cannot be shown your images, so on a workflow that uses pictures they write from your words alone — the video model still gets the picture either way."
+        >
+          <Select
+            id={`${id}-model`}
+            value={rewriteModel}
+            onChange={onRewriteModelChange}
+            options={rewritePicker.options}
+          />
+        </Field>
+      ) : null}
+
       {engine === "gateway" ? (
         <Field
           id={`${id}-tier`}
