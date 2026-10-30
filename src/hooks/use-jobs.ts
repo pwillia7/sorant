@@ -63,6 +63,8 @@ interface GenerateResponse {
   loras?: Job["loras"];
   /** Whether the brief was written on the ComfyUI machine. */
   localDirector?: boolean;
+  /** The file name a batched run writes under. See `Job.runKey`. */
+  runKey?: string;
   estimatedSeconds: number | null;
 }
 
@@ -416,6 +418,7 @@ export function useJobs(): JobsController {
           patches,
           loras,
           localDirector: response.localDirector === true,
+          runKey: response.runKey,
           variant: workflow.estimateBy
             ? String(response.resolved?.[workflow.estimateBy.param] ?? "")
             : undefined,

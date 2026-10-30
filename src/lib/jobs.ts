@@ -134,6 +134,12 @@ export interface Job {
   lostContact?: boolean;
   /** Its output was found on the box after the fact rather than reported. */
   recovered?: boolean;
+  /**
+   * The `filename_prefix` a batched run — an upscale — writes its file under,
+   * unique to the run. Its prompt id dies with ComfyUI's history; this names
+   * the file it leaves behind. See `recoverUpscales`.
+   */
+  runKey?: string;
   resolved: Record<string, ParamValue>;
   estimatedSeconds: number | null;
 }

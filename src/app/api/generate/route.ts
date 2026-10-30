@@ -8,6 +8,7 @@ import {
 } from "@/lib/comfy";
 import { allowedValuesFor } from "@/lib/dynamic-options";
 import { errorResponse } from "@/lib/errors";
+import { runKey } from "@/lib/meta-batch";
 import { applyParams, ParamError, validateWorkflow } from "@/lib/params";
 import { getWorkflow } from "@/lib/workflows";
 import {
@@ -197,6 +198,9 @@ export async function POST(request: Request) {
       // Echoed for the same reason: the history buckets render times by how a
       // run was made, and a local brief adds time to it.
       localDirector: localDirector !== undefined,
+      // The file name a batched run writes under, unique to it: what finds its
+      // file again if ComfyUI restarts and forgets the run. See meta-batch.ts.
+      runKey: runKey(graph) ?? undefined,
       // Only ever a starting point: the client replaces it with this machine's
       // own median for this workflow and these modes as soon as it has one, so
       // the fact that neither number describes both switches at once costs a

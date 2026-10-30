@@ -148,3 +148,42 @@ export async function recoverScenes(
     stillMissing: missing.filter((job) => !found[job.promptId]).length,
   };
 }
+
+/**
+ * The scenes' upscales this device lost track of, which can be looked for.
+ *
+ * Simpler than a scene's: an upscale writes under a file name of its own run
+ * (`Job.runKey`), so its file is found by name rather than matched by order
+ * and length. One sent before the name was kept has nothing to look for.
+ */
+export function lostUpscales(
+  project: MusicVideoProject,
+  jobFor: (promptId: string) => Job | undefined,
+): Job[] {
+  return project.scenes
+    .map((scene) => (scene.upscalePromptId ? jobFor(scene.upscalePromptId) : undefined))
+    .filter((job): job is Job => job !== undefined && lostTrackOf(job) && Boolean(job.runKey));
+}
+
+export async function recoverUpscales(
+  project: MusicVideoProject,
+  jobs: Job[],
+): Promise<RecoveryResult> {
+  const byId = new Map(jobs.map((job) => [job.promptId, job]));
+  const missing = lostUpscales(project, (id) => byId.get(id));
+  const found: RecoveryResult["found"] = {};
+  for (const job of missing) {
+    const query = new URLSearchParams({ run: job.runKey ?? "" });
+    const { files } = await api<{ files: OutputFile[] }>(`/api/outputs?${query}`);
+    if (files.length === 0) continue;
+    found[job.promptId] = {
+      outputs: files.map(({ url, filename, subfolder, type }) => ({ url, filename, subfolder, type })),
+      completedAt: Math.max(...files.map((file) => file.modifiedAt)),
+    };
+  }
+  return {
+    found,
+    lost: missing.length,
+    stillMissing: missing.filter((job) => !found[job.promptId]).length,
+  };
+}

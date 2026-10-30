@@ -3,9 +3,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JobsController } from "@/hooks/use-jobs";
 import { api, ApiError, getToken } from "@/lib/client";
-import { isActive, type Job, type MusicVideoPart, type MusicVideoTag } from "@/lib/jobs";
+import {
+  isActive,
+  lostTrackOf,
+  type Job,
+  type JobOutput,
+  type MusicVideoPart,
+  type MusicVideoTag,
+} from "@/lib/jobs";
 import { analyseSong } from "@/lib/music-video/beats";
-import { lostScenes, recoverScenes } from "@/lib/music-video/recover";
+import {
+  lostScenes,
+  lostUpscales,
+  recoverScenes,
+  recoverUpscales,
+} from "@/lib/music-video/recover";
 import {
   composeLook,
   outlined,
@@ -92,6 +104,11 @@ export interface MusicVideoController {
    */
   upscaleAll: (size: number, frameRate: number) => Promise<void>;
   /**
+   * Join the upscaled scenes. It happens on its own once every scene is
+   * upscaled; this is for after that join failed.
+   */
+  joinUpscaled: () => Promise<void>;
+  /**
    * Render another take of a scene, on a fresh seed, and use it. The earlier
    * takes are kept to pick from: see `takesFor`.
    */
@@ -105,13 +122,14 @@ export interface MusicVideoController {
   pickTake: (index: number, promptId: string) => void;
   stitch: () => Promise<void>;
   /**
-   * How many scenes this device lost track of — abandoned when the server went
-   * quiet, or forgotten by a ComfyUI restart — and so may have clips on the box.
+   * How many scenes and upscales this device lost track of — abandoned when
+   * the server went quiet, or forgotten by a ComfyUI restart — and so may have
+   * clips on the box.
    */
   lostCount: number;
   /** Whether `recover` is looking. */
   recovering: boolean;
-  /** Look on the box for the lost scenes' clips. See `recoverScenes`. */
+  /** Look on the box for the lost clips. See `recoverScenes` and `recoverUpscales`. */
   recover: () => Promise<void>;
   /** What the last `recover` found, to say so. */
   recoveryNote: string | null;
@@ -127,6 +145,8 @@ interface Options {
   values: Record<string, ParamValue>;
   modes: RunModes & { lowVram?: boolean; localDirector?: string };
   jobs: JobsController;
+  /** Whether ComfyUI is answering, so lost upscales can be sent again. */
+  online: boolean;
 }
 
 function readProject(): MusicVideoProject | null {
@@ -162,6 +182,20 @@ const savedVideo = (job: Job | undefined) =>
       )
     : undefined;
 
+/**
+ * The copy of a clip a join reads. The song replaces every scene's own sound,
+ * but trimming a scene to its window re-encodes the sound it has, and FFmpeg's
+ * AAC encoder can abort on a soundtrack it decoded without complaint — taking
+ * ComfyUI down with it, every time the join is sent (one 4K upscale of 13,
+ * 2026-10-30). VHS keeps the silent file beside each "-audio" one it writes,
+ * so an upscale is joined from that and has no sound to re-encode.
+ */
+const SOUNDTRACKED = /^(.+_\d{5,})-audio(\.[a-z0-9]+)$/i;
+const silentCopy = (output: JobOutput): JobOutput => ({
+  ...output,
+  filename: output.filename.replace(SOUNDTRACKED, "$1$2"),
+});
+
 /** What a run of this project is tagged with in the history. See `Job.musicVideo`. */
 const tagFor = (
   project: MusicVideoProject,
@@ -186,6 +220,7 @@ export function useMusicVideo({
   values,
   modes,
   jobs,
+  online,
 }: Options): MusicVideoController {
   const [project, setProject] = useState<MusicVideoProject | null>(readProject);
   const [busy, setBusy] = useState<"cutting" | null>(null);
@@ -679,8 +714,9 @@ export function useMusicVideo({
     ) => {
       if (!stitchWorkflow) return null;
       const clips = current.scenes.map((scene) => {
-        const output = savedVideo(pick(scene));
-        if (!output) return null;
+        const saved = savedVideo(pick(scene));
+        if (!saved) return null;
+        const output = silentCopy(saved);
         // As LoadVideo names a file in another of ComfyUI's folders.
         const path = output.subfolder ? `${output.subfolder}/${output.filename}` : output.filename;
         return { file: `${path} [${output.type || "output"}]`, seconds: keptFrames(scene) / FPS };
@@ -721,7 +757,12 @@ export function useMusicVideo({
    * a job of a few minutes: a failure, or a reset of the box, costs that scene
    * and not hours of work, and a redone scene needs only its own upscale again.
    */
-  const upscaleAll = useCallback(async (size: number, frameRate: number) => {
+  const sendUpscales = useCallback(async (
+    size: number,
+    frameRate: number,
+    /** Send only these scenes, rather than every one without a good upscale. */
+    only?: number[],
+  ) => {
     if (!project || !upscaleWorkflow) return;
     setError(null);
     let current: MusicVideoProject = {
@@ -731,12 +772,15 @@ export function useMusicVideo({
       // A project upscaled before the choice existed kept the clip's own rate.
       upscaleFrameRate:
         project.upscaleFrameRate ?? (project.upscaleSize ? 1 : frameRate),
+      upscaleResumed: only
+        ? [...new Set([...(project.upscaleResumed ?? []), ...only])]
+        : project.upscaleResumed,
     };
     setProject(current);
     for (let index = 0; index < current.scenes.length; index += 1) {
       const scene = current.scenes[index];
       const existing = upscaleFor(scene);
-      if (scene.upscalePromptId && !failed(existing)) continue;
+      if (only ? !only.includes(index) : scene.upscalePromptId && !failed(existing)) continue;
       const output = savedVideo(jobFor(scene));
       if (!output) {
         setError(`Scene ${index + 1} has no finished clip to upscale yet.`);
@@ -778,43 +822,108 @@ export function useMusicVideo({
       }
     }
   }, [project, upscaleWorkflow, upscaleFor, jobFor, jobs]);
+  const upscaleAll = useCallback(
+    (size: number, frameRate: number) => sendUpscales(size, frameRate),
+    [sendUpscales],
+  );
 
   // Once every scene's upscale is done, join them — once. The person asked for
-  // an upscaled video, not for forty upscaled clips.
+  // an upscaled video, not for forty upscaled clips. Once per set of upscales,
+  // too: a join that failed waits for `joinUpscaled` rather than going again,
+  // because one that took ComfyUI down would go again the moment it was back
+  // up, and take it down again, for as long as the page stayed open.
   const joiningUpscaled = useRef(false);
   const upscaleJobs = project?.scenes.map(upscaleFor) ?? [];
   const upscalesDone = upscaleJobs.filter((job) => job?.phase === "done").length;
   const allUpscaled =
     project !== null && upscaleJobs.length > 0 && upscalesDone === upscaleJobs.length;
+  const upscaleSet = upscaleJobs.map((job) => job?.promptId ?? "").join(",");
+  const joinUpscaledNow = useCallback(
+    async (current: MusicVideoProject) => {
+      if (joiningUpscaled.current) return;
+      joiningUpscaled.current = true;
+      setProject((previous) => (previous ? { ...previous, upscaledJoinTried: upscaleSet } : previous));
+      try {
+        const promptId = await join(current, upscaleFor, "upscaled-join");
+        if (promptId) {
+          setProject((previous) => (previous ? { ...previous, upscaledStitchPromptId: promptId } : previous));
+        }
+      } finally {
+        joiningUpscaled.current = false;
+      }
+    },
+    [join, upscaleFor, upscaleSet],
+  );
   useEffect(() => {
     if (!project?.upscaleRequested || !allUpscaled || project.upscaledStitchPromptId) return;
-    if (joiningUpscaled.current) return;
-    joiningUpscaled.current = true;
-    void join(project, upscaleFor, "upscaled-join").then((promptId) => {
-      joiningUpscaled.current = false;
-      if (promptId) {
-        setProject((previous) => (previous ? { ...previous, upscaledStitchPromptId: promptId } : previous));
-      }
-    });
-  }, [project, allUpscaled, join, upscaleFor]);
+    if (project.upscaledJoinTried === upscaleSet) return;
+    void joinUpscaledNow(project);
+  }, [project, allUpscaled, upscaleSet, joinUpscaledNow]);
+  const joinUpscaled = useCallback(async () => {
+    if (!project || !allUpscaled || project.upscaledStitchPromptId) return;
+    setError(null);
+    await joinUpscaledNow(project);
+  }, [project, allUpscaled, joinUpscaledNow]);
 
-  const lostCount = project ? lostScenes(project, (id) => byId.get(id)).length : 0;
+  // Upscales ComfyUI forgot — it restarted, or the box did — picked back up
+  // once it answers again: the finished ones found by name, the rest sent
+  // again, each scene once. A real failure is left for the button, which says
+  // what went wrong.
+  const resuming = useRef(false);
+  const upscaling = upscaleJobs.some((job) => job !== undefined && isActive(job));
+  const { recover: recoverJobs } = jobs;
+  useEffect(() => {
+    if (!online || !project?.upscaleRequested || upscaling || resuming.current) return;
+    const lost = project.scenes.flatMap((scene, index) => {
+      const job = upscaleFor(scene);
+      return job && lostTrackOf(job) && !project.upscaleResumed?.includes(index) ? [index] : [];
+    });
+    if (lost.length === 0) return;
+    resuming.current = true;
+    void (async () => {
+      try {
+        const { found } = await recoverUpscales(project, jobs.jobs).catch(() => ({
+          found: {} as Record<string, never>,
+        }));
+        recoverJobs(found);
+        const resend = lost.filter((index) => {
+          const promptId = project.scenes[index].upscalePromptId;
+          return !promptId || !found[promptId];
+        });
+        if (resend.length > 0 && project.upscaleSize) {
+          await sendUpscales(project.upscaleSize, project.upscaleFrameRate ?? 1, resend);
+        }
+      } finally {
+        resuming.current = false;
+      }
+    })();
+  }, [online, project, upscaling, upscaleFor, jobs.jobs, recoverJobs, sendUpscales]);
+
+  const lostCount = project
+    ? lostScenes(project, (id) => byId.get(id)).length +
+      lostUpscales(project, (id) => byId.get(id)).length
+    : 0;
   const [recovering, setRecovering] = useState(false);
   const [recoveryNote, setRecoveryNote] = useState<string | null>(null);
-  const { recover: recoverJobs } = jobs;
   const recover = useCallback(async () => {
     if (!project) return;
     setError(null);
     setRecoveryNote(null);
     setRecovering(true);
     try {
-      const { found, lost, stillMissing } = await recoverScenes(project, jobs.jobs);
-      recoverJobs(found);
+      // The upscales first: found by name, they need nothing the scenes'
+      // search can fail for.
+      const upscales = await recoverUpscales(project, jobs.jobs);
+      recoverJobs(upscales.found);
+      const scenes = await recoverScenes(project, jobs.jobs);
+      recoverJobs(scenes.found);
+      const lost = scenes.lost + upscales.lost;
+      const stillMissing = scenes.stillMissing + upscales.stillMissing;
       const count = lost - stillMissing;
       setRecoveryNote(
         stillMissing === 0
           ? `Found all ${lost} on the ComfyUI machine.`
-          : `Found ${count} of ${lost} on the ComfyUI machine. Render sends the rest again.`,
+          : `Found ${count} of ${lost} on the ComfyUI machine. Render or Upscale sends the rest again.`,
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not look for the lost scenes.");
@@ -852,6 +961,7 @@ export function useMusicVideo({
       joining: Boolean(upscaledStitchJob && !upscaledFinal && !failed(upscaledStitchJob)),
     },
     upscaleAll,
+    joinUpscaled,
     stitch,
     lostCount,
     recovering,

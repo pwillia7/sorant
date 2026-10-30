@@ -50,6 +50,19 @@ export interface MusicVideoProject {
   /** The run that joins the upscaled scenes. */
   upscaledStitchPromptId?: string;
   /**
+   * The upscales the join last went ahead with on its own, as their prompt ids
+   * in scene order. It goes ahead once per set: a join that fails is offered
+   * again rather than sent again, since one that took ComfyUI down with it
+   * would do so every time the box came back.
+   */
+  upscaledJoinTried?: string;
+  /**
+   * The scenes whose upscale was sent again on its own after ComfyUI forgot
+   * it. Once each: a scene whose upscale is what brings the box down is left
+   * for someone to look at.
+   */
+  upscaleResumed?: number[];
+  /**
    * The shorter side the scenes are upscaled to. Fixed when the first one is
    * sent, so a scene upscaled later — a redo, or one that failed — comes out
    * the same size as the rest and the join has one size to work with.

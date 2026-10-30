@@ -276,11 +276,11 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                 variant="primary"
                 disabled={video.recovering}
                 onClick={() => void video.recover()}
-                title="This device lost contact with the ComfyUI machine while these scenes were queued, so they may have finished anyway. Looks for their clips on the machine before anything is rendered again."
+                title="This device lost contact with the ComfyUI machine while these scenes or upscales were queued, so they may have finished anyway. Looks for their clips on the machine before anything is sent again."
               >
                 {video.recovering
                   ? "Looking…"
-                  : `Find ${video.lostCount === 1 ? "the lost scene" : `the ${video.lostCount} lost scenes`} on the machine`}
+                  : `Find ${video.lostCount === 1 ? "the lost clip" : `the ${video.lostCount} lost clips`} on the machine`}
               </Button>
             ) : null}
             {unrendered > 0 ? (
@@ -309,14 +309,23 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                 </span>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    onClick={() => void video.upscaleAll(upscaleSize, upscaleRate)}
-                    title={`Upscales every scene to ${upscaleSize} px${upscaleRate > 1 ? ` at ${24 * upscaleRate} fps` : ""}, then joins the upscaled scenes into a second video. Roughly ${upscaleTime(upscaleSize)} for this song.`}
-                  >
-                    {upscaleRemaining < scenes.length
-                      ? `Upscale the ${upscaleRemaining} remaining`
-                      : "Upscale the video"}
-                  </Button>
+                  {upscaleRemaining === 0 ? (
+                    <Button
+                      onClick={() => void video.joinUpscaled()}
+                      title="Every scene is upscaled. Joins them into the upscaled video again, after the last try failed."
+                    >
+                      Join the upscaled scenes
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => void video.upscaleAll(upscaleSize, upscaleRate)}
+                      title={`Upscales every scene to ${upscaleSize} px${upscaleRate > 1 ? ` at ${24 * upscaleRate} fps` : ""}, then joins the upscaled scenes into a second video. Roughly ${upscaleTime(upscaleSize)} for this song.`}
+                    >
+                      {upscaleRemaining < scenes.length
+                        ? `Upscale the ${upscaleRemaining} remaining`
+                        : "Upscale the video"}
+                    </Button>
+                  )}
                   {project?.upscaleSize ? (
                     <span className="text-[12px] text-fg-subtle">
                       at {project.upscaleSize} px

@@ -983,6 +983,7 @@ function Workbench({
     values,
     modes: { ...modes, lowVram, localDirector: runDirector },
     jobs,
+    online: health?.reachable === true && health.authorized !== false,
   });
   // The takes and upscales the music video is using, so its entry in the
   // history lists those and leaves the rest to the panel's take picker.

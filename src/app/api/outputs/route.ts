@@ -46,6 +46,8 @@ export async function GET(request: Request) {
 
   try {
     const search = new URL(request.url).searchParams;
+    const run = search.get("run");
+    if (run !== null) return Response.json({ files: await runFiles(run) });
     const after = search.get("after") ?? "";
     const subfolder = search.get("subfolder") ?? "";
     const match = COUNTED.exec(after);
@@ -98,4 +100,50 @@ export async function GET(request: Request) {
   } catch (error) {
     return errorResponse(error);
   }
+}
+
+/**
+ * The files one batched run wrote, by the `filename_prefix` it was given —
+ * `video/upscale_1a2b3c4d`. VHS numbers from 1 under a prefix it has not seen,
+ * and with a soundtrack keeps the silent file beside the one with sound, so
+ * there are at most these two names to ask for, the one with sound first. See
+ * `Job.runKey`.
+ *
+ * A file whose length cannot be read is one a run died writing — an MP4 says
+ * how long it is when it is closed — and is left out.
+ */
+const RUN_KEY = /^[\w-]+(\/[\w-]+)*$/;
+
+async function runFiles(run: string): Promise<OutputFile[]> {
+  if (!RUN_KEY.test(run) || isUnsafePath(run)) {
+    throw new ParamError("run must be a run's file prefix.", "run");
+  }
+  const slash = run.lastIndexOf("/");
+  const subfolder = slash === -1 ? "" : run.slice(0, slash);
+  const base = run.slice(slash + 1);
+  const names = [`${base}_00001-audio.mp4`, `${base}_00001.mp4`];
+  const stats = await Promise.all(
+    names.map(async (filename) => {
+      const ref = { filename, subfolder, type: "output" };
+      const stat = await statFile(ref);
+      if (!stat) return null;
+      const seconds = await mp4Seconds((from, to) => readFileRange(ref, from, to)).catch(() => null);
+      return seconds === null ? null : { ...stat, seconds };
+    }),
+  );
+  return names.flatMap((filename, i) => {
+    const stat = stats[i];
+    if (!stat) return [];
+    const query = new URLSearchParams({ filename, subfolder, type: "output" });
+    return [
+      {
+        filename,
+        subfolder,
+        type: "output",
+        url: `/api/media?${query}`,
+        modifiedAt: stat.modifiedAt,
+        seconds: stat.seconds,
+      },
+    ];
+  });
 }
