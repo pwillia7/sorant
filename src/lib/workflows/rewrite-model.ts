@@ -121,9 +121,10 @@ export function rewriteModelParam(
     id: REWRITE_MODEL,
     label: "Rewrite model",
     type: "select",
-    // The newest permissive model that can also see, which is the first entry
-    // of the offered list on any graph — a graph is written carrying a model
-    // its director accepts unconverted, whether or not it shows one a picture.
+    // The first entry of the offered list that can also see — the permissive
+    // family's quick non-reasoning member, see `cheapWithoutReasoning`. A graph
+    // is written carrying a model its director accepts unconverted, whether or
+    // not it shows one a picture.
     default: defaultRewriteModel(true),
     // Sighted first and blind after, rather than the curation's own order with
     // a heading on each entry. The two are interleaved family by family, so

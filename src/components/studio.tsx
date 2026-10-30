@@ -396,8 +396,9 @@ function Workbench({
    * catalog's, narrowed to the key's tier. Taken from a graph that shows its
    * director a picture where there is one, since that is the list that says
    * which models can see. A choice that list no longer has — retired, or
-   * outside the tier — falls back to the first a form was left on, then to the
-   * picker's default.
+   * outside the tier — falls back to the picker's default, as does no choice
+   * at all: the forms' stored values are the old default written back on every
+   * load, not something anyone chose.
    */
   const rewritePicker = useMemo(() => {
     const pickers = workflows.flatMap((workflow) =>
@@ -411,12 +412,11 @@ function Workbench({
   const rewriteModel = useMemo(() => {
     if (!rewritePicker) return undefined;
     const offeredIds = new Set(rewritePicker.options.map((option) => option.value));
-    const fromForms = Object.values(valuesByWorkflow).map((values) => values[REWRITE_MODEL]);
-    const candidate = [chosenRewriteModel, ...fromForms, rewritePicker.default].find(
+    const candidate = [chosenRewriteModel, rewritePicker.default].find(
       (id): id is string => typeof id === "string" && offeredIds.has(id),
     );
     return candidate ?? rewritePicker.options[0]?.value;
-  }, [rewritePicker, chosenRewriteModel, valuesByWorkflow]);
+  }, [rewritePicker, chosenRewriteModel]);
   const onRewriteModelChange = useCallback((id: string) => {
     setChosenRewriteModel(id);
     writeStoredRewriteModel(id);

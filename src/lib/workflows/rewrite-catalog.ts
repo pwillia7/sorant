@@ -60,13 +60,17 @@ export const REWRITE_FAMILIES: Array<{
   prefix: string;
   why: string;
   /**
-   * Also offer the family's cheapest paid member that does not reason.
+   * Also offer the family's cheapest paid member that does not reason, and
+   * offer it first.
    *
    * Reasoning tokens are billed as output, and a director that must reason —
    * Grok's newest will not go below `low` effort — spends most of a rewrite's
-   * cost on thinking nobody reads. Opt-in per family rather than a fifth pick
-   * everywhere, because in most families the cheapest non-reasoning member is
-   * an old model nobody would choose, and the list is a control, not a catalog.
+   * cost on thinking nobody reads, and most of its time: about two minutes a
+   * call, where a music video's plan makes one call per scene (2026-10-30).
+   * First, because the first offered model is every graph's default. Opt-in
+   * per family rather than a fifth pick everywhere, because in most families
+   * the cheapest non-reasoning member is an old model nobody would choose, and
+   * the list is a control, not a catalog.
    */
   cheapWithoutReasoning?: true;
 }> = [
@@ -99,13 +103,15 @@ export const REWRITE_FAMILIES: Array<{
  * provider means by that version, rather than on whichever speed tier they
  * shipped most recently — `glm-5.3-fast` is not a newer model than `glm-5.3`,
  * it is the same one with a different price. Dated snapshots (`-0813`) go for
- * the same reason.
+ * the same reason, and so does `-batch`: the same model on a batch tier, which
+ * is cheaper because it is not in a hurry — the wrong trade for a rewrite
+ * someone is waiting on.
  *
  * `-free` is conspicuously *not* here: a free variant is a distinct offer and
  * gets its own place in the list. See `curate`.
  */
 const NOT_A_VERSION =
-  /(-fast|-highspeed|-turbo|-lightning|-promo(-\d+)?|-beta|-preview|-exp|-thinking|-multi-agent|-\d{4})$/;
+  /(-fast|-highspeed|-turbo|-lightning|-promo(-\d+)?|-beta|-preview|-exp|-thinking|-multi-agent|-batch|-\d{4})$/;
 
 /**
  * Families' members that are for writing code, or are not really chat models.
@@ -221,16 +227,16 @@ export function curate(models: CatalogEntry[]): OfferedModel[] {
      * without writing blind.
      */
     const picks = [
-      members.find((model) => paid(model) && seesImages(model)),
-      members.find((model) => paid(model) && !seesImages(model)),
-      members.find((model) => gratis(model) && seesImages(model)),
-      members.find((model) => gratis(model) && !seesImages(model)),
       family.cheapWithoutReasoning
         ? members
             .filter((model) => paid(model) && !reasons(model))
             // Stable, so a price tie keeps the newer of the two.
             .sort((a, b) => price(a.pricing?.output) - price(b.pricing?.output))[0]
         : undefined,
+      members.find((model) => paid(model) && seesImages(model)),
+      members.find((model) => paid(model) && !seesImages(model)),
+      members.find((model) => gratis(model) && seesImages(model)),
+      members.find((model) => gratis(model) && !seesImages(model)),
     ];
 
     for (const model of picks) {
