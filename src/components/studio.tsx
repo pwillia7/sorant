@@ -305,13 +305,21 @@ function Workbench({
    * Where the prompt rewrite runs, and on which local model when it is the
    * ComfyUI machine. For every workflow at once, like `lowVram`: it is about
    * the setup rather than the shot. See local-director.ts.
+   *
+   * Until someone chooses, the local director — unless the machine has been
+   * asked and has no file for it, when a run there could only fail. Before
+   * the machine answers it is local too: a run sent then that cannot find the
+   * file says so and names the way back.
    */
-  const [directorEngine, setDirectorEngine] = useState(
-    readStoredDirectorEngine,
-  );
+  const [chosenEngine, setChosenEngine] = useState(readStoredDirectorEngine);
   const [localDirector, setLocalDirector] = useState(readStoredLocalDirector);
+  const directorEngine: DirectorEngine =
+    chosenEngine ??
+    (compat?.localDirectors && !compat.localDirectors.includes(localDirector)
+      ? "gateway"
+      : "local");
   const onDirectorEngineChange = useCallback((engine: DirectorEngine) => {
-    setDirectorEngine(engine);
+    setChosenEngine(engine);
     writeStoredDirectorEngine(engine);
   }, []);
   const onLocalDirectorChange = useCallback((id: string) => {

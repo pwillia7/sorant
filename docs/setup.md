@@ -122,9 +122,10 @@ you can switch at any time:
   through ComfyUI's built-in `TextGenerate` node: no key, nothing refused, about
   20 seconds slower a run. It needs one more 12 GB file
   (`pnpm models:download --comfy <ComfyUI folder> --extras local-director`).
-  Then open the **Gateway** button and set *Where is the prompt rewritten?* to
-  **This ComfyUI machine**. The choice is remembered per browser, so set it once
-  on each device. The easiest way to start.
+  It is the default: a browser that has not chosen starts here whenever the
+  machine has that file, and on the gateway when it does not. Change it from
+  *Where is the prompt rewritten?* behind the **Gateway** button; the choice
+  is remembered per browser. The easiest way to start.
 - **On the Vercel AI Gateway — a key.** Hosted models: faster, each with a
   content policy. Create a key at
   [vercel.com/dashboard](https://vercel.com/dashboard) → **AI Gateway** → **API

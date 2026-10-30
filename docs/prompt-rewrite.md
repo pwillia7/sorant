@@ -282,11 +282,14 @@ verifies every offered id against the live dropdown on your own install.
 
 ## Running the rewrite on the ComfyUI machine
 
-The rewrite does not have to use the gateway. From the header's Gateway
-button, beside the key, it can be set to run on **This ComfyUI machine**
-instead: no account, no key, and no hosted model's content policy — a director
-that refuses to describe the shot is a run that never starts, and that is the
-gateway's usual failure. The choice is per browser, not per workflow, and
+The rewrite does not have to use the gateway, and by default it does not: it
+runs on **This ComfyUI machine** — no account, no key, and no hosted model's
+content policy, since a director that refuses to describe the shot is a run
+that never starts, and that is the gateway's usual failure. A browser that has
+not chosen starts there as long as the machine has the model file
+(`/api/compat` lists which local models it has a file for), and on the gateway
+when it does not, rather than failing every run at the rewrite. The header's
+Gateway button switches it. The choice is per browser, not per workflow, and
 travels with each run as a mode; while it is on, **Rewrite model** leaves the
 dialog, since it would be choosing a model nothing uses.
 

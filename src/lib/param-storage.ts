@@ -89,13 +89,19 @@ export type StoredModes = Record<string, boolean>;
 const DIRECTOR_ENGINE_KEY = "sorant-director-engine";
 const LOCAL_DIRECTOR_KEY = "sorant-local-director";
 
-export function readStoredDirectorEngine(): DirectorEngine {
+/**
+ * Null until someone chooses. The default is then the local director, as long
+ * as the ComfyUI machine has its file — see the studio's `directorEngine` —
+ * since it costs nothing and refuses nothing, where a gateway model can do
+ * both; but the file is an optional download, and on a machine without it
+ * every run would stop at the rewrite.
+ */
+export function readStoredDirectorEngine(): DirectorEngine | null {
   try {
-    return localStorage.getItem(DIRECTOR_ENGINE_KEY) === "local"
-      ? "local"
-      : "gateway";
+    const stored = localStorage.getItem(DIRECTOR_ENGINE_KEY);
+    return stored === "local" || stored === "gateway" ? stored : null;
   } catch {
-    return "gateway";
+    return null;
   }
 }
 

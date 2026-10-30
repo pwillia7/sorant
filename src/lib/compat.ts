@@ -1,5 +1,10 @@
 import requirements from "../../machine-requirements.json";
 import { enumValuesFor, probeNodeSchema } from "./comfy";
+import {
+  findLocalDirectorFile,
+  LOCAL_DIRECTOR_MODELS,
+  LOCAL_LOADER_CLASS,
+} from "./workflows/local-director";
 import type { MachineRequirements } from "./workflows/requirements";
 
 /**
@@ -39,6 +44,13 @@ export interface CompatReport {
   /** Some classes could not be asked about, so the report may be missing problems. */
   incomplete: boolean;
   workflows: Record<string, WorkflowCompat>;
+  /**
+   * Which local director models the machine has a file for, by id — or null
+   * when its text encoders could not be listed. What decides whether a
+   * browser that has never chosen starts on the local director. See
+   * `readStoredDirectorEngine`.
+   */
+  localDirectors: string[] | null;
 }
 
 const MANIFEST = requirements as MachineRequirements;
@@ -108,7 +120,7 @@ async function buildReport(): Promise<CompatReport> {
   const probes = await probeAll(Object.keys(MANIFEST.classes));
   const answers = [...probes.values()];
   if (answers.every((answer) => answer === "unknown")) {
-    return { checked: false, incomplete: true, workflows: {} };
+    return { checked: false, incomplete: true, workflows: {}, localDirectors: null };
   }
 
   const workflows: Record<string, WorkflowCompat> = {};
@@ -157,10 +169,19 @@ async function buildReport(): Promise<CompatReport> {
     });
   }
 
+  const loader = probes.get(LOCAL_LOADER_CLASS) ?? (await probeNodeSchema(LOCAL_LOADER_CLASS));
+  const encoders = typeof loader === "string" ? null : enumValuesFor(loader, "clip_name");
+  const localDirectors = encoders
+    ? LOCAL_DIRECTOR_MODELS.filter((model) => findLocalDirectorFile(model, encoders)).map(
+        (model) => model.id,
+      )
+    : null;
+
   return {
     checked: true,
     incomplete: answers.includes("unknown"),
     workflows,
+    localDirectors,
   };
 }
 
