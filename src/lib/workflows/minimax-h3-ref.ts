@@ -1605,7 +1605,7 @@ const params: ParamDef[] = [
   rewriteModelParam(graph, [ids.director]),
 
   durationParam(ids, director),
-  lookParam(director),
+  lookParam(director, { references: true }),
   aspectRatioParam("115"),
   {
     id: "megapixels",

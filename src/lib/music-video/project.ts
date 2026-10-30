@@ -316,7 +316,7 @@ export function sceneValues(
   const idea = String(project.values.prompt ?? "").trim();
   const look = project.look?.trim() ?? "";
   const lookNote = look
-    ? `\n\n(How they look, in this scene and every other one in the video: ${look} — use these words as the observed detail in each subject's definition, and describe them no other way. They outrank anything below about anyone's appearance.)`
+    ? `\n\n(How they look, in this scene and every other one in the video: ${look} — use these words as the observed detail in each subject's definition, and describe them no other way. They outrank anything below about anyone's appearance or how the video is rendered.)`
     : "";
   const shot = `${scene.shot}${lookNote}`;
   return {
@@ -361,9 +361,10 @@ export function composeLook(
   // Told to write nothing for a picture with nobody in it, the local
   // describer has still written "There is no man in this picture." — which
   // would then be handed to every scene as how someone looks.
+  // A style picture's paragraph is about no one, and is kept whatever it says.
   const described = (cast ?? "")
     .split(/\n\s*\n/)
-    .filter((paragraph) => !/\b(is|are) no (one|body|person|people|man|woman|character)\b|\bnobody\b/i.test(paragraph))
+    .filter((paragraph) => /^\s*the style of\b/i.test(paragraph) || !/\b(is|are) no (one|body|person|people|man|woman|character)\b|\bnobody\b/i.test(paragraph))
     .join("\n\n")
     .trim();
   return [described, releases ? planned.trim() : ""].filter(Boolean).join("\n\n");

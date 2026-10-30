@@ -182,8 +182,8 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                 onChange={(value) => video.editLook(value)}
               />
               <p className="mt-1 text-[12px] leading-snug text-fg-subtle">
-                Given word for word to every scene, so the costume holds across
-                the cuts. Edits apply to scenes rendered from now on.
+                Given word for word to every scene, so the costume and any style
+                picture&apos;s look hold across the cuts. Edits apply to scenes rendered from now on.
               </p>
             </div>
           ) : null}

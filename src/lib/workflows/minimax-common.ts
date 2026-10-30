@@ -271,13 +271,31 @@ Do not ask for dramatic or high-contrast lighting, rim light, glow, bloom, lens 
 
 export const DEFAULT_LOOK = "natural";
 
-/** The look's instruction to the director, or nothing for Cinematic. */
-export const lookBlock: DirectorAppendix = (values) =>
-  (LOOKS[String(values[LOOK_PARAM])] ?? LOOKS[DEFAULT_LOOK]).block;
+/**
+ * The look's instruction to the director, or nothing for Cinematic.
+ *
+ * A picture set to Style only replaces either. Natural's "Live-action,
+ * naturalistic" over a cel-shaded or painted style picture told the director
+ * to write the opposite of the one thing that picture is there for.
+ */
+export const lookBlock: DirectorAppendix = (values) => {
+  const styles = styleReferences(values);
+  if (styles.length > 0) {
+    const label = pictureList(styles);
+    return `LOOK
+
+${label} ${styles.length > 1 ? "decide" : "decides"} how this video looks. In the style statement, name the medium you actually see there — live-action footage, cel animation, an oil painting, claymation, pixel art, a 3D render — and describe its palette, contrast, light, texture and grain as they are in the picture. Every subject is rendered in it, including the ones from the other pictures.
+
+Do not push it toward naturalistic, cinematic or glossy, and do not mix in a second medium. Describe the style, never the picture's content: nothing in it appears in the video. If the user's text names a different style outright, theirs wins.`;
+  }
+  return (LOOKS[String(values[LOOK_PARAM])] ?? LOOKS[DEFAULT_LOOK]).block;
+};
 
 export function lookParam(
   /** The graph's director target, as for `durationParam`. */
   director: ParamTarget,
+  /** Whether the graph takes reference pictures, any of which can override it. */
+  { references = false }: { references?: boolean } = {},
 ): ParamDef {
   return {
     id: LOOK_PARAM,
@@ -288,7 +306,7 @@ export function lookParam(
       value,
       label: look.label,
     })),
-    help: "Natural asks the director for real-world light and muted colour, which avoids the over-contrasted AI look. Cinematic leaves the grade to it.",
+    help: `Natural asks the director for real-world light and muted colour, which avoids the over-contrasted AI look. Cinematic leaves the grade to it.${references ? " A picture set to Style only decides the look instead." : ""}`,
     group: "Output",
     targets: [director],
   };
@@ -926,12 +944,20 @@ const KEEP_MODES = {
       "identity, proportions, costume, accessories, markings and subject style",
     marker: "fully_preserved",
     note: "Only the performance and the setting are the scene's to choose.",
+    restyled: {
+      facets: "identity, proportions, costume, accessories and markings",
+      marker: "partially_preserved",
+    },
   },
   identity: {
     label: "Identity only — the scene dresses them",
     facets: "identity, proportions and subject style",
     marker: "partially_preserved",
     note: "Costume, accessories and markings are released: whatever the user's prompt calls for is what this subject wears, and the reference's own clothing carries no weight. Their face, build and rendering are unchanged.",
+    restyled: {
+      facets: "identity and proportions",
+      marker: "partially_preserved",
+    },
   },
   costume: {
     label: "Costume and gear only — a different wearer",
@@ -943,9 +969,24 @@ const KEEP_MODES = {
     label: "Style only — a look, not a subject",
     facets: "subject style, palette and rendering",
     marker: "weak_reference",
-    note: "This image contributes a manner of rendering and nothing else. Do not put its subject in the video, and do not treat anything in it as a character, an object or a location the scene contains.",
+    note: "This image contributes a manner of rendering and nothing else. Do not put its subject in the video, and do not treat anything in it as a character, an object or a location the scene contains. Its medium, palette and rendering are the whole video's, every other subject's included.",
   },
-} as const;
+} as const satisfies Record<
+  string,
+  {
+    label: string;
+    facets: string;
+    marker: string;
+    note: string;
+    /**
+     * The facets and marker when another picture is set to Style only. A
+     * subject held at its own subject style would be drawn in two manners at
+     * once — a photograph of someone beside a cel-shaded style picture is a
+     * request for them cel-shaded — so the style picture takes that facet.
+     */
+    restyled?: { facets: string; marker: string };
+  }
+>;
 
 /**
  * What a reference *clip* can be asked to carry, which is not what a picture
@@ -1049,6 +1090,28 @@ function keepMode(value: ParamValue | undefined): (typeof KEEP_MODES)[KeepMode] 
   const key = String(value ?? DEFAULT_KEEP);
   return KEEP_MODES[key as KeepMode] ?? KEEP_MODES[DEFAULT_KEEP];
 }
+
+/**
+ * The pictures set to Style only, by slot number, among those actually wired.
+ *
+ * Read off the submission alone, so the look block can ask it on any graph:
+ * one with no reference slots has none.
+ */
+export function styleReferences(values: Record<string, ParamValue>): number[] {
+  const styles: number[] = [];
+  const filled = leadingReferences(values, ORDINALS.length);
+  for (let index = 1; index <= filled; index += 1) {
+    if (referenceKeep(values, index) === "style") styles.push(index);
+  }
+  return styles;
+}
+
+/** "<Picture 2>", "<Picture 2> and <Picture 3>". */
+const pictureList = (indexes: number[]) =>
+  indexes
+    .map((index) => `<Picture ${index}>`)
+    .join(", ")
+    .replace(/, ([^,]*)$/, " and $1");
 
 /** What a reference slot is set to keep, by key. See KEEP_MODES. */
 export function referenceKeep(
@@ -1849,11 +1912,17 @@ export function referenceFacets(
   return (values) => {
     const lines: string[] = [];
     const filled = leadingReferences(values, count);
+    const styles = styleReferences(values).filter((index) => index <= filled);
 
     for (let index = 1; index <= filled; index += 1) {
       const mode = keepMode(values[keepParamId(index)]);
+      const restyled = styles.length > 0 && "restyled" in mode ? mode.restyled : null;
+      const { facets, marker } = restyled ?? mode;
+      const released = restyled
+        ? ` Its subject style is released too, to ${pictureList(styles)}: render this subject in that picture's medium and manner, not the one it has here. Its line in retention_analysis reads: "<Subject N> (appears in [Shot 1]): partially_preserved - ${facets} are retained; subject style is released to ${pictureList(styles)}, whose medium this subject is drawn in."`
+        : "";
       lines.push(
-        `<Picture ${index}>: keep ${mode.facets}. Its marker in retention_analysis is ${mode.marker}. ${mode.note}`,
+        `<Picture ${index}>: keep ${facets}. Its marker in retention_analysis is ${marker}. ${mode.note}${released}`,
       );
     }
 

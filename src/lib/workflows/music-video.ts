@@ -7,6 +7,7 @@ import {
   lookParam,
   referenceKeep,
   referenceSlot,
+  styleReferences,
   type MinimaxNodeIds,
 } from "./minimax-common";
 import { REWRITE_IMAGE_INPUT, rewriteModelParam, rewriteNode } from "./rewrite-model";
@@ -50,6 +51,8 @@ const REF_NODES = ["3", "5", "6", "7"].slice(0, MUSIC_VIDEO_PICTURES);
 /** Describes the people in the pictures, from the pictures alone. */
 const CAST_NODE = "8";
 const CAST_PROMPT_NODE = "9";
+/** The planner's own batch, when a style picture is left out of it. */
+const PLAN_BATCH_NODE = "10";
 
 const ids: Pick<MinimaxNodeIds, "director"> = { director: DIRECTOR_NODE };
 
@@ -91,11 +94,11 @@ Follow the song's shape. Quiet scenes are intimate, still or atmospheric; loud o
 
 No two scenes are the same event, and no two place lines are the same words. Unless the idea keeps to one place, use at least four different places across the video and spend no more than three scenes in a row in one of them.
 
-Refer to the subject plainly — "the singer", "the woman", or the name the user gives them — never by a picture label, and never describe their face, hair or clothes.
+Refer to the subject plainly — "the singer", "the woman", or the name the user gives them — never by a picture label, and never describe their face, hair or clothes. No picture label appears anywhere in "place" or "happens".
 
 THE LOOK
 
-How the people in the pictures look is written up separately, from the pictures alone. "look" is only for what a picture releases: when one is set to keep only who someone is, choose what they wear here, once, for the whole video, in one or two concrete sentences ("The man in <Picture 1> wears ..."). When every picture keeps everything, or there are no pictures, "look" is an empty string.`;
+How the people in the pictures look, and the style of any picture there for its style, is written up separately, from the pictures alone. "look" is only for what a picture releases: when one is set to keep only who someone is, choose what they wear here, once, for the whole video, in one or two concrete sentences ("The man in <Picture 1> wears ..."). When every picture keeps everything, or there are no pictures, "look" is an empty string.`;
 
 /**
  * One scene's shot, from the outline.
@@ -138,17 +141,19 @@ Begin with whatever makes the scene vivid — the place, an object, the action, 
  * was not enough either — on the local model it followed the idea's outfit on
  * one plan in two. A describer that never sees the idea cannot follow it.
  */
-export const CAST_DESCRIBER = `You describe the people in reference pictures for a music video, so that every scene of it shows them the same way.
+export const CAST_DESCRIBER = `You describe the reference pictures of a music video — the people in them, and the style of any picture that is there for its style — so that every scene of it shows them the same way.
 
 You are shown the pictures, in order: <Picture 1>, <Picture 2> and so on. Below, you are told what each one is for.
 
-Return only the description, as plain text with no heading, list or markdown: one short paragraph per picture you are asked to describe, each opening with who it is and which picture — "The man in <Picture 1>: ...".
+Return only the description, as plain text with no heading, list or markdown: one short paragraph per picture you are asked to describe, each opening with who it is and which picture — "The man in <Picture 1>: ..." — or, for a style picture, "The style of <Picture 2>: ...".
 
 Be concrete and exact about what you can see: skin, hair and facial hair, build and apparent age; every garment with its colour, pattern and cut; hats, glasses, jewellery and anything carried. Do not spell out lettering or logos: say there is lettering, where, and in what colour. The video model reads the words off the picture itself, and a misreading written here would compete with them in every scene. Describe only what is visible. Do not guess at what is out of frame, and do not name the person, the setting, the mood or the style of the picture.
 
 Describe how they look, never what they are doing. Leave out pose, gesture, expression and where their hands are: every scene is a different moment, and anything you write here is repeated in all of them.
 
-A picture may have no person or character in it at all — a place, a game screen, an object. Write nothing for that picture: no paragraph, and no note that there is nobody in it.`;
+A style picture is there for how it is made, not for what is in it. Name its medium, and the tradition or genre it belongs to when you recognise one (a Persian miniature, ukiyo-e, 1980s anime, a Pixar-style 3D render, Super 8 film), then describe its line and edges, texture and grain, the palette, the contrast and how light falls, so that a scene with entirely different content could be made in it. Never name or describe anything it shows — no person, place, object or subject matter — because every scene would then show it too.
+
+Any other picture may have no person or character in it at all — a place, a game screen, an object. Write nothing for that picture: no paragraph, and no note that there is nobody in it.`;
 
 /** What to describe in each picture, by what the picture is set to keep. */
 function castBlock(values: Record<string, ParamValue>): string {
@@ -161,7 +166,8 @@ function castBlock(values: Record<string, ParamValue>): string {
         "describe only the person's face, hair and build. What they wear is chosen elsewhere, so say nothing about their clothes.",
       costume:
         "describe only what the person wears and carries, which goes onto someone else. Say nothing about their face, hair or build.",
-      style: "a style reference with no one in it to hold. Skip it.",
+      style:
+        "a style reference. Describe only its style, in a paragraph of its own, and nothing that is in it.",
     }[referenceKeep(values, index)];
     lines.push(`<Picture ${index}>: ${ask}`);
   }
@@ -178,29 +184,58 @@ ${lines.join("\n")}` : "";
  * and `retention_analysis`, neither of which a plan has, and it cannot say the
  * one thing a plan needs — that a picture with no one in it, a game screen or
  * a place, is something to put in the shots rather than somebody to cast.
+ *
+ * A style picture is named but not shown: see `shownToPlanner`.
  */
 function picturesBlock(values: Record<string, ParamValue>): string {
   const filled = leadingReferences(values, REF_NODES.length);
-  const lines: string[] = [];
-  for (let index = 1; index <= filled; index += 1) {
+  if (filled === 0) return "";
+  const shown = shownToPlanner(values);
+  const styles = styleReferences(values);
+  const lines = shown.map((index) => {
     const says = {
       everything: "whoever is in it, kept exactly as they are — face, hair and clothes. Do not describe them.",
       identity:
         "who is in it, kept as they are; what they wear is the video's to choose (see the look).",
       costume: "what is worn in it, put onto whoever the scene casts.",
-      style: "a style: how the video looks, not anything in it.",
+      style: "",
     }[referenceKeep(values, index)];
-    lines.push(`<Picture ${index}>: ${says}`);
-  }
-  return lines.length
-    ? `THE PICTURES
+    return `<Picture ${index}>: ${says}`;
+  });
+  const labels = (indexes: number[]) => indexes.map((index) => `<Picture ${index}>`).join(", ");
+  // Numbered as every scene numbers them, which is not the order shown once a
+  // style picture before them has been left out.
+  const order =
+    shown.length > 0 && shown.some((index, position) => index !== position + 1)
+      ? `\n\nYou are shown ${labels(shown)}, in that order.`
+      : "";
+  const style =
+    styles.length > 0
+      ? `${labels(styles)}, which you are not shown, ${styles.length > 1 ? "set" : "sets"} only the style every scene is drawn in. That is written up separately and handled for you: never mention ${styles.length > 1 ? "them" : "it"}, and do not describe how the footage looks.`
+      : "";
+  return [
+    `THE PICTURES\n\nEvery scene is given these same pictures.${order}`,
+    lines.join("\n"),
+    style,
+    shown.length > 0
+      ? "A picture with no one in it shows a place or an object: put what it shows into the scenes where it belongs."
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
 
-Every scene is given these same pictures.
-
-${lines.join("\n")}
-
-A picture with no one in it shows a place, an object or a look: put what it shows into the scenes where it belongs.`
-    : "";
+/**
+ * The pictures the planner and the shot writers are shown: all but the style
+ * ones. Shown a Persian miniature as a style, the local planner put "dancers
+ * like the figures in <Picture 2>" into the outline on two plans in four,
+ * however plainly it was told the picture's content was not the video's. The
+ * describer is the one that needs to see it, and its words reach every scene.
+ */
+function shownToPlanner(values: Record<string, ParamValue>): number[] {
+  const filled = leadingReferences(values, REF_NODES.length);
+  const styles = new Set(styleReferences(values));
+  return Array.from({ length: filled }, (_, i) => i + 1).filter((index) => !styles.has(index));
 }
 
 /**
@@ -453,7 +488,7 @@ const params: ParamDef[] = [
     scope: "browser",
     targets: [],
   },
-  { ...lookParam(director), scope: "scenes" },
+  { ...lookParam(director, { references: true }), scope: "scenes" },
   { ...aspectRatioParam("unused"), scope: "scenes", targets: [] },
   {
     id: "megapixels",
@@ -580,6 +615,31 @@ export const musicVideo: WorkflowDef = {
       },
     },
     {
+      name: "a style picture before a person",
+      values: {
+        reference_audio: "song.mp3",
+        prompt: "x",
+        scene_list: `${SCENES_HEADING}\n1.`,
+        reference_image_1: "a.png",
+        reference_1_keep: "style",
+        reference_image_2: "b.png",
+      },
+    },
+    {
+      name: "writing the shots, only a style picture",
+      values: {
+        reference_audio: "song.mp3",
+        prompt: "x",
+        scene_list: `${SCENES_HEADING}\n1.`,
+        reference_image_1: "a.png",
+        reference_1_keep: "style",
+        scene_outline: JSON.stringify({
+          concept: "x",
+          scenes: [{ part: "intro", sings: false, place: "a", happens: "b", timing: "0:00.0–0:05.0 (5.0 s), loudness quiet" }],
+        } satisfies ShotRequest),
+      },
+    },
+    {
       name: "writing the shots, no pictures",
       values: {
         reference_audio: "song.mp3",
@@ -607,6 +667,23 @@ export const musicVideo: WorkflowDef = {
       // Nobody to describe.
       delete graph[CAST_NODE];
       delete graph[CAST_PROMPT_NODE];
+    }
+    // The planner, and the writers made from it below, see every picture but
+    // the style ones, which only the describer needs. See `shownToPlanner`.
+    const shown = shownToPlanner(values);
+    if (filled > 0 && shown.length < filled) {
+      if (shown.length === 0) {
+        delete graph[DIRECTOR_NODE].inputs[REWRITE_IMAGE_INPUT];
+      } else {
+        graph[PLAN_BATCH_NODE] = {
+          class_type: "BatchImagesNode",
+          inputs: Object.fromEntries(
+            shown.map((index, position) => [batchInput(position + 1), [REF_NODES[index - 1], 0]]),
+          ),
+          _meta: { title: "Batch Images (Planner)" },
+        };
+        graph[DIRECTOR_NODE].inputs[REWRITE_IMAGE_INPUT] = [PLAN_BATCH_NODE, 0];
+      }
     }
     if (!String(values[SCENES_PARAM] ?? "").includes(SCENES_HEADING)) {
       throw new ParamError(
@@ -637,6 +714,17 @@ export const musicVideo: WorkflowDef = {
       // The look was settled with the outline.
       delete graph[CAST_NODE];
       delete graph[CAST_PROMPT_NODE];
+    }
+
+    // A style picture only the describer sees is left with nothing to read it
+    // once the describer is gone, and so is the batch it was in.
+    const read = (id: string) =>
+      Object.values(graph).some((node) =>
+        Object.values(node.inputs).some((value) => Array.isArray(value) && value[0] === id),
+      );
+    if (graph[BATCH_NODE] && !read(BATCH_NODE)) delete graph[BATCH_NODE];
+    for (const node of REF_NODES) {
+      if (graph[node] && !read(node)) delete graph[node];
     }
   },
 };
