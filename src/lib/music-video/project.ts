@@ -12,6 +12,7 @@ import {
   SCENES_HEADING,
   shotBrief,
   type OutlineScene,
+  type PlannedKind,
   type SceneWindow,
   type ShotRequest,
 } from "./scenes";
@@ -28,8 +29,11 @@ import {
 export interface MusicVideoProject {
   id: string;
   createdAt: number;
-  /** The song as ComfyUI's input directory names it. */
+  /** Absent on a music video, which every project was before there was a second kind. */
+  kind?: PlannedKind;
+  /** The song as ComfyUI's input directory names it. Empty for a multi-scene video. */
   song: string;
+  /** The song's length; for a multi-scene video, its scenes' together. */
   songSeconds: number;
   /** The form values the plan was made from. Every scene run starts from them. */
   values: Record<string, ParamValue>;
@@ -125,6 +129,109 @@ export interface ProjectScene extends SceneWindow, Partial<OutlineScene> {
    * means the video's, so a change to those still reaches it.
    */
   references?: SceneReference[];
+  /** A multi-scene video's: the voices this scene speaks with instead of the video's. */
+  voices?: SceneVoice[];
+  /**
+   * Which voice's speaker has this scene's first line, where it has two. Absent,
+   * it is read off the scene's lines. See `openerOf`.
+   */
+  opener?: VoiceOpener;
+}
+
+/**
+ * A recording of how someone sounds, as a scene is handed it: up to two, the
+ * Reference to Video slots a scene runs with.
+ */
+export interface SceneVoice {
+  audio: string;
+  /** Who speaks with it, in the scene's own words: "Mara", "the old man". */
+  owner: string;
+  /** Where in the recording its few seconds are taken from. */
+  start: number;
+  /** How many seconds of it the model hears. */
+  seconds: number;
+  /** The recording's whole length, as the player measured it; 0 if not yet. */
+  length: number;
+}
+
+export type VoiceOpener = "first" | "second";
+
+/** How many voices a scene takes: Reference to Video's two slots. */
+export const SCENE_VOICES = 2;
+
+/** The form's ids for each voice slot, as Reference to Video names them. */
+const VOICE_IDS = [
+  {
+    audio: "reference_voice",
+    owner: "reference_voice_owner",
+    start: "reference_voice_start",
+    seconds: "reference_voice_seconds",
+    length: "reference_voice_length",
+  },
+  {
+    audio: "reference_voice_2",
+    owner: "reference_voice_2_owner",
+    start: "reference_voice_2_start",
+    seconds: "reference_voice_2_seconds",
+    length: "reference_voice_2_length",
+  },
+] as const;
+const OPENER_ID = "reference_voice_opener";
+/** What Reference to Video takes from a voice when nothing says: 5 seconds. */
+const VOICE_SECONDS = 5;
+
+/** The voices every scene speaks with unless it has its own. A second only beside a first. */
+export function videoVoices(project: MusicVideoProject): SceneVoice[] {
+  const voices: SceneVoice[] = [];
+  for (const ids of VOICE_IDS) {
+    const audio = String(project.values[ids.audio] ?? "").trim();
+    if (!audio) break;
+    voices.push({
+      audio,
+      owner: String(project.values[ids.owner] ?? "").trim(),
+      start: Number(project.values[ids.start] ?? 0) || 0,
+      seconds: Number(project.values[ids.seconds] ?? VOICE_SECONDS) || VOICE_SECONDS,
+      length: Number(project.values[ids.length] ?? 0) || 0,
+    });
+  }
+  return voices;
+}
+
+/** A scene's voices: its own, or the video's. */
+export const voicesOf = (project: MusicVideoProject, scene: ProjectScene): SceneVoice[] =>
+  scene.voices ?? videoVoices(project);
+
+/**
+ * Which voice's speaker has the scene's first line. Reference to Video gives
+ * the opening line to whichever recording is wired last, and wires the
+ * opener's last — so getting this wrong swaps the two voices. Set on the scene
+ * when someone has said; otherwise the first line's speaker, matched against
+ * whose each voice is.
+ */
+export function openerOf(scene: ProjectScene, voices: SceneVoice[]): VoiceOpener {
+  if (scene.opener) return scene.opener;
+  if (voices.length < 2) return "first";
+  const speaker = (scene.lines ?? "").split("\n").find((line) => line.includes(":"))?.split(":")[0];
+  const name = speaker?.trim().toLowerCase();
+  if (!name) return "first";
+  const owns = (voice: SceneVoice) => {
+    const owner = voice.owner.toLowerCase();
+    return owner !== "" && (owner.includes(name) || name.includes(owner));
+  };
+  return owns(voices[1]) && !owns(voices[0]) ? "second" : "first";
+}
+
+/**
+ * Whether a scene has anything for Reference to Video to build from. One
+ * that does not — a multi-scene video with no pictures and no voices — is a
+ * Text to Video run, since Reference to Video refuses a run with nothing.
+ */
+export function sceneHasReferences(project: MusicVideoProject, scene: ProjectScene): boolean {
+  if (project.kind !== "story") return true;
+  return (
+    (scene.references ?? videoReferences(project)).length > 0 ||
+    voicesOf(project, scene).length > 0
+  );
 }
 
 /** One of a scene's own pictures, as ComfyUI's input directory names it. */
@@ -172,6 +279,16 @@ export function sceneList(scenes: SceneWindow[]): string {
 The song is cut into ${scenes.length} scenes:
 
 ${lines.join("\n")}`;
+}
+
+/**
+ * A multi-scene video's scene list: only how many there are. The planner
+ * chooses each one's length, and is handed nothing to read it off.
+ */
+export function storySceneList(count: number): string {
+  return `${SCENES_HEADING}
+
+The video is ${count} scenes long. Return exactly ${count} entries.`;
 }
 
 function describeEnergy(energy: number): string {
@@ -267,6 +384,8 @@ export function parsePlan(reply: string, count: number): Plan {
       sings: entry?.sings === true,
       place: text(entry?.place),
       happens: text(entry?.happens),
+      ...(Number(entry?.seconds) > 0 ? { seconds: Number(entry?.seconds) } : {}),
+      lines: text(entry?.lines),
     })),
     shots: Array.from(placed, (entry) => text(entry?.shot)),
   };
@@ -283,8 +402,11 @@ function readEntries(body: string): Record<string, unknown>[] {
   return starts.map((at, index) => {
     const chunk = body.slice(at, starts[index + 1] ?? body.length);
     const scene = chunk.match(/"scene"\s*:\s*(\d+)/);
+    const seconds = chunk.match(/"seconds"\s*:\s*(\d+(?:\.\d+)?)/);
     return {
       ...(scene ? { scene: Number(scene[1]) } : {}),
+      ...(seconds ? { seconds: Number(seconds[1]) } : {}),
+      lines: stringField(chunk, "lines"),
       part: stringField(chunk, "part"),
       sings: /"sings"\s*:\s*true/.test(chunk),
       place: stringField(chunk, "place"),
@@ -324,7 +446,9 @@ export function shotRequest(
       sings: scene.sings === true,
       place: scene.place ?? "",
       happens: scene.happens ?? "",
-      timing: sceneLine(scene),
+      ...(project.kind === "story"
+        ? { lines: scene.lines ?? "", timing: `${(scene.end - scene.start).toFixed(1)} s` }
+        : { timing: sceneLine(scene) }),
     })),
   };
   return JSON.stringify(request);
@@ -332,9 +456,12 @@ export function shotRequest(
 
 /** Each scene's shot, out of the writing run's briefs; blank where it wrote none. */
 export function readShots(briefs: Record<string, string>, count: number): string[] {
-  return Array.from({ length: count }, (_, index) =>
-    (briefs[shotBrief(index)] ?? "").trim().replace(/^"|"$/g, ""),
-  );
+  return Array.from({ length: count }, (_, index) => {
+    const shot = (briefs[shotBrief(index)] ?? "").trim();
+    // A shot the model put in quotes, and only that: a story's shot can end
+    // on a line of dialogue, whose closing quote is its own.
+    return /^"[^"]*"$/.test(shot) ? shot.slice(1, -1) : shot;
+  });
 }
 
 /**
@@ -374,6 +501,29 @@ export function sceneValues(
     ? `\n\n(How they look, in this scene and every other one in the video: ${look} — use these words as the observed detail in each subject's definition, and describe them no other way. They outrank anything below about anyone's appearance or how the video is rendered.)`
     : "";
   const shot = `${scene.shot}${lookNote}`;
+  const background = (noun: string, note = "") =>
+    idea
+      ? `${shot}\n\n(This is scene ${index + 1} of ${project.scenes.length} in a ${noun}. The video as a whole: ${idea} — background only; this scene shows only what is described above${look ? ", and its people look only as described above" : ""}.${note})`
+      : `${shot}${note ? `\n\n(${note.trim()})` : ""}`;
+  // A fixed offset per scene from one base, so a whole video can be made
+  // again exactly; a random base stays random per scene.
+  const sceneSeed = seed >= 0 ? seed + index : -1;
+
+  if (project.kind === "story") {
+    const voices = voicesOf(project, scene);
+    return {
+      ...values,
+      ...(scene.references ? referenceValues(scene.references, MUSIC_VIDEO_PICTURES) : {}),
+      ...voiceValues(voices, openerOf(scene, voices)),
+      // Its own length, made whole: the join keeps every frame of it.
+      duration: renderSeconds(scene),
+      // Without lines the scene's director is free to write some, and a
+      // silent video would come back talking.
+      prompt: background("video", scene.lines?.trim() ? "" : " Nobody speaks in this scene."),
+      seed: sceneSeed,
+    };
+  }
+
   return {
     ...values,
     ...(scene.references ? referenceValues(scene.references, MUSIC_VIDEO_PICTURES) : {}),
@@ -383,13 +533,24 @@ export function sceneValues(
     reference_trim: "match",
     reference_trim_start: scene.start,
     duration: renderSeconds(scene),
-    prompt: idea
-      ? `${shot}\n\n(This is scene ${index + 1} of ${project.scenes.length} in a music video. The video as a whole: ${idea} — background only; this scene shows only what is described above${look ? ", and its people look only as described above" : ""}.)`
-      : shot,
-    // A fixed offset per scene from one base, so a whole video can be made
-    // again exactly; a random base stays random per scene.
-    seed: seed >= 0 ? seed + index : -1,
+    prompt: background("music video"),
+    seed: sceneSeed,
   };
+}
+
+/** A scene's voices as Reference to Video's controls, emptying a slot it leaves free. */
+function voiceValues(voices: SceneVoice[], opener: VoiceOpener): Record<string, ParamValue> {
+  const values: Record<string, ParamValue> = {};
+  VOICE_IDS.forEach((ids, slot) => {
+    const voice = voices[slot];
+    values[ids.audio] = voice?.audio ?? "";
+    values[ids.owner] = voice?.owner ?? "";
+    values[ids.start] = voice?.start ?? 0;
+    values[ids.seconds] = voice?.seconds ?? VOICE_SECONDS;
+    values[ids.length] = voice?.length ?? 0;
+  });
+  values[OPENER_ID] = opener;
+  return values;
 }
 
 /**

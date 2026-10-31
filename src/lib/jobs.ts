@@ -161,6 +161,8 @@ export interface MusicVideoTag {
   title?: string;
   /** How many scenes the video has, so the entry can say how far it has got. */
   scenes?: number;
+  /** Set on a multi-scene video's runs; a music video's have none. */
+  kind?: "story";
 }
 
 export type MusicVideoPart = "plan" | "scene" | "join" | "upscale" | "upscaled-join";
@@ -701,6 +703,8 @@ export type HistoryEntry =
 
 export interface MusicVideoGroup {
   projectId: string;
+  /** "Music video" or "Multi-scene video". */
+  label: string;
   title: string;
   /** Every run in it, newest first. */
   jobs: Job[];
@@ -803,12 +807,13 @@ function musicVideoGroup(projectId: string, members: Job[]): MusicVideoGroup {
   const sceneOf = (slot: Job[]) => slot[0].musicVideo?.scene ?? 0;
   parts.scene.sort((a, b) => sceneOf(a) - sceneOf(b));
   parts.upscale.sort((a, b) => sceneOf(a) - sceneOf(b));
-  const title =
-    newestFirst.find((job) => job.musicVideo?.title)?.musicVideo?.title?.trim() ||
-    "Music video";
+  const story = newestFirst.some((job) => job.musicVideo?.kind === "story");
+  const label = story ? "Multi-scene video" : "Music video";
+  const title = newestFirst.find((job) => job.musicVideo?.title)?.musicVideo?.title?.trim() || label;
   const sceneCount = newestFirst.find((job) => job.musicVideo?.scenes)?.musicVideo?.scenes;
   return {
     projectId,
+    label,
     title,
     sceneCount,
     jobs: newestFirst,

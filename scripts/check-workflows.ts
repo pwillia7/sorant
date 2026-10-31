@@ -67,6 +67,27 @@ for (const workflow of WORKFLOWS) {
       }
     }
   }
+  // A bare scene is sent the same values, and drops whatever its graph has no
+  // control for — the pictures and voices it has none of. What it does have
+  // has to be the same kind of control.
+  const bare = workflow.scenes.bare;
+  const bareTarget = bare ? WORKFLOWS.find((other) => other.id === bare) : undefined;
+  if (bare && !bareTarget) {
+    problems.push(`scenes.bare names workflow "${bare}", which is not registered`);
+  } else if (bareTarget) {
+    for (const param of workflow.params) {
+      if (param.scope !== "scenes") continue;
+      const there = bareTarget.params.find((other) => other.id === param.id);
+      if (there && there.type !== param.type) {
+        problems.push(`"${param.id}" is a ${param.type} here and a ${there.type} on ${bareTarget.id}`);
+      }
+    }
+    for (const id of ["prompt", "duration", "seed"]) {
+      if (!bareTarget.params.some((param) => param.id === id)) {
+        problems.push(`${bareTarget.id} has no "${id}" control for a bare scene to set`);
+      }
+    }
+  }
   if (problems.length > 0) {
     failed = true;
     console.error(`  FAIL ${workflow.id} scenes`);

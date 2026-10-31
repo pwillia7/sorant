@@ -6,8 +6,9 @@ import { minimaxH3ImageToVideo } from "./minimax-h3-i2v";
 import { minimaxH3Reference } from "./minimax-h3-ref";
 import { minimaxH3ReferenceVideo } from "./minimax-h3-ref2v";
 import { minimaxMusic3 } from "./minimax-music3";
+import { multiScene } from "./multi-scene";
 import { musicVideo } from "./music-video";
-import { musicVideoStitch } from "./music-video-stitch";
+import { multiSceneStitch, musicVideoStitch } from "./music-video-stitch";
 import { upscale } from "./upscale";
 import { toSummary, type WorkflowDef, type WorkflowSummary } from "./types";
 
@@ -27,9 +28,10 @@ export const WORKFLOWS: WorkflowDef[] = [
   minimaxH3Reference,
   minimaxH3ReferenceVideo,
   minimaxH3Extend,
-  // Plans a whole song and runs Reference to Video once per scene. After the
-  // graph it runs, which it names by id.
+  // Plan a whole video and run Reference to Video once per scene. After the
+  // graphs they run, which they name by id.
   musicVideo,
+  multiScene,
   // Not a generator: it only takes a finished clip, by the Upscale button.
   upscale,
   // Last, and the only one that is not H3 and not video: a different model
@@ -37,8 +39,9 @@ export const WORKFLOWS: WorkflowDef[] = [
   minimaxMusic3,
   // Not in the picker: the Edit button on a picture runs it. See `tool`.
   imageEdit,
-  // Not in the picker either: the music video's panel runs it to join scenes.
+  // Not in the picker either: the planned videos' panel runs them to join scenes.
   musicVideoStitch,
+  multiSceneStitch,
 ];
 
 export function getWorkflow(id: string): WorkflowDef | undefined {

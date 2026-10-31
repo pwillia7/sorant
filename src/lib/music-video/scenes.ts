@@ -58,6 +58,16 @@ export interface OutlineScene {
   sings: boolean;
   place: string;
   happens: string;
+  /**
+   * How long the scene runs, as a multi-scene video's planner chose it. A
+   * music video's scenes are as long as the song's cuts, so it has none.
+   */
+  seconds?: number;
+  /**
+   * What is said in a multi-scene video's scene, a line per turn as "Name:
+   * words"; empty where nobody speaks.
+   */
+  lines?: string;
 }
 
 /**
@@ -79,6 +89,41 @@ export interface ShotRequest {
    * be the same request, and ComfyUI would hand back the cached shot.
    */
   take?: number;
+}
+
+/**
+ * What a planned video is made to: a song, cut on its beats, or a story the
+ * planner times scene by scene with each scene's own sound. A project with no
+ * kind is a music video, as every project was before there was a second.
+ */
+export type PlannedKind = "music" | "story";
+
+/** How long a multi-scene video's scene may be: H3's trained range. */
+export const STORY_SCENE_SECONDS = { min: 4, max: 15, initial: 8 } as const;
+
+/**
+ * A multi-scene video's scene length as it is run: the planner's or the
+ * user's, held to the range and snapped up to a length H3 makes exactly, so
+ * the clip that comes back is the scene and nothing has to be trimmed off it.
+ */
+export function storySeconds(seconds: number | undefined): number {
+  const wanted = Number.isFinite(seconds) ? Number(seconds) : STORY_SCENE_SECONDS.initial;
+  const held = Math.min(STORY_SCENE_SECONDS.max, Math.max(STORY_SCENE_SECONDS.min, wanted));
+  return effectiveSeconds(held);
+}
+
+/**
+ * A multi-scene video's scenes laid end to end from their lengths. They have
+ * no song to sit against, but the panel shows where each falls, and the join
+ * keeps each scene's whole run.
+ */
+export function storyWindows(lengths: Array<number | undefined>): SceneWindow[] {
+  let at = 0;
+  return lengths.map((length) => {
+    const start = at;
+    at = round3(at + storySeconds(length));
+    return { start: round3(start), end: at, energy: 0.5 };
+  });
 }
 
 /** How many reference pictures a music video takes. The plan graph has a loader per slot. */

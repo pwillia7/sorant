@@ -8,15 +8,21 @@ import {
   keepsVideoLook,
   MUSIC_VIDEO_FRAME_RATES,
   MUSIC_VIDEO_UPSCALE_SIZES,
+  openerOf,
+  SCENE_VOICES,
+  sceneHasReferences,
   videoReferences,
+  videoVoices,
   type SceneReference,
+  type SceneVoice,
 } from "@/lib/music-video/project";
-import { clock, MUSIC_VIDEO_PICTURES } from "@/lib/music-video/scenes";
+import { clock, MUSIC_VIDEO_PICTURES, STORY_SCENE_SECONDS } from "@/lib/music-video/scenes";
 import { REFERENCE_KEEP_OPTIONS } from "@/lib/workflows/minimax-common";
 import { Badge, Dot, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
+import { AudioUpload } from "./ui/audio-upload";
 import { ImageUpload } from "./ui/image-upload";
-import { Select, TextArea, TextInput, Toggle } from "./ui/inputs";
+import { NumberInput, Select, TextArea, TextInput, Toggle } from "./ui/inputs";
 
 /**
  * The music video's own stage: the scene list, each scene's take as it
@@ -38,8 +44,21 @@ const STEP_HINT: Record<MusicVideoController["step"], string> = {
   done: "Finished.",
 };
 
+/** Where a multi-scene video's steps read differently: it has no song. */
+const STORY_STEP_HINT: Partial<Record<MusicVideoController["step"], string>> = {
+  idle: "Write the idea, choose how many scenes, then plan the video.",
+  stitching: "Joining the scenes, each with its own sound…",
+};
+
+/** The lengths a multi-scene video's scene can be set to, in whole seconds. */
+const STORY_LENGTHS = Array.from(
+  { length: STORY_SCENE_SECONDS.max - STORY_SCENE_SECONDS.min + 1 },
+  (_, index) => STORY_SCENE_SECONDS.min + index,
+);
+
 export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
   const { project, step } = video;
+  const story = project?.kind === "story" || video.kind === "story";
   const scenes = project?.scenes ?? [];
   // The saved file, not the previews of what it was made from: every scene's
   // loader and trim reports a video of its own in the same run.
@@ -107,8 +126,8 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
   return (
     <Panel padded>
       <PanelHeader
-        title="Music video"
-        hint={STEP_HINT[step]}
+        title={story ? "Multi-scene video" : "Music video"}
+        hint={(story ? STORY_STEP_HINT[step] : undefined) ?? STEP_HINT[step]}
         action={
           project ? (
             <Button
@@ -144,7 +163,9 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
           <Spinner className="size-3.5" />
           {step === "cutting"
             ? "Finding the beats in the song."
-            : `${scenes.length} scenes, ${clock(project?.songSeconds ?? 0)} of song.`}
+            : story
+              ? `${scenes.length} scenes.`
+              : `${scenes.length} scenes, ${clock(project?.songSeconds ?? 0)} of song.`}
         </p>
       ) : null}
 
@@ -152,14 +173,14 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
         <FinishedVideo
           url={upscaledUrl}
           label="Upscaled"
-          download={`music_video_${project?.id ?? ""}_upscaled.mp4`}
+          download={`${story ? "multi_scene" : "music_video"}_${project?.id ?? ""}_upscaled.mp4`}
         />
       ) : null}
       {finalUrl ? (
         <FinishedVideo
           url={finalUrl}
           label={upscaledUrl ? "Original" : undefined}
-          download={`music_video_${project?.id ?? ""}.mp4`}
+          download={`${story ? "multi_scene" : "music_video"}_${project?.id ?? ""}.mp4`}
           compact={Boolean(upscaledUrl)}
         />
       ) : null}
@@ -207,7 +228,25 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                     <span className="font-mono">
                       {clock(scene.start)}–{clock(scene.end)}
                     </span>
-                    <span>{(scene.end - scene.start).toFixed(1)} s</span>
+                    {story ? (
+                      <label className="flex items-center gap-1" title="How long this scene runs. The scenes after it move along; a scene already rendered keeps its length until it is redone.">
+                        <span className="sr-only">Scene {index + 1} length</span>
+                        <select
+                          value={Math.round(scene.seconds ?? scene.end - scene.start)}
+                          disabled={busy}
+                          onChange={(event) => video.editLength(index, Number(event.target.value))}
+                          className="rounded border border-border-default bg-bg px-1 py-0.5 text-[12px] text-fg disabled:opacity-50"
+                        >
+                          {STORY_LENGTHS.map((seconds) => (
+                            <option key={seconds} value={seconds}>
+                              {seconds} s
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : (
+                      <span>{(scene.end - scene.start).toFixed(1)} s</span>
+                    )}
                     {scene.part ? (
                       <span title="Where the planner thinks this scene falls in the song. It cannot hear the song, so it is a guess from the lyrics and the loudness.">
                         {scene.part}
@@ -249,6 +288,7 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                         />
                       ) : null}
                       <ScenePictures index={index} disabled={busy} video={video} />
+                      {story ? <SceneVoices index={index} disabled={busy} video={video} /> : null}
                     </div>
                     {clip ? (
                       <video
@@ -540,7 +580,7 @@ function sceneClip(job: Job | undefined) {
 /** The joined file a stitch saved, not the scene previews it also reports. */
 function joinedUrl(job: Job | undefined): string | undefined {
   return job?.outputs.find(
-    (file) => file.type === "output" && /^music_video.*\.(mp4|webm|mov)$/i.test(file.filename),
+    (file) => file.type === "output" && /^(music_video|multi_scene).*\.(mp4|webm|mov)$/i.test(file.filename),
   )?.url;
 }
 
@@ -598,6 +638,7 @@ function SceneOutline({
   video: MusicVideoController;
 }) {
   const rewriting = Boolean(scene.rewritePromptId);
+  const story = video.project?.kind === "story";
   return (
     <details className="group mt-2">
       <summary className="cursor-pointer list-none text-[12px] text-fg-subtle hover:text-fg-muted">
@@ -623,17 +664,37 @@ function SceneOutline({
           disabled={disabled || rewriting}
           onChange={(happens) => video.editOutline(index, { happens })}
         />
+        {story ? (
+          <>
+            <label className="text-[12px] text-fg-muted" htmlFor={`scene-${index}-lines`}>
+              Lines
+            </label>
+            <TextArea
+              id={`scene-${index}-lines`}
+              value={scene.lines ?? ""}
+              rows={2}
+              maxLength={1000}
+              placeholder="Nobody speaks. Or, a line per turn — Mara: We're too late."
+              disabled={disabled || rewriting}
+              onChange={(lines) => video.editOutline(index, { lines })}
+            />
+          </>
+        ) : null}
         <div className="flex flex-wrap items-center gap-3">
-          <Toggle
-            id={`scene-${index}-sings`}
-            checked={scene.sings === true}
-            disabled={disabled || rewriting}
-            describedBy={`scene-${index}-sings-help`}
-            onChange={(sings) => video.editOutline(index, { sings })}
-          />
-          <label className="text-[12px] text-fg" htmlFor={`scene-${index}-sings`}>
-            Sings
-          </label>
+          {story ? null : (
+            <>
+              <Toggle
+                id={`scene-${index}-sings`}
+                checked={scene.sings === true}
+                disabled={disabled || rewriting}
+                describedBy={`scene-${index}-sings-help`}
+                onChange={(sings) => video.editOutline(index, { sings })}
+              />
+              <label className="text-[12px] text-fg" htmlFor={`scene-${index}-sings`}>
+                Sings
+              </label>
+            </>
+          )}
           <Button
             variant="quiet"
             size="xs"
@@ -651,8 +712,9 @@ function SceneOutline({
           </Button>
         </div>
         <p id={`scene-${index}-sings-help`} className="text-[12px] leading-snug text-fg-subtle">
-          Off for an instrumental stretch: a mouth moving to words where there is no voice looks wrong. Changes here
-          take effect when the shot is rewritten.
+          {story
+            ? "The shot quotes the lines word for word. Changes here take effect when the shot is rewritten."
+            : "Off for an instrumental stretch: a mouth moving to words where there is no voice looks wrong. Changes here take effect when the shot is rewritten."}
         </p>
       </div>
     </details>
@@ -763,7 +825,9 @@ function ScenePictures({
             <p className="min-w-0 flex-1 text-[12px] leading-snug text-fg-subtle">
               {shared.length > 0
                 ? `Renders from the video's ${shared.length === 1 ? "picture" : `${shared.length} pictures`}.`
-                : "The video has no pictures, so this scene renders from the idea alone."}
+                : project.kind === "story"
+                  ? "The video has no pictures."
+                  : "The video has no pictures, so this scene renders from the idea alone."}
             </p>
             <Button
               variant="quiet"
@@ -775,6 +839,171 @@ function ScenePictures({
             </Button>
           </div>
         )}
+      </div>
+    </details>
+  );
+}
+
+/**
+ * A multi-scene video's voices for one scene: the video's, until it is given
+ * its own — the voice of someone who speaks only here, or none, for a scene
+ * none of them are in. Its own start as a copy of the video's, as the
+ * pictures do.
+ */
+function SceneVoices({
+  index,
+  disabled,
+  video,
+}: {
+  index: number;
+  disabled: boolean;
+  video: MusicVideoController;
+}) {
+  const project = video.project;
+  const scene = project?.scenes[index];
+  if (!project || !scene) return null;
+  const own = scene.voices;
+  const shared = videoVoices(project);
+  const voices = own ?? shared;
+  const set = (update: (current: SceneVoice[]) => SceneVoice[]) =>
+    video.editVoices(index, (current) => update(current ?? []).filter((voice) => voice.audio));
+  const slots = own ? Math.min(own.length + 1, SCENE_VOICES) : 0;
+  const guessed = openerOf({ ...scene, opener: undefined }, voices);
+  const named = (voice: SceneVoice | undefined, fallback: string) => voice?.owner || fallback;
+  return (
+    <details className="group mt-2">
+      <summary className="cursor-pointer list-none text-[12px] text-fg-subtle hover:text-fg-muted">
+        <span className="mr-1.5 inline-block transition-transform group-open:rotate-90">›</span>
+        Voices
+        <span className="ml-1.5">
+          {own
+            ? `· this scene's own (${own.length})`
+            : shared.length > 0
+              ? "· the video's"
+              : "· none"}
+        </span>
+        {sceneHasReferences(project, scene) ? null : (
+          <span className="ml-1.5" title="With no pictures and no voices, this scene is made from its words alone.">
+            · Text to Video
+          </span>
+        )}
+      </summary>
+      <div className="mt-2 flex flex-col gap-3">
+        {own ? (
+          <>
+            {Array.from({ length: slots }, (_, slot) => {
+              const voice = own[slot];
+              const id = `scene-${index}-voice-${slot + 1}`;
+              const change = (patch: Partial<SceneVoice>) =>
+                set((current) =>
+                  current.map((other) => (other.audio === voice?.audio ? { ...other, ...patch } : other)),
+                );
+              return (
+                <div key={`${slot}-${voice?.audio ?? ""}`} className="flex min-w-0 flex-col gap-1.5">
+                  <label className="text-[12px] text-fg-muted" htmlFor={id}>
+                    {slot === 0 ? "Voice" : "Second voice"}
+                  </label>
+                  <AudioUpload
+                    id={id}
+                    value={voice?.audio ?? ""}
+                    noun="voice recording"
+                    disabled={disabled}
+                    onChange={(audio) =>
+                      set((current) => {
+                        const at = voice ? current.findIndex((other) => other.audio === voice.audio) : -1;
+                        const next = [...current];
+                        next[at === -1 ? current.length : at] = {
+                          audio,
+                          owner: voice?.owner ?? "",
+                          start: voice?.start ?? 0,
+                          seconds: voice?.seconds ?? 5,
+                          length: 0,
+                        };
+                        return next;
+                      })
+                    }
+                    onMeasure={(length) => {
+                      if (voice && voice.length !== length) change({ length });
+                    }}
+                  />
+                  {voice ? (
+                    <div className="grid gap-2 sm:grid-cols-[1fr_8rem]">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[12px] text-fg-muted" htmlFor={`${id}-owner`}>
+                          Whose voice
+                        </label>
+                        <TextInput
+                          id={`${id}-owner`}
+                          value={voice.owner}
+                          disabled={disabled}
+                          onChange={(owner) => change({ owner })}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[12px] text-fg-muted" htmlFor={`${id}-start`}>
+                          Start at (s)
+                        </label>
+                        <NumberInput
+                          id={`${id}-start`}
+                          value={voice.start}
+                          min={0}
+                          max={3600}
+                          step={0.5}
+                          disabled={disabled}
+                          onChange={(start) => change({ start })}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </>
+        ) : (
+          <p className="text-[12px] leading-snug text-fg-subtle">
+            {shared.length > 0
+              ? `Speaks with the video's ${shared.length === 1 ? "voice" : "two voices"}${shared.some((voice) => voice.owner) ? ` (${shared.map((voice) => voice.owner).filter(Boolean).join(", ")})` : ""}.`
+              : "The video has no voices, so anyone who speaks here gets a voice from the words alone."}
+          </p>
+        )}
+        {voices.length === 2 ? (
+          <div className="flex flex-col gap-1">
+            <label className="text-[12px] text-fg-muted" htmlFor={`scene-${index}-opener`}>
+              Speaks first
+            </label>
+            <Select
+              id={`scene-${index}-opener`}
+              value={scene.opener ?? "auto"}
+              disabled={disabled}
+              options={[
+                {
+                  value: "auto",
+                  label: `From the lines — ${guessed === "second" ? named(voices[1], "the second voice") : named(voices[0], "the first voice")}`,
+                },
+                { value: "first", label: named(voices[0], "The first voice") },
+                { value: "second", label: named(voices[1], "The second voice") },
+              ]}
+              onChange={(opener) =>
+                video.editOpener(index, opener === "first" || opener === "second" ? opener : undefined)
+              }
+            />
+          </div>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="min-w-0 flex-1 text-[12px] leading-snug text-fg-subtle">
+            {own
+              ? "Name each voice's speaker as the lines do. Applies when the scene is next rendered."
+              : "Give this scene its own to add someone who speaks only here, or to leave out a voice whose speaker is not in it."}
+          </p>
+          <Button
+            variant="quiet"
+            size="xs"
+            disabled={disabled}
+            onClick={() => video.editVoices(index, own ? undefined : shared)}
+          >
+            {own ? "Use the video's voices" : "Use different voices"}
+          </Button>
+        </div>
       </div>
     </details>
   );

@@ -191,3 +191,76 @@ export const musicVideoStitch: WorkflowDef = {
     });
   },
 };
+
+/**
+ * Joins a multi-scene video's scenes with the sound each one was made with.
+ *
+ * No song: `ConcatenateVideo` without `complete_audio` carries every scene's
+ * own track, decoded and written again as one. And no trims — a multi-scene
+ * scene is run at a length H3 makes exactly (see `storySeconds`), so the clip
+ * is the scene. A trim is a re-encode of each scene's sound on its own,
+ * which is the step FFmpeg's AAC encoder once aborted in (see `silentCopy`
+ * in the music video's hook), so leaving it out is one fewer.
+ *
+ * Every scene has to have sound for this — the node refuses a mix of clips
+ * with and without — and every H3 run has.
+ */
+const ownSoundGraph: ComfyGraph = {
+  [LIST_NODE]: graph[LIST_NODE],
+  [JOIN_NODE]: {
+    class_type: "ConcatenateVideo",
+    inputs: { codec: "auto" },
+    _meta: { title: "Concatenate Video" },
+  },
+  save: {
+    class_type: "SaveVideo",
+    inputs: {
+      video: [JOIN_NODE, 0],
+      filename_prefix: "video/multi_scene",
+      format: "auto",
+      codec: "auto",
+    },
+    _meta: { title: "Save Video" },
+  },
+};
+
+export const multiSceneStitch: WorkflowDef = {
+  id: "multi-scene-stitch",
+  name: "Multi-scene video",
+  description: "Joins a multi-scene video's scenes, each with its own sound.",
+  estimatedSeconds: 30,
+  hasAudio: true,
+  tool: true,
+  graph: ownSoundGraph,
+  params: [params[0]],
+
+  finalizeCases: [
+    {
+      name: "three scenes",
+      values: {
+        scenes: JSON.stringify([
+          { file: "video/a.mp4 [output]", seconds: 8.04 },
+          { file: "video/b.mp4 [output]", seconds: 5.04 },
+          { file: "video/c-audio.mp4 [output]", seconds: 12.04 },
+        ]),
+      },
+    },
+    {
+      name: "a scene list that climbs out of the output folder",
+      values: { scenes: JSON.stringify([{ file: "../secrets.mp4 [output]", seconds: 4 }]) },
+      rejects: "not a clip this can join",
+    },
+  ],
+
+  finalize(graph, values) {
+    parseScenes(values.scenes).forEach((scene, index) => {
+      const load = `load_${index}`;
+      graph[load] = {
+        class_type: "LoadVideo",
+        inputs: { file: scene.file },
+        _meta: { title: `Load Video (scene ${index + 1})` },
+      };
+      graph[JOIN_NODE].inputs[`videos.video${index}`] = [load, 0];
+    });
+  },
+};

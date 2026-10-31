@@ -204,7 +204,9 @@ function InFlight({
     // The music video's planning run writes text and samples nothing.
     job.workflowId === "music-video" && job.phase === "running"
       ? { label: "Planning", detail: "Writing a scene for every cut in the song." }
-      : (PHASE_COPY[job.phase] ?? PHASE_COPY.queued);
+      : job.workflowId === "multi-scene" && job.phase === "running"
+        ? { label: "Planning", detail: "Writing the story out scene by scene." }
+        : (PHASE_COPY[job.phase] ?? PHASE_COPY.queued);
   // Waiting time while it waits, render time once it renders — the clock
   // restarts at the seam rather than running on from submit. See `clockMs`.
   const elapsedMs = clockMs(job, now);

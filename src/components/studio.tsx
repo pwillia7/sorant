@@ -965,31 +965,49 @@ function Workbench({
         : undefined,
     [picked],
   );
-  const musicVideo = useMusicVideo({
-    workflow: picked?.scenes ? selected : undefined,
-    sceneWorkflow: picked?.scenes ? modesWorkflow : undefined,
-    stitchWorkflow,
-    // Whichever workflow the Upscale button sends a clip to.
-    upscaleWorkflow: picked?.scenes
-      ? workflows.find((workflow) => workflow.clipTarget?.action === "upscale")
-      : undefined,
-    values,
-    modes: { ...modes, lowVram, localDirector: runDirector, rewriteModel },
-    jobs,
-    online: health?.reachable === true && health.authorized !== false,
-  });
+  // What a multi-scene video's scenes run as when they have nothing to build
+  // from, in the same modes as the rest. See `scenes.bare`.
+  const bareSceneWorkflow = useMemo(() => {
+    const bare = workflows.find((workflow) => workflow.id === picked?.scenes?.bare);
+    return bare ? effectiveWorkflow(bare, turboOn) : undefined;
+  }, [workflows, picked, turboOn]);
+  // One for each kind, both always mounted, so each keeps its own project
+  // while the other is on screen. Only the one on screen is handed the
+  // workflows it submits to.
+  const plannedOptions = (kind: "music" | "story") => {
+    const active = picked?.scenes?.kind === kind;
+    return {
+      kind,
+      workflow: active ? selected : undefined,
+      sceneWorkflow: active ? modesWorkflow : undefined,
+      bareSceneWorkflow: active ? bareSceneWorkflow : undefined,
+      stitchWorkflow: active ? stitchWorkflow : undefined,
+      // Whichever workflow the Upscale button sends a clip to.
+      upscaleWorkflow: active
+        ? workflows.find((workflow) => workflow.clipTarget?.action === "upscale")
+        : undefined,
+      values,
+      modes: { ...modes, lowVram, localDirector: runDirector, rewriteModel },
+      jobs,
+      online: health?.reachable === true && health.authorized !== false,
+    };
+  };
+  const musicVideoKind = useMusicVideo(plannedOptions("music"));
+  const multiScene = useMusicVideo(plannedOptions("story"));
+  /** The planned video on screen, or the music video's when neither is. */
+  const musicVideo = picked?.scenes?.kind === "story" ? multiScene : musicVideoKind;
   // The takes and upscales the music video is using, so its entry in the
   // history lists those and leaves the rest to the panel's take picker.
   const takesInUse = useMemo(
     () =>
       new Set(
-        (musicVideo.project?.scenes ?? []).flatMap((scene) =>
+        [...(musicVideoKind.project?.scenes ?? []), ...(multiScene.project?.scenes ?? [])].flatMap((scene) =>
           [scene.promptId, scene.upscalePromptId].filter(
             (id): id is string => Boolean(id),
           ),
         ),
       ),
-    [musicVideo.project],
+    [musicVideoKind.project, multiScene.project],
   );
 
   const submit = useCallback(() => {

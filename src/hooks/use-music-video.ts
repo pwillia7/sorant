@@ -24,12 +24,16 @@ import {
   outlineShot,
   parsePlan,
   readShots,
+  sceneHasReferences,
   sceneList,
   sceneValues,
   shotRequest,
+  storySceneList,
   type MusicVideoProject,
   type ProjectScene,
   type SceneReference,
+  type SceneVoice,
+  type VoiceOpener,
 } from "@/lib/music-video/project";
 import {
   CAST_BRIEF,
@@ -38,6 +42,9 @@ import {
   MUSIC_VIDEO_PICTURES,
   PLAN_BRIEF,
   splitSong,
+  STORY_SCENE_SECONDS,
+  storyWindows,
+  type PlannedKind,
 } from "@/lib/music-video/scenes";
 import { FPS } from "@/lib/workflows/minimax-common";
 import type { RunModes } from "@/lib/workflows/modes";
@@ -60,7 +67,11 @@ import { defaultValuesFor, type ParamValue, type WorkflowSummary } from "@/lib/w
  * stay in the history.
  */
 
-const STORAGE_KEY = "sorant-music-video";
+/** Where each kind keeps its project: one of each at a time. */
+const STORAGE_KEYS: Record<PlannedKind, string> = {
+  music: "sorant-music-video",
+  story: "sorant-multi-scene",
+};
 
 export type MusicVideoStep =
   | "idle"
@@ -73,6 +84,8 @@ export type MusicVideoStep =
   | "done";
 
 export interface MusicVideoController {
+  /** Which planned video this is, before there is a project to say. */
+  kind: PlannedKind;
   project: MusicVideoProject | null;
   step: MusicVideoStep;
   error: string | null;
@@ -84,7 +97,7 @@ export interface MusicVideoController {
   /** Change a scene's outline line. Its shot changes only when rewritten. */
   editOutline: (
     index: number,
-    patch: Partial<Pick<ProjectScene, "place" | "happens" | "sings">>,
+    patch: Partial<Pick<ProjectScene, "place" | "happens" | "sings" | "lines">>,
   ) => void;
   /** Write one scene's shot again from its outline line. */
   rewriteShot: (index: number) => Promise<void>;
@@ -102,6 +115,21 @@ export interface MusicVideoController {
       | undefined
       | ((current: SceneReference[] | undefined) => SceneReference[] | undefined),
   ) => void;
+  /**
+   * A multi-scene video's: give a scene voices of its own, or with none, put
+   * it back on the video's. An update as well, as for the pictures.
+   */
+  editVoices: (
+    index: number,
+    voices:
+      | SceneVoice[]
+      | undefined
+      | ((current: SceneVoice[] | undefined) => SceneVoice[] | undefined),
+  ) => void;
+  /** Which voice's speaker opens a scene; with none, it is read off the lines. */
+  editOpener: (index: number, opener: VoiceOpener | undefined) => void;
+  /** A multi-scene video's: how long a scene runs. The scenes after it move along. */
+  editLength: (index: number, seconds: number) => void;
   /** Queue every scene that has no job, or whose job failed. */
   renderAll: () => Promise<void>;
   /** The finished video, once the stitch has run. */
@@ -153,8 +181,12 @@ export interface MusicVideoController {
 }
 
 interface Options {
+  /** Which planned video this is. Each keeps its own project. */
+  kind: PlannedKind;
   workflow: WorkflowSummary | undefined;
   sceneWorkflow: WorkflowSummary | undefined;
+  /** What a scene with nothing to build from runs as. See `scenes.bare`. */
+  bareSceneWorkflow?: WorkflowSummary;
   stitchWorkflow: WorkflowSummary | undefined;
   upscaleWorkflow: WorkflowSummary | undefined;
   values: Record<string, ParamValue>;
@@ -164,19 +196,19 @@ interface Options {
   online: boolean;
 }
 
-function readProject(): MusicVideoProject | null {
+function readProject(kind: PlannedKind): MusicVideoProject | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEYS[kind]);
     return raw ? (JSON.parse(raw) as MusicVideoProject) : null;
   } catch {
     return null;
   }
 }
 
-function writeProject(project: MusicVideoProject | null): void {
+function writeProject(kind: PlannedKind, project: MusicVideoProject | null): void {
   try {
-    if (project) localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
-    else localStorage.removeItem(STORAGE_KEY);
+    if (project) localStorage.setItem(STORAGE_KEYS[kind], JSON.stringify(project));
+    else localStorage.removeItem(STORAGE_KEYS[kind]);
   } catch {
     // Storage full or disabled: the project lives for this tab only.
   }
@@ -211,6 +243,18 @@ const silentCopy = (output: JobOutput): JobOutput => ({
   filename: output.filename.replace(SOUNDTRACKED, "$1$2"),
 });
 
+/**
+ * The copy of a clip with its sound, for a multi-scene video, whose join
+ * keeps every scene's own. An upscale reports the silent file and the one
+ * with sound; a scene's own run, only the one.
+ */
+const soundtracked = (job: Job | undefined): JobOutput | undefined =>
+  job?.phase === "done"
+    ? (job.outputs.find(
+        (file) => (file.type || "output") === "output" && SOUNDTRACKED.test(file.filename),
+      ) ?? savedVideo(job))
+    : undefined;
+
 /** What a run of this project is tagged with in the history. See `Job.musicVideo`. */
 const tagFor = (
   project: MusicVideoProject,
@@ -222,14 +266,26 @@ const tagFor = (
   scene,
   title: String(project.values.prompt ?? "").trim() || undefined,
   scenes: project.scenes.length,
+  ...(project.kind === "story" ? { kind: "story" as const } : {}),
 });
+
+/**
+ * A story's scenes laid end to end again from their lengths, after the plan
+ * gave them theirs or someone changed one.
+ */
+function retimed(scenes: ProjectScene[]): ProjectScene[] {
+  const windows = storyWindows(scenes.map((scene) => scene.seconds));
+  return scenes.map((scene, index) => ({ ...scene, ...windows[index] }));
+}
 
 const failed = (job: Job | undefined) =>
   job !== undefined && ["error", "cancelled", "unknown"].includes(job.phase);
 
 export function useMusicVideo({
+  kind,
   workflow,
   sceneWorkflow,
+  bareSceneWorkflow,
   stitchWorkflow,
   upscaleWorkflow,
   values,
@@ -237,11 +293,11 @@ export function useMusicVideo({
   jobs,
   online,
 }: Options): MusicVideoController {
-  const [project, setProject] = useState<MusicVideoProject | null>(readProject);
+  const [project, setProject] = useState<MusicVideoProject | null>(() => readProject(kind));
   const [busy, setBusy] = useState<"cutting" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => writeProject(project), [project]);
+  useEffect(() => writeProject(kind, project), [kind, project]);
 
   // Runs this project submitted before runs were tagged with it, found by the
   // ids it kept. A redo it has since replaced is no longer among them; the
@@ -363,17 +419,21 @@ export function useMusicVideo({
         setProject({ ...project, planPromptId: undefined });
         return;
       }
+      const scenes = project.scenes.map((scene, index) => ({
+        ...scene,
+        ...plan.outline[index],
+        // An instrumental is told to the planner, and held here too: it
+        // cannot hear the song, and its guess is what this switch overrules.
+        ...(project.values[INSTRUMENTAL_PARAM] === true ? { sings: false } : {}),
+        // And a story with the dialogue off, for one stray line.
+        ...(project.kind === "story" && project.values.dialogue === false ? { lines: "" } : {}),
+      }));
       setProject({
         ...project,
         look,
         concept: plan.concept,
-        scenes: project.scenes.map((scene, index) => ({
-          ...scene,
-          ...plan.outline[index],
-          // An instrumental is told to the planner, and held here too: it
-          // cannot hear the song, and its guess is what this switch overrules.
-          ...(project.values[INSTRUMENTAL_PARAM] === true ? { sings: false } : {}),
-        })),
+        // A story's scenes are as long as the planner made them.
+        scenes: project.kind === "story" ? retimed(scenes) : scenes,
       });
     } else if (failed(planJob)) {
       setError(planJob.error ?? "The plan did not come back. Try again.");
@@ -389,8 +449,11 @@ export function useMusicVideo({
             workflow,
             {
               ...current.values,
-              prompt: String(current.values.prompt ?? "").trim() || "A performance video for this song.",
-              scene_list: sceneList(current.scenes),
+              prompt:
+                String(current.values.prompt ?? "").trim() ||
+                (current.kind === "story" ? "A short story told in a few scenes." : "A performance video for this song."),
+              scene_list:
+                current.kind === "story" ? storySceneList(current.scenes.length) : sceneList(current.scenes),
               scene_outline: shotRequest(current, rewrite),
             },
             {
@@ -532,6 +595,38 @@ export function useMusicVideo({
   const plan = useCallback(async () => {
     if (!workflow) return;
     setError(null);
+
+    // A story has no song to cut: as many scenes as were asked for, each at
+    // a placeholder length until the planner gives it its own.
+    if (kind === "story") {
+      const count = Math.max(2, Math.round(Number(values.scene_count ?? 6)));
+      const windows = storyWindows(Array.from({ length: count }, () => STORY_SCENE_SECONDS.initial));
+      const next: MusicVideoProject = {
+        id: Date.now().toString(36),
+        createdAt: Date.now(),
+        kind: "story",
+        song: "",
+        songSeconds: windows.at(-1)?.end ?? 0,
+        values: { ...values },
+        scenes: windows.map((window) => ({ ...window, shot: "" })),
+      };
+      const promptId = await jobs.submit(
+        workflow,
+        {
+          ...values,
+          prompt: String(values.prompt ?? "").trim() || "A short story told in a few scenes.",
+          scene_list: storySceneList(count),
+        },
+        {
+          localDirector: modes.localDirector,
+          rewriteModel: modes.rewriteModel,
+          musicVideo: tagFor(next, "plan"),
+        },
+      );
+      if (promptId) setProject({ ...next, planPromptId: promptId });
+      return;
+    }
+
     const song = String(values.reference_audio ?? "").trim();
     if (!song) {
       setError("Add the song first.");
@@ -588,7 +683,7 @@ export function useMusicVideo({
     } finally {
       setBusy(null);
     }
-  }, [workflow, values, jobs, modes.localDirector, modes.rewriteModel]);
+  }, [kind, workflow, values, jobs, modes.localDirector, modes.rewriteModel]);
 
   const editShot = useCallback((index: number, shot: string) => {
     setProject((previous) =>
@@ -603,7 +698,7 @@ export function useMusicVideo({
 
   /** Change a scene's outline line: where it is, what happens, whether anyone sings. */
   const editOutline = useCallback(
-    (index: number, patch: Partial<Pick<ProjectScene, "place" | "happens" | "sings">>) => {
+    (index: number, patch: Partial<Pick<ProjectScene, "place" | "happens" | "sings" | "lines">>) => {
       setProject((previous) =>
         previous
           ? {
@@ -639,6 +734,49 @@ export function useMusicVideo({
     );
   }, []);
 
+  /** One scene of the project changed, from what it is now. */
+  const editScene = useCallback(
+    (index: number, change: (scene: ProjectScene) => ProjectScene) => {
+      setProject((previous) =>
+        previous
+          ? {
+              ...previous,
+              scenes: previous.scenes.map((scene, i) => (i === index ? change(scene) : scene)),
+            }
+          : previous,
+      );
+    },
+    [],
+  );
+
+  const editVoices = useCallback<MusicVideoController["editVoices"]>(
+    (index, voices) =>
+      editScene(index, (scene) => ({
+        ...scene,
+        voices: typeof voices === "function" ? voices(scene.voices) : voices,
+      })),
+    [editScene],
+  );
+
+  const editOpener = useCallback(
+    (index: number, opener: VoiceOpener | undefined) => editScene(index, (scene) => ({ ...scene, opener })),
+    [editScene],
+  );
+
+  const editLength = useCallback((index: number, seconds: number) => {
+    setProject((previous) =>
+      previous
+        ? {
+            ...previous,
+            // The join was of the scenes as they were timed.
+            stitchPromptId: undefined,
+            upscaledStitchPromptId: undefined,
+            scenes: retimed(previous.scenes.map((scene, i) => (i === index ? { ...scene, seconds } : scene))),
+          }
+        : previous,
+    );
+  }, []);
+
   /** Which form ids every scene run inherits — the ones scoped to scenes. */
   const scoped = useMemo(
     () => (workflow?.params ?? []).filter((param) => param.scope === "scenes").map((param) => param.id),
@@ -647,20 +785,28 @@ export function useMusicVideo({
 
   const submitScene = useCallback(
     async (current: MusicVideoProject, index: number, fresh: boolean) => {
-      if (!sceneWorkflow) return null;
       const scene = current.scenes[index];
+      // Nothing for Reference to Video to build from: Text to Video, with
+      // the values it has controls for.
+      const bare = !sceneHasReferences(current, scene);
+      const target = bare ? bareSceneWorkflow : sceneWorkflow;
+      if (!target) return null;
       const values = sceneValues(current, scene, index, scoped);
+      if (bare) {
+        const known = new Set(target.params.map((param) => param.id));
+        for (const id of Object.keys(values)) if (!known.has(id)) delete values[id];
+      }
       if (fresh) values.seed = -1;
       // Under the first scene in the history, so a video's scenes read as one
       // family rather than forty unrelated clips.
       const first = current.scenes[0]?.promptId;
-      return jobs.submit(sceneWorkflow, values, {
+      return jobs.submit(target, values, {
         ...modes,
         derivedFrom: index > 0 ? first : undefined,
         musicVideo: tagFor(current, "scene", index),
       });
     },
-    [sceneWorkflow, scoped, jobs, modes],
+    [sceneWorkflow, bareSceneWorkflow, scoped, jobs, modes],
   );
 
   /**
@@ -760,10 +906,13 @@ export function useMusicVideo({
       part: "join" | "upscaled-join",
     ) => {
       if (!stitchWorkflow) return null;
+      const story = current.kind === "story";
       const clips = current.scenes.map((scene) => {
-        const saved = savedVideo(pick(scene));
+        // A story keeps each scene's sound; a music video lays the song over
+        // silent ones.
+        const saved = story ? soundtracked(pick(scene)) : savedVideo(pick(scene));
         if (!saved) return null;
-        const output = silentCopy(saved);
+        const output = story ? saved : silentCopy(saved);
         // As LoadVideo names a file in another of ComfyUI's folders.
         const path = output.subfolder ? `${output.subfolder}/${output.filename}` : output.filename;
         return { file: `${path} [${output.type || "output"}]`, seconds: keptFrames(scene) / FPS };
@@ -772,14 +921,17 @@ export function useMusicVideo({
         setError("Every scene needs a finished clip before they can be joined.");
         return null;
       }
+      const idea = String(current.values.prompt ?? "").trim();
       return jobs.submit(
         stitchWorkflow,
-        {
-          scenes: JSON.stringify(clips),
-          song: current.song,
-          song_seconds: Math.round(current.songSeconds * 1000) / 1000,
-          prompt: `Music video: ${String(current.values.prompt ?? "").trim()}`,
-        },
+        story
+          ? { scenes: JSON.stringify(clips), prompt: `Multi-scene video: ${idea}` }
+          : {
+              scenes: JSON.stringify(clips),
+              song: current.song,
+              song_seconds: Math.round(current.songSeconds * 1000) / 1000,
+              prompt: `Music video: ${idea}`,
+            },
         // Under the first scene in the history, with the rest of the video.
         { derivedFrom: current.scenes[0]?.promptId, musicVideo: tagFor(current, part) },
       );
@@ -986,6 +1138,7 @@ export function useMusicVideo({
   }, []);
 
   return {
+    kind,
     project,
     step,
     error,
@@ -996,6 +1149,9 @@ export function useMusicVideo({
     rewriteShot,
     editLook,
     editReferences,
+    editVoices,
+    editOpener,
+    editLength,
     renderAll,
     redo,
     takesFor,

@@ -13,6 +13,7 @@ with the overview table, then jump to the one you are using.
 - [Extend](#extend)
 - [Text to Image](#text-to-image)
 - [Music video](#music-video)
+- [Multi-scene video](#multi-scene-video)
 - [Create video, from a finished track](#create-video-from-a-finished-track)
 - [A voice, as a reference of its own](#a-voice-as-a-reference-of-its-own)
 - [One voice, one speaker](#one-voice-one-speaker)
@@ -41,6 +42,7 @@ timing and encoding controls via `minimax-common.ts`.
 | `minimax-h3-ref2v` — remix | The source clip's frames, measured by `GetImageSizeAndCount` — length included |
 | `minimax-h3-extend` — extend | The source clip's **last frame**, measured by `GetImageSize` (whichever seam the run takes) |
 | `music-video` — music video | Aspect ratio, applied to every scene; each scene is a `minimax-h3-ref` run |
+| `multi-scene` — multi-scene video | Aspect ratio, applied to every scene; each scene is a `minimax-h3-ref` run, or `minimax-h3` when it has no pictures and no voices |
 | `upscale` — upscale | The **Output size** control, applied to the clip's short side |
 | `image-edit` — the Edit button | The picture's own shape, at 1 MP |
 
@@ -277,6 +279,49 @@ drift. What holds them together is the plan.
 
 A music video then upscales scene by scene with RTX Video — see
 [Upscale](#upscale).
+
+## Multi-scene video
+
+`multi-scene` is the music video without the song: one idea told in several
+scenes, each with the sound H3 makes for it — a short film, a sketch, a
+story. Both are built on `planned-video.ts`, which holds the plan graph, the
+pictures, the cast describer and `finalize`; each brings its own planner,
+shot writer and controls.
+
+What changes without a song:
+
+1. **The scene count is the user's, the lengths are the planner's.** There
+   are no beats to cut on, so **Scenes** sets how many, and the planner gives
+   each a length of 4–15 seconds from what happens in it and how much is said
+   (about two and a half words a second). Each length is snapped up to one H3
+   makes exactly (`storySeconds` in `scenes.ts`), so the clip is the scene and
+   nothing is trimmed off it. Every scene's length can be changed in the panel.
+2. **Dialogue.** The outline has a `lines` field per scene — `Name: words`,
+   a turn per line — which the shot writer quotes word for word. **Dialogue**
+   off tells the planner nobody speaks, and every scene with no lines is sent
+   with "Nobody speaks in this scene", since a scene director left free writes
+   some.
+3. **Voices.** Up to two recordings, each with whose voice it is, go under
+   every scene, like the pictures — they are what makes one person sound the
+   same from scene to scene. A scene can have its own voices (someone who
+   speaks only there) or none (a scene its speakers are not in). With two,
+   the one whose speaker has the first line is wired last, read off the
+   scene's lines and overridable as **Speaks first**; see
+   [One voice, one speaker](#one-voice-one-speaker).
+4. **Bare scenes.** Reference to Video refuses a run with nothing to build
+   from, so a scene with no pictures and no voices is a Text to Video run
+   (`scenes.bare`). `check:workflows` holds the two graphs' shared controls
+   to the same kinds.
+5. **The join keeps each scene's sound.** `multi-scene-stitch` concatenates
+   the clips without `complete_audio`, so ComfyUI carries each one's track,
+   and without trims. Its audio is still decoded and written again as AAC —
+   the same encoder the music video's join uses for the song — so the one
+   crash seen there ([music video's join](#music-video)) is not ruled out
+   here. The upscaled join reads each upscale's file with sound rather than
+   the silent copy.
+
+Each kind keeps its own project in the browser, so a music video and a
+multi-scene video can be in progress at once.
 
 ## Create video, from a finished track
 

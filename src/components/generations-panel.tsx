@@ -882,7 +882,7 @@ function MusicVideoEntry({
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
             <span className="shrink-0 text-[12px] font-medium text-fg">
-              Music video
+              {group.label}
             </span>
             <span className="min-w-0 truncate text-[11px] text-fg-subtle">
               {group.title}

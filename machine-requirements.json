@@ -141,6 +141,7 @@
         "minimax-h3-ref (spectrum)",
         "minimax-h3-ref (style, vhs tape)",
         "minimax-h3-ref (turbo)",
+        "multi-scene",
         "music-video"
       ]
     },
@@ -269,6 +270,7 @@
       ],
       "optional": false,
       "workflows": [
+        "multi-scene-stitch",
         "music-video-stitch"
       ]
     },
@@ -777,6 +779,7 @@
         "minimax-h3-ref (spectrum)",
         "minimax-h3-ref (style, vhs tape)",
         "minimax-h3-ref (turbo)",
+        "multi-scene",
         "music-video"
       ]
     },
@@ -1035,6 +1038,8 @@
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-ref2v (turbo)",
         "minimax-music3",
+        "multi-scene",
+        "multi-scene-stitch",
         "music-video",
         "music-video-stitch"
       ]
@@ -1367,6 +1372,7 @@
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-ref2v (turbo)",
+        "multi-scene-stitch",
         "music-video-stitch"
       ]
     },
@@ -1914,6 +1920,7 @@
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-ref2v (turbo)",
+        "multi-scene",
         "music-video"
       ]
     },

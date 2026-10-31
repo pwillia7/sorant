@@ -569,7 +569,19 @@ export interface WorkflowDef {
    * history, retries and cancelling all work on a scene the way they do on a
    * clip. See src/lib/music-video/.
    */
-  scenes?: { workflow: string; stitch: string };
+  scenes?: {
+    /** A music video, cut to a song, or a multi-scene video, told as a story. */
+    kind: "music" | "story";
+    workflow: string;
+    stitch: string;
+    /**
+     * The workflow a scene with nothing to build from runs as instead: a
+     * multi-scene video with no pictures and no voices, which Reference to
+     * Video refuses. Its scenes are Text to Video runs. See
+     * `sceneHasReferences`.
+     */
+    bare?: string;
+  };
   graph: ComfyGraph;
   params: ParamDef[];
   /**

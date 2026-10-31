@@ -38,6 +38,11 @@ soundtrack:
   its beats, each scene is planned and rendered with the song under it, and
   the scenes are joined. Any scene can be given pictures of its own after
   the plan, for someone or something that appears only there.
+- **Multi-scene video** — one idea told in several scenes with no song: a
+  short film, a sketch, a story. Each scene keeps its own sound, lines of
+  dialogue are written per scene, and up to two voice recordings keep
+  people sounding the same across scenes. Pictures and voices can be set per
+  scene.
 
 And **Text to Image**, an H3 still from a prompt.
 
