@@ -32,6 +32,7 @@ import {
 } from "@/lib/music-video/project";
 import {
   CAST_BRIEF,
+  INSTRUMENTAL_PARAM,
   keptFrames,
   MUSIC_VIDEO_PICTURES,
   PLAN_BRIEF,
@@ -352,7 +353,13 @@ export function useMusicVideo({
         ...project,
         look,
         concept: plan.concept,
-        scenes: project.scenes.map((scene, index) => ({ ...scene, ...plan.outline[index] })),
+        scenes: project.scenes.map((scene, index) => ({
+          ...scene,
+          ...plan.outline[index],
+          // An instrumental is told to the planner, and held here too: it
+          // cannot hear the song, and its guess is what this switch overrules.
+          ...(project.values[INSTRUMENTAL_PARAM] === true ? { sings: false } : {}),
+        })),
       });
     } else if (failed(planJob)) {
       setError(planJob.error ?? "The plan did not come back. Try again.");

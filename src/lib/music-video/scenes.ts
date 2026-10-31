@@ -24,6 +24,15 @@ import { effectiveSeconds, FPS } from "@/lib/workflows/minimax-common";
 export const SCENES_HEADING = "THE SCENES";
 
 /**
+ * The user's word that the song has no vocal, which the planner cannot work
+ * out for itself: it cannot hear the song, and left to guess it has written
+ * someone singing through a fully instrumental intro. The plan's arrival holds
+ * every scene to it as well (see useMusicVideo), so one stray "sings" in the
+ * reply does not put a mouth moving to nothing on screen.
+ */
+export const INSTRUMENTAL_PARAM = "instrumental";
+
+/**
  * The titles the music video planner's two replies come back under: the scene
  * plan, and how the people in the pictures look. See briefsFrom, which drops
  * the "AI Gateway - " prefix off a node's title.

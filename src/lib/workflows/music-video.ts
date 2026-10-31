@@ -13,6 +13,7 @@ import {
 import { REWRITE_IMAGE_INPUT, rewriteModelParam, rewriteNode } from "./rewrite-model";
 import {
   CAST_BRIEF,
+  INSTRUMENTAL_PARAM,
   MUSIC_VIDEO_PICTURES,
   PLAN_BRIEF,
   SCENES_HEADING,
@@ -247,7 +248,8 @@ function shownToPlanner(values: Record<string, ParamValue>): number[] {
  */
 function lyricsBlock(values: Record<string, ParamValue>): string {
   const lyrics = String(values[LYRICS_PARAM] ?? "").trim();
-  if (!lyrics) return "";
+  // Hidden behind the switch, but kept: words typed before it was turned on.
+  if (!lyrics || values[INSTRUMENTAL_PARAM] === true) return "";
   return `THE LYRICS
 
 These are the song's words, for what the song is about and how it feels. You do not know when each line is sung, so do not assign lines to scenes or write them into any shot. Let them shape the concept, the places and the moments.
@@ -256,6 +258,13 @@ ${lyrics}`;
 }
 
 const LYRICS_PARAM = "song_lyrics";
+
+function instrumentalBlock(values: Record<string, ParamValue>): string {
+  if (values[INSTRUMENTAL_PARAM] !== true) return "";
+  return `THE SONG IS INSTRUMENTAL
+
+There is no vocal anywhere in this song. Nobody on screen sings, raps or mouths words in any scene, so every "sings" is false, whatever the idea says about performing. "part" follows the music alone. Let the subject carry the song in other ways — how they move, dance, play, travel or react to it.`;
+}
 
 /** The scene list the browser wrote from cutting the song. See `sceneList`. */
 const SCENES_PARAM = "scene_list";
@@ -361,7 +370,7 @@ const graph: ComfyGraph = {
 const director = directorTarget(
   ids,
   MUSIC_VIDEO_PLANNER,
-  [picturesBlock, lyricsBlock, scenesBlock],
+  [picturesBlock, lyricsBlock, instrumentalBlock, scenesBlock],
   // No length block: the planner is not writing one clip of a known length,
   // and each scene's own length is in the scene list.
   () => "",
@@ -393,6 +402,15 @@ const params: ParamDef[] = [
     targets: [],
   },
   {
+    id: INSTRUMENTAL_PARAM,
+    label: "Instrumental",
+    type: "toggle",
+    default: false,
+    help: "No vocal in the song: every scene is planned with Sings off, so no one mouths words to it. You can still turn Sings on for a scene in the outline.",
+    group: "Song",
+    targets: [director],
+  },
+  {
     id: LYRICS_PARAM,
     label: "Lyrics",
     type: "textarea",
@@ -402,6 +420,7 @@ const params: ParamDef[] = [
     maxLength: 6000,
     help: "Optional. What the song is about, for the plan — nothing here knows when each line is sung, so they shape the scenes rather than being placed in them.",
     group: "Song",
+    hiddenBy: { param: INSTRUMENTAL_PARAM, is: true },
     targets: [director],
   },
   {
