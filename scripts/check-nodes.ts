@@ -233,6 +233,16 @@ async function main() {
       `  old      ${LOCAL_CLASS} takes no system_prompt — update ComfyUI before running the director locally`,
     );
   }
+  const generatorInputs = {
+    ...generator?.input?.required,
+    ...generator?.input?.optional,
+  };
+  // A flag the setup docs used to recommend, kept here to say so: it takes away
+  // the room the 27B needs, and half its replies stream weights from system RAM
+  // instead — the same brief nine times slower. See local-director.ts.
+  const argv = ((await systemStats().catch(() => null)) as { system?: { argv?: string[] } } | null)
+    ?.system?.argv;
+  const headroom = argv?.some((arg) => arg.startsWith("--vram-headroom"));
   for (const model of LOCAL_DIRECTOR_MODELS) {
     const file = encoders ? findLocalDirectorFile(model, encoders) : undefined;
     console.log(
@@ -240,6 +250,21 @@ async function main() {
         ? `  ok       ${model.label}  (${file})`
         : `  optional ${model.label}  — not installed; download from ${model.download}`,
     );
+    // A model that sets inputs of its own needs a node new enough to have
+    // them: ComfyUI drops an input it does not know, silently.
+    const unknown = Object.keys(model.inputs ?? {}).filter(
+      (input) => generator && !(input in generatorInputs),
+    );
+    if (file && headroom && model.fillsCard) {
+      console.log(
+        `  slow     ComfyUI runs with --vram-headroom, which makes ${model.label} up to nine times slower — take it off ComfyUI's launch line`,
+      );
+    }
+    if (file && unknown.length > 0) {
+      console.log(
+        `  old      ${LOCAL_CLASS} takes no ${unknown.join(", ")} — update ComfyUI before running ${model.label}`,
+      );
+    }
   }
 
   /**

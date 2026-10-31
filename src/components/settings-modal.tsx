@@ -6,6 +6,10 @@ import { Modal } from "@/components/ui/modal";
 import { formatDuration, formatWhen, renderMs, type Job } from "@/lib/jobs";
 import { offeredModel, REWRITE_MODEL } from "@/lib/workflows/rewrite-model";
 import {
+  EARLIEST_LOCAL_DIRECTOR,
+  localDirectorModel,
+} from "@/lib/workflows/local-director";
+import {
   paramVisible,
   type ParamValue,
   type WorkflowSummary,
@@ -182,7 +186,7 @@ export function SettingsModal({
               label="Director"
               value={
                 job.localDirector
-                  ? "This ComfyUI machine"
+                  ? `This ComfyUI machine — ${localDirectorModel(job.localModel ?? EARLIEST_LOCAL_DIRECTOR).label}`
                   : (offeredModel(resolved[REWRITE_MODEL])?.label ??
                     String(resolved[REWRITE_MODEL] ?? "AI Gateway"))
               }

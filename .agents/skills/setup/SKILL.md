@@ -30,8 +30,14 @@ What it asks of you, worth carrying in before you start:
   runbook's defaults without offering menus; `pnpm smoke` is the gate, and you
   fix what it reports before involving the person.
 - **Offer the prompt rewrite on this machine** (no account) alongside an AI
-  Gateway key, and tell the person their app password is in `.env.local` and
-  can be changed.
+  Gateway key, and recommend which local model from their card's VRAM — Qwen
+  3.8 27B on 24 GB, Gemma 4 12B on 16 GB, the gateway below that — then let
+  them choose (the runbook's Phase 7 table). Tell the person their app
+  password is in `.env.local` and can be changed.
+- **No `--vram-headroom` on the launch line.** Older versions of the runbook
+  added it; it makes the 27B local director up to nine times slower and was
+  never shown to prevent anything. The restarts it was meant for are fixed by
+  `TdrDelay`.
 - **Reach ComfyUI through DuckDNS and Caddy**, HTTPS on the machine itself.
   Tailscale Funnel is only for when no port can be forwarded: its relayed
   bandwidth cannot carry a long music video or a 4K upscale.

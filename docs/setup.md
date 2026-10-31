@@ -118,14 +118,21 @@ which turns one line into the detailed format MiniMax H3 was trained on. You
 choose where that happens, from the **Gateway** button in the app's header, and
 you can switch at any time:
 
-- **On your ComfyUI machine — no account needed.** An uncensored Gemma runs
-  through ComfyUI's built-in `TextGenerate` node: no key, nothing refused, about
-  20 seconds slower a run. It needs one more 12 GB file
-  (`pnpm models:download --comfy <ComfyUI folder> --extras local-director`).
+- **On your ComfyUI machine — no account needed.** A model runs through
+  ComfyUI's built-in `TextGenerate` node: no key, 20–40 seconds slower a run.
+  Two work, and the app offers whichever you have:
+  - **Qwen 3.8 27B** for a 24 GB card — the better writer, about 40 seconds a
+    brief (`--extras local-director-27b`, 17 GB). The stock model, though it
+    refused nothing in testing.
+  - **Gemma 4 12B uncensored** for 16 GB — twice as fast, plainer writing
+    (`--extras local-director`, 12 GB).
+
+  Download with `pnpm models:download --comfy <ComfyUI folder> --extras <set>`.
   It is the default: a browser that has not chosen starts here whenever the
-  machine has that file, and on the gateway when it does not. Change it from
-  *Where is the prompt rewritten?* behind the **Gateway** button; the choice
-  is remembered per browser. The easiest way to start.
+  machine has a model, the 27B if it has both, and on the gateway when it has
+  neither. Change it from *Where is the prompt rewritten?* and *Local model*
+  behind the header's **Local** / **Gateway** button; the choice is remembered
+  per browser. The easiest way to start.
 - **On the Vercel AI Gateway — a key.** Hosted models: faster, each with a
   content policy. Create a key at
   [vercel.com/dashboard](https://vercel.com/dashboard) → **AI Gateway** → **API
@@ -214,7 +221,8 @@ Optional — nothing fails without these until you choose them:
 
 | File | Folder under `models/` | Size | For |
 | --- | --- | ---: | --- |
-| `gemma4_12b_uncensored_heretic_int8_convrot.safetensors` | `text_encoders/` | 12.1 GB | rewriting prompts on the ComfyUI machine |
+| `Qwen3.8-27B_w4a8.safetensors` | `text_encoders/` | 17.3 GB | rewriting prompts on the ComfyUI machine, 24 GB cards (`--extras local-director-27b`) |
+| `gemma4_12b_uncensored_heretic_int8_convrot.safetensors` | `text_encoders/` | 12.1 GB | rewriting prompts on the ComfyUI machine, faster, 16 GB cards (`--extras local-director`) |
 | `seedvr2_7b_sharp_int8_convrot.safetensors` | `diffusion_models/` | 8.3 GB | Upscale's **SeedVR2 7B** (`--extras seedvr2`) |
 | `seedvr2_ema_vae_fp16.safetensors` | `vae/` | 0.5 GB | either SeedVR2 choice |
 | `seedvr2_3b_int8_convrot.safetensors` | `diffusion_models/` | 3.5 GB | Upscale's **SeedVR2 3B** (`--extras upscale-3b`) |
@@ -233,7 +241,7 @@ Where to get them:
 | SeedVR2 | [Comfy-Org/SeedVR2](https://huggingface.co/Comfy-Org/SeedVR2) |
 | RIFE / FILM | [Comfy-Org/frame_interpolation](https://huggingface.co/Comfy-Org/frame_interpolation) |
 | FLUX Kontext | ComfyUI's [Kontext tutorial](https://docs.comfy.org/tutorials/flux/flux-1-kontext-dev). The diffusion model is gated: accept its licence on Hugging Face first |
-| Local rewrite model | [radiatingreverberations/Gemma-4-12B-It-Uncensored-Heretic-INT8-ConvRot-ComfyUI](https://huggingface.co/radiatingreverberations/Gemma-4-12B-It-Uncensored-Heretic-INT8-ConvRot-ComfyUI) |
+| Local rewrite models | [beycanai/Qwen-LM](https://huggingface.co/beycanai/Qwen-LM) (Qwen 3.8 27B), [radiatingreverberations/Gemma-4-12B-It-Uncensored-Heretic-INT8-ConvRot-ComfyUI](https://huggingface.co/radiatingreverberations/Gemma-4-12B-It-Uncensored-Heretic-INT8-ConvRot-ComfyUI) |
 
 **Is your copy named differently?** The download script finds it by size and
 links it under the expected name, so there is nothing to rename or edit. To use
@@ -261,10 +269,11 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrDelay /t R
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrDdiDelay /t REG_DWORD /d 60 /f
 ```
 
-Also add `--vram-headroom 3` to ComfyUI's launch line. It stops dynamic VRAM
-paging into a full card, a separate Windows failure, at no cost in speed. Leave
-it off on Linux: a full card there is an out-of-memory error, not a stall, so
-the flag would only hold back 3 GB.
+Don't add `--vram-headroom` to ComfyUI's launch line, and take it off if an
+earlier version of this guide had you add it. It was a guess against a
+different Windows problem that never turned up, and it costs the Qwen 3.8 27B
+local director the room it needs: with it, half that model's briefs take six
+minutes instead of forty seconds. `pnpm check:nodes` warns when it's there.
 
 ---
 
@@ -574,7 +583,7 @@ README for the prompt to paste.
 | `check:nodes` fails only on models for workflows you skipped | Run it as `pnpm check:nodes --workflows <the ones you downloaded>` |
 | 12 GB card on Linux: `illegal memory access`, Xid errors, a ComfyUI that hangs on to its port | Add `--disable-dynamic-vram` to the launch line, and use `--reserve-vram 1.5` rather than `--lowvram` |
 | 12 GB card: the local rewrite takes an hour, or fails `Expected a cuda device, but got: cpu` | `--lowvram` put Gemma on the CPU. Drop it, or use the gateway rewrite |
-| "The local director is chosen but … is not in" | The Gemma file is not in `models/text_encoders/`, or switch the rewrite back to the gateway |
+| "The local director is chosen but … is not in" | That model's file is not in `models/text_encoders/`: download it, pick the other local model, or switch the rewrite back to the gateway |
 | Only the **Edit** button fails | One of the four FLUX Kontext files — `pnpm check:nodes` names it |
 | Large uploads fail when deployed | No Blob store — see [step 4](#4-deploy-to-vercel) |
 | The Windows machine restarts during step 1 | [The GPU timeout](#on-windows-raise-the-gpu-timeout-first). Display event 4101 in the System log confirms it |

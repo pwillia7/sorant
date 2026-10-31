@@ -1,5 +1,6 @@
 "use client";
 
+import { EARLIEST_LOCAL_DIRECTOR } from "@/lib/workflows/local-director";
 import type { ParamValue } from "@/lib/workflows/types";
 
 /**
@@ -59,6 +60,12 @@ export interface Job {
    * so an estimate pooling the two would describe neither.
    */
   localDirector?: boolean;
+  /**
+   * Which local model, by id, where `localDirector` is set. In `modeKey` too:
+   * the 27B takes twice Gemma's time. Absent on runs from before there was a
+   * choice, which were Gemma's.
+   */
+  localModel?: string;
   /**
    * The value of the workflow's `estimateBy` control, where it has one —
    * Upscale's upscaler. In `modeKey` for the same reason: the same workflow at
@@ -498,7 +505,13 @@ export function learnedEstimateSeconds(jobs: Job[], job: Job): number | null {
 function modeKey(job: Job): string {
   return [
     job.turbo ? "turbo" : "",
-    job.localDirector ? "local-director" : "",
+    // Gemma's runs keep the key they had before there was a choice, so the
+    // history they built still counts.
+    job.localDirector
+      ? (job.localModel ?? EARLIEST_LOCAL_DIRECTOR) === EARLIEST_LOCAL_DIRECTOR
+        ? "local-director"
+        : `local-director:${job.localModel}`
+      : "",
     job.variant ? `variant:${job.variant}` : "",
     ...(job.patches ?? []),
   ]

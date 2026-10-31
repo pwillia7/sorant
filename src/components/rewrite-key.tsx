@@ -50,6 +50,7 @@ export function RewriteKeyButton({
   onEngineChange,
   localDirector,
   onLocalDirectorChange,
+  installedDirectors,
   rewritePicker,
   rewriteModel,
   onRewriteModelChange,
@@ -58,6 +59,8 @@ export function RewriteKeyButton({
   onEngineChange: (engine: DirectorEngine) => void;
   localDirector: string;
   onLocalDirectorChange: (id: string) => void;
+  /** The local models the machine has, by id; null until it has been asked. */
+  installedDirectors: string[] | null;
   /** Absent until the workflows are in. */
   rewritePicker: RewritePicker | undefined;
   rewriteModel: string | undefined;
@@ -148,6 +151,7 @@ export function RewriteKeyButton({
         onEngineChange={onEngineChange}
         localDirector={localDirector}
         onLocalDirectorChange={onLocalDirectorChange}
+        installedDirectors={installedDirectors}
         rewritePicker={rewritePicker}
         rewriteModel={rewriteModel}
         onRewriteModelChange={onRewriteModelChange}
@@ -165,6 +169,7 @@ function RewriteKeyModal({
   onEngineChange,
   localDirector,
   onLocalDirectorChange,
+  installedDirectors,
   rewritePicker,
   rewriteModel,
   onRewriteModelChange,
@@ -177,6 +182,7 @@ function RewriteKeyModal({
   onEngineChange: (engine: DirectorEngine) => void;
   localDirector: string;
   onLocalDirectorChange: (id: string) => void;
+  installedDirectors: string[] | null;
   rewritePicker: RewritePicker | undefined;
   rewriteModel: string | undefined;
   onRewriteModelChange: (id: string) => void;
@@ -195,6 +201,20 @@ function RewriteKeyModal({
   }, [open]);
 
   const typingKey = engine === "gateway" && key.trim().length > 0;
+
+  /**
+   * The local models worth offering: the ones the machine has, once it has
+   * said — a model it lacks is a choice every run would refuse. Every model
+   * before then, or when it has none, so there is something to download.
+   */
+  const offered = LOCAL_DIRECTOR_MODELS.filter(
+    (model) =>
+      !installedDirectors?.length || installedDirectors.includes(model.id),
+  );
+  const missing = LOCAL_DIRECTOR_MODELS.filter(
+    (model) => installedDirectors && !installedDirectors.includes(model.id),
+  );
+  const chosen = localDirectorModel(localDirector);
 
   const save = async () => {
     setSaving(true);
@@ -265,15 +285,15 @@ function RewriteKeyModal({
       {/*
         Where the rewrite runs, first, because it decides whether anything
         below matters. Every gateway model has a content policy of its own,
-        and a refusal is a run that never starts; the local model has its
-        refusals taken out, and costs about twenty seconds a run for it.
+        and a refusal is a run that never starts; the local models refuse far
+        less, and cost twenty to forty seconds a run for it.
       */}
       <Field
         id={`${id}-engine`}
         label="Where is the prompt rewritten?"
         help={
           engine === "local"
-            ? "By an uncensored model on your ComfyUI machine, loaded and unloaded around the video model. It has had its refusals trained out, so it writes the briefs the hosted models decline, and it can see your images — but it adds about twenty seconds to every run."
+            ? "By a model on your ComfyUI machine, loaded and unloaded around the video model. Free, it can see your images, and it writes briefs the hosted models decline — but it adds twenty to forty seconds to every run."
             : "By a hosted model on the Vercel AI Gateway, chosen below for every workflow. Fast, but every one of them has a content policy, and a refused brief is a run that never starts."
         }
       >
@@ -285,7 +305,7 @@ function RewriteKeyModal({
             { value: "gateway", label: "AI Gateway — hosted models" },
             {
               value: "local",
-              label: "This ComfyUI machine — uncensored, slower",
+              label: "This ComfyUI machine — free, slower",
             },
           ]}
         />
@@ -296,30 +316,55 @@ function RewriteKeyModal({
           <Field
             id={`${id}-local`}
             label="Local model"
-            help="Goes in ComfyUI's models/text_encoders folder. Take the int8 file — the bf16 one does not fit on a 24 GB card."
+            help={chosen.about}
           >
             <Select
               id={`${id}-local`}
               value={localDirector}
               onChange={onLocalDirectorChange}
-              options={LOCAL_DIRECTOR_MODELS.map((model) => ({
+              options={offered.map((model) => ({
                 value: model.id,
                 label: model.label,
               }))}
             />
           </Field>
-          <p className="text-[12px] text-fg-subtle">
-            Not on the machine yet?{" "}
-            <a
-              href={localDirectorModel(localDirector).download}
-              target="_blank"
-              rel="noreferrer"
-              className="text-accent underline underline-offset-2"
-            >
-              Download it from Hugging Face
-            </a>
-            .
-          </p>
+          {/*
+            The rest as downloads rather than choices. Into ComfyUI's
+            models/text_encoders folder, which is what makes them choices here.
+          */}
+          {missing.length > 0 && missing.length < LOCAL_DIRECTOR_MODELS.length ? (
+            <p className="text-[12px] text-fg-subtle">
+              Also works here, once it is in ComfyUI&apos;s models/text_encoders
+              folder:{" "}
+              {missing.map((model, index) => (
+                <span key={model.id}>
+                  {index > 0 ? ", " : null}
+                  <a
+                    href={model.download}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-accent underline underline-offset-2"
+                  >
+                    {model.label}
+                  </a>
+                </span>
+              ))}
+              .
+            </p>
+          ) : !installedDirectors?.length ? (
+            <p className="text-[12px] text-fg-subtle">
+              {installedDirectors ? "Not on the machine yet. " : "Not on the machine yet? "}
+              <a
+                href={chosen.download}
+                target="_blank"
+                rel="noreferrer"
+                className="text-accent underline underline-offset-2"
+              >
+                Download it from Hugging Face
+              </a>{" "}
+              into ComfyUI&apos;s models/text_encoders folder.
+            </p>
+          ) : null}
         </>
       ) : null}
 

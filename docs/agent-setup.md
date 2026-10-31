@@ -242,12 +242,15 @@ another install of the same version, and say so. `pnpm smoke` in Phase 7 is
 what proves SageAttention actually works; `check:nodes` only sees the node.
 
 **Edit the launch line once, now, before the restart.** Add
-`--max-upload-size 100` (the app's upload ceiling), and on **Windows only**
-`--vram-headroom 3`. That keeps Dynamic VRAM from filling the card, which on
-Windows does not fail but pages into shared system memory and stalls
-(Comfy-Org/ComfyUI#15360), at no cost in speed. Linux has no such fallback (a
-full card is an out-of-memory error), so there the flag only takes 3 GB away
-from the run: leave it off. Do not add `--listen`: Caddy and Funnel connect to localhost, and
+`--max-upload-size 100` (the app's upload ceiling). **Do not add
+`--vram-headroom`**, and take it off if it is there: earlier versions of this
+runbook recommended `--vram-headroom 3` against a Windows paging stall
+(Comfy-Org/ComfyUI#15360) that was never reproduced here, and the restarts it
+was added during were Windows' GPU timeout (Phase 2's `TdrDelay`). It is not
+free: it holds back the room Qwen 3.8 27B needs, and half that model's
+replies then stream weights from system RAM — the same brief in six minutes
+instead of forty seconds. `pnpm check:nodes` warns when it is on the launch
+line. Do not add `--listen`: Caddy and Funnel connect to localhost, and
 `--listen` exposes ComfyUI to the whole network. Do not add
 `--enable-cors-header` with a specific origin (see troubleshooting). Keep the
 `--port` it has.
@@ -273,7 +276,7 @@ The script counts a file as present wherever ComfyUI would find it: the
 install's own `models/`, every folder its `extra_model_paths.yaml` adds, and
 any further `--models-dir <path>`. New files go into the install's own
 `models/`. `--workflows all` takes everything required; `--extras` adds optional
-sets (`local-director`, `vhs-tape`, `vhs-tape-lighter`, `seedvr2`, `upscale-3b`, `film`);
+sets (`local-director`, `local-director-27b`, `vhs-tape`, `vhs-tape-lighter`, `seedvr2`, `upscale-3b`, `film`);
 `--skip <file>` leaves one out — the usual one is the bf16 pair,
 `minimax_h3_ref2va_bf16.safetensors,qwen3vl_32b_minimax_h3_bf16.safetensors`, if
 they will use only pictures as references. Lists take commas or spaces.
@@ -310,10 +313,12 @@ it.
 
 **The optional sets, and when to offer them:**
 
-- **`local-director`** (12 GB) — rewrites prompts with an uncensored Gemma
-  through ComfyUI's built-in `TextGenerate`. No account, no key and nothing
-  refused, about 20 seconds slower a run. **Offer it by default**: it is the
-  rewrite that needs nothing else (Phase 7).
+- **`local-director`** (12 GB) or **`local-director-27b`** (17 GB) — rewrites
+  prompts on this machine through ComfyUI's built-in `TextGenerate`. No
+  account and no key. **Offer one by default**: it is the rewrite that needs
+  nothing else. Which one depends on the card — see *Choose where prompts are
+  rewritten* in Phase 7, and decide it with the person now, so the download
+  runs with the rest.
 - **`vhs-tape` / `vhs-tape-lighter`** — the VHS tape content LoRA. H3 LoRAs
   break on the int8 *rotated* base the graphs ship on (warped faces, melting
   limbs, no error), so the switch swaps to a non-rotated checkpoint while on:
@@ -544,13 +549,22 @@ person's one line into the detailed format MiniMax H3 was trained on, and
 something has to do the rewriting. Offer both, and recommend the first unless
 they already have a Vercel account they want to use:
 
-1. **On this machine — no account, recommended to start.** The `local-director`
-   set (12 GB) from Phase 3:
-   `pnpm models:download --comfy <ComfyUI folder> --extras local-director`.
-   In the app, the person clicks the **Gateway** button in the header and sets
-   *Where is the prompt rewritten?* to **This ComfyUI machine**. The choice is
-   remembered per browser, so they set it once on each device they use. It is
-   uncensored and about 20 seconds slower a run.
+1. **On this machine — no account, recommended to start.** Two models work.
+   Recommend by the card's VRAM (`nvidia-smi`), say why, and let the person
+   choose — they can download both and switch in the app at any time:
+
+   | VRAM | Recommend | Why |
+   | --- | --- | --- |
+   | **24 GB or more** | `local-director-27b` — Qwen 3.8 27B (17 GB) | The best writer: richer shots, every music video scene in a different place, closest to their idea. About 40 seconds a brief, 20 GB at its peak. The stock model rather than an uncensored one, though it refused nothing in testing |
+   | **16 GB** | `local-director` — Gemma 4 12B uncensored (12 GB) | Peaks at 14 GB, about 20 seconds a brief. Plainer writing. Also the one to take on a 24 GB card if they want speed, or a model with its refusals trained out |
+   | **12 GB** | The gateway, below | The local models are tight or do not fit; see the 12 GB troubleshooting rows if they insist on Gemma |
+
+   `pnpm models:download --comfy <ComfyUI folder> --extras local-director-27b`
+   (or `local-director`, or both). The app offers whichever the machine has,
+   the 27B first, and a browser that has not chosen starts on this machine
+   with it. The person can change it from the **Local** / **Gateway** button
+   in the header — *Where is the prompt rewritten?* and *Local model*; the
+   choice is remembered per browser.
 2. **The Vercel AI Gateway — a key.** Hosted models, faster, each with a content
    policy. The person creates a key at
    [vercel.com/dashboard](https://vercel.com/dashboard) → **AI Gateway** → **API
@@ -571,7 +585,7 @@ as the normal way to run.
 pnpm check:nodes --workflows minimax-h3,minimax-music3   # the set from Phase 3; exit 0
 pnpm check:workflows        # the app's own definitions; needs no ComfyUI
 pnpm dev                    # in the background
-pnpm smoke --director local # or --director gateway, matching their choice
+pnpm smoke --director local --local-model <qwen38-27b | gemma-4-12b-heretic> # or --director gateway
 ```
 
 `check:nodes` asks ComfyUI for every node class, model file and dropdown option
@@ -760,6 +774,16 @@ git show <target>:machine-requirements.json | grep -m1 '"fingerprint"'
   on a class mean an updated pack (or a newer ComfyUI for a core node), a new
   model means a download. The release notes on GitHub say the same in words,
   under **ComfyUI machine changes**.
+- **Optional downloads are not in the fingerprint** — the local director
+  models, the VHS tape LoRA, the SeedVR2 upscalers — because no graph needs
+  them. A release that adds one says so in its notes, as **New optional
+  download**. It is still app-only: deploy it, then offer the download as its
+  own step on the ComfyUI machine. For a new local director model, recommend
+  from the card's VRAM as in Phase 7.
+- **A launch line with `--vram-headroom`** — which this runbook used to
+  recommend — makes Qwen 3.8 27B up to nine times slower, and `check:nodes`
+  says so. If they use the 27B, offer to take it off and restart ComfyUI
+  (ask first).
 
 ### U3 — Machine changes, on the ComfyUI machine
 
@@ -831,7 +855,9 @@ On the ComfyUI machine:
 | `check:nodes` fails only on models for workflows they did not choose | Run it with `--workflows` and the set from Phase 3 |
 | 12 GB card, Linux: `illegal memory access`, Xid errors in `dmesg`, or a ComfyUI that will not let go of its port | Dynamic VRAM on a small card. Add `--disable-dynamic-vram`; if Xid errors continue, the `comfy-kitchen` CUDA backend is the next suspect. Then leave ComfyUI at its normal VRAM policy with `--reserve-vram 1.5` rather than `--lowvram` |
 | 12 GB card: the local director takes an hour, or fails `Expected a cuda device, but got: cpu` | `--lowvram` has put Gemma on the CPU (the error is a ComfyUI bug on that path). Drop `--lowvram`; if it still does not fit, use the gateway rewrite instead |
-| "The local director is chosen but … is not in" | `models:download --extras local-director`, or switch back to the gateway |
+| "The local director is chosen but … is not in" | `models:download --extras local-director` (or `local-director-27b`), or switch back to the gateway |
+| The 27B takes minutes over a brief that usually takes forty seconds; `check:nodes` says `slow … --vram-headroom` | Take `--vram-headroom` off ComfyUI's launch line and restart it. With it, Dynamic VRAM keeps part of the model in system RAM and streams it over PCIe for every token |
+| `TextGenerate takes no mtp` from `check:nodes` | ComfyUI is too old for the 27B. Update it |
 | Large uploads fail deployed, work locally | No Blob store — Phase 8 |
 | A job shows as **Lost** | ComfyUI restarted and dropped its history |
 | "Contact was lost" | The connection dropped, not the workflow. Check the pill and resubmit |

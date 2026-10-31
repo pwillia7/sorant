@@ -52,8 +52,10 @@ right](docs/screenshot.jpg)
 A few things make it more than a form over a graph:
 
 - **Your prompt is rewritten for the model.** A language model turns one line
-  into the detailed format MiniMax H3 was trained on. You pick which model does
-  it — some are free — or switch the rewrite off.
+  into the detailed format MiniMax H3 was trained on. It can run free on your
+  own ComfyUI machine — Qwen 3.8 27B on a 24 GB card, or a faster, uncensored
+  Gemma 4 12B on 16 GB — or on a hosted model of your choice, or you can
+  switch it off.
 - **Fast by default.** Turbo and SageAttention start on, cutting a run to a few
   minutes on a 24 GB card. Spectrum is there too, off by default.
 - **Runs queue and keep going.** Queue several and walk away: they finish on
@@ -128,8 +130,8 @@ agent does that for you and checks each step as it goes.
    ComfyUI reachable and deploys. You only step in for what has to be yours:
    choosing the ComfyUI password, signing in to Vercel and DuckDNS (and
    Hugging Face, for the Edit button), forwarding a port on your router, and
-   choosing where prompts are rewritten: on your own machine with no account,
-   or with an AI Gateway key.
+   choosing where prompts are rewritten: on your own machine with no account
+   (it recommends a model for your graphics card), or with an AI Gateway key.
    At the end it offers to send a setup report to the project if anything went
    wrong; that's up to you.
 
@@ -242,7 +244,7 @@ The [full troubleshooting table](docs/setup.md#troubleshooting) has the rest.
 | `pnpm check:nodes` | Ask your ComfyUI for every pack, model and key the app needs. Needs `COMFY_URL`. |
 | `pnpm check:workflows` | Check every workflow definition against its own graph. Needs nothing but this repo. |
 | `pnpm sync:models` | Rebuild the rewrite-model list from the AI Gateway's live catalog. |
-| `pnpm smoke` | Run one short Text to Video through the app and wait for it — the end-to-end check that a setup works. `--director local` for the on-machine rewrite, `--url` for a deployment. |
+| `pnpm smoke` | Run one short Text to Video through the app and wait for it — the end-to-end check that a setup works. `--director local` for the on-machine rewrite (`--local-model` to pick which), `--url` for a deployment. |
 | `pnpm requirements:write` | Rewrite `machine-requirements.json`, what this version needs from the ComfyUI machine. Run after changing a workflow. |
 
 ## Known limits

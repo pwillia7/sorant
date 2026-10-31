@@ -286,9 +286,11 @@ The rewrite does not have to use the gateway, and by default it does not: it
 runs on **This ComfyUI machine** — no account, no key, and no hosted model's
 content policy, since a director that refuses to describe the shot is a run
 that never starts, and that is the gateway's usual failure. A browser that has
-not chosen starts there as long as the machine has the model file
-(`/api/compat` lists which local models it has a file for), and on the gateway
-when it does not, rather than failing every run at the rewrite. The header's
+not chosen starts there as long as the machine has a local model
+(`/api/compat` lists which it has a file for), on the best one it has, and on
+the gateway when it has none, rather than failing every run at the rewrite.
+A model chosen in a browser that the machine no longer has gives way to one it
+does. The header's
 Gateway button switches it. The choice is per browser, not per workflow, and
 travels with each run as a mode; while it is on, **Rewrite model** leaves the
 dialog, since it would be choosing a model nothing uses.
@@ -302,25 +304,51 @@ next to the video models; loaded through `CLIPLoader`, it is a model ComfyUI's
 memory manager knows about and evicts before the video models load. A separate
 server would be memory ComfyUI cannot see.
 
-The model is Heretic's uncensored **Gemma 4 12B, int8** (6 refusals in 100,
-against 99 for the stock model), downloaded with
-`pnpm models:download --extras local-director` into `text_encoders/`. It can
-see, so the graphs that show their director a picture keep doing so. The file
-is found by **pattern, not name**, because downloads mangle the spaces in the
-upstream filename. An LTX text-encoder packaging of the same weights also
-matches, but only when nothing better is installed: it writes the same briefs
-in about 80 seconds against 20.
+There are two models, picked in a bake-off of four on a 3090 (2026-10-31),
+through the app's own plan, shot and brief paths and its own parsers. Both can
+see, so the graphs that show their director a picture keep doing so, and both
+go into `text_encoders/`:
 
-The price is speed and some reliability. A full brief takes about 20 seconds
-on a 3090 cold, against ten or twenty on the gateway, and Gemma follows the
-long priority rules less closely than the gateway's best models. Its long JSON
-replies — the music video outline — sometimes come back malformed, which the
-app reads as far as it can and says so. On a 12 GB card it may not fit beside
-ComfyUI's working memory at all; see the
+| | Qwen 3.8 27B, W4A8 | Gemma 4 12B heretic, int8 |
+| --- | --- | --- |
+| Download | `--extras local-director-27b`, 17 GB | `--extras local-director`, 12 GB |
+| Card | 24 GB (20 GB at its peak) | 16 GB (14 GB at its peak) |
+| A reference brief, cold | 36–43 s | 16–19 s |
+| A 21-scene music video's plan / shots | about 110 s / 190 s | about 45 s / 60 s |
+| Music video scenes in a different place | 100% | 87% |
+| Refusals | the stock model; none in testing | trained out (6 in 100) |
+
+The 27B is the better writer, and the one the app offers first. Gemma is twice
+as fast, but writes plainer shots and repeats places across a music video
+more. The 27B's multi-token prediction made it no faster, and is off.
+
+At 20 GB the 27B is what fills a 24 GB card, so it needs all of it: with
+`--vram-headroom 3` on ComfyUI's launch line — which the setup docs used to
+recommend — Dynamic VRAM kept part of it in system RAM and streamed those
+weights over PCIe for every token. Three briefs in six took 370–390 seconds
+instead of 40, with the same text; without the flag, eight in eight took 40–42.
+`pnpm check:nodes` warns when the flag is there.
+
+A Qwen3-VL 8B (dropped scenes from long plans; never released a style
+picture's subject) and a Gemma 4 E4B (slower than the 12B on a card without
+native fp8) did not make it. Thinking on the 27B doubled its time with no
+better reply.
+
+Files are found by **pattern, not name**, because downloads mangle filenames.
+An LTX text-encoder packaging of the Gemma weights also matches, but only when
+nothing better is installed: it writes the same briefs in about 80 seconds
+against 20.
+
+The price is speed and some reliability, against ten or twenty seconds on the
+gateway, and both follow the long priority rules less closely than the
+gateway's best models. Long JSON replies — the music video outline — can come
+back malformed, which the app reads as far as it can and says so. On a 12 GB
+card neither may fit beside ComfyUI's working memory; see the
 [troubleshooting](setup.md#troubleshooting) rows.
 
-`pnpm check:nodes` reports whether this ComfyUI can run it: a `TextGenerate`
-new enough to take a system prompt, and the model file.
+`pnpm check:nodes` reports whether this ComfyUI can run each: a `TextGenerate`
+new enough to take a system prompt and the inputs the model sets, and the
+model file.
 
 ## Sending a prompt unrewritten
 

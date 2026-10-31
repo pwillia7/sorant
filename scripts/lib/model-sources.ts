@@ -58,6 +58,7 @@ export const MODEL_SOURCES: Record<string, ModelSource> = {
 
   // The local director (found by pattern, not named in a graph)
   "gemma4_12b_uncensored_heretic_int8_convrot.safetensors": { repo: "radiatingreverberations/Gemma-4-12B-It-Uncensored-Heretic-INT8-ConvRot-ComfyUI", path: "gemma4_12b_uncensored_heretic_int8_convrot.safetensors", folder: "text_encoders", bytes: 12055235716 },
+  "Qwen3.8-27B_w4a8.safetensors": { repo: "beycanai/Qwen-LM", path: "Qwen3.8-27B_w4a8.safetensors", folder: "text_encoders", bytes: 17286101500 },
 };
 
 /**
@@ -68,7 +69,11 @@ export const MODEL_SOURCES: Record<string, ModelSource> = {
 export const EXTRAS: Record<string, { files: string[]; what: string }> = {
   "local-director": {
     files: ["gemma4_12b_uncensored_heretic_int8_convrot.safetensors"],
-    what: "rewrite prompts on this machine instead of the gateway",
+    what: "rewrite prompts on this machine instead of the gateway: Gemma 4 12B, uncensored and fast, 16 GB cards and up",
+  },
+  "local-director-27b": {
+    files: ["Qwen3.8-27B_w4a8.safetensors"],
+    what: "rewrite prompts on this machine with Qwen 3.8 27B: the better writer, twice as slow, 24 GB cards and up",
   },
   "vhs-tape": {
     files: ["vh5tape-comfyui.safetensors", "minimax_h3_fl2va_bf16.safetensors"],

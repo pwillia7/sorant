@@ -55,12 +55,44 @@ export interface LocalDirectorModel {
   slower?: RegExp;
   /** Where to get it, for the error that says it is missing. */
   download: string;
+  /** What choosing it means, for the picker: what it is good at, what it costs. */
+  about: string;
+  /** What one brief adds to a run, for a first estimate. See `LOCAL_DIRECTOR_SECONDS`. */
+  seconds: number;
+  /**
+   * Big enough to fill a 24 GB card, so that VRAM held back from it is weights
+   * streamed from system RAM on every token. `check:nodes` warns of
+   * `--vram-headroom` for these.
+   */
+  fillsCard?: boolean;
+  /** `TextGenerate` inputs of its own, over the ones every model gets. */
+  inputs?: Record<string, unknown>;
 }
 
 /**
- * The models known to work, best first.
+ * The models known to work, best first — a browser that has not chosen gets
+ * the first one the machine has.
  *
- * One today: Heretic's uncensored Gemma 4 12B (6 refusals in 100, against 99
+ * Chosen in a bake-off on a 3090 (2026-10-31): four models through the app's
+ * own plan, shot and brief paths, the replies through its own parsers. Two
+ * made it. A Qwen3-VL 8B dropped scenes from long plans and never released a
+ * style picture's subject; a Gemma 4 E4B was slower than the 12B on a card
+ * without native fp8, and no better than the gateway.
+ *
+ * Qwen 3.8 27B writes the best plans and shots of any of them — every place
+ * distinct, the idea followed closest — at about twice Gemma's time and 20 GB
+ * at its peak, so it wants a 24 GB card. It is the stock model, not one with
+ * its refusals taken out, but it wrote everything the refusal probes asked
+ * for. Its multi-token prediction made it no faster, so it is off.
+ *
+ * At 20 GB it is also what fills the card, and a launch line with
+ * `--vram-headroom` takes away the room it needs: Dynamic VRAM then leaves
+ * part of it in system RAM and streams those weights over PCIe for every
+ * token, and half its replies took six minutes instead of forty seconds — the
+ * same text, nine times slower. Without the flag, none did. `check:nodes`
+ * says when the flag is there.
+ *
+ * Then Heretic's uncensored Gemma 4 12B (6 refusals in 100, against 99
  * for the stock model), as a single-file int8 build made for ComfyUI's
  * `TextGenerate`. Gemma 4 because it is what ComfyUI's own LTX prompt enhancer
  * runs, so the format of these briefs is work it is known to do; and it can
@@ -76,6 +108,17 @@ export interface LocalDirectorModel {
  */
 export const LOCAL_DIRECTOR_MODELS: LocalDirectorModel[] = [
   {
+    id: "qwen38-27b",
+    label: "Qwen 3.8 27B (W4A8)",
+    match: /qwen3\.8[-_ ]?27b.*w4a8/i,
+    download: "https://huggingface.co/beycanai/Qwen-LM",
+    about:
+      "The best writer of the local models: richer shots, closer to your idea. Needs a 24 GB card. Adds about 40 seconds to every video; a music video takes about 2 minutes to plan and 3 to write 20 shots. The stock model rather than an uncensored one, though it has refused nothing in testing.",
+    seconds: 45,
+    fillsCard: true,
+    inputs: { mtp: "off" },
+  },
+  {
     id: "gemma-4-12b-heretic",
     label: "Gemma 4 12B uncensored (heretic, int8)",
     match: /gemma[-_ ]?4[-_ ]?12b.*heretic.*int8/i,
@@ -84,16 +127,31 @@ export const LOCAL_DIRECTOR_MODELS: LocalDirectorModel[] = [
     slower: /ltx|deepneuralnerd/i,
     download:
       "https://huggingface.co/radiatingreverberations/Gemma-4-12B-It-Uncensored-Heretic-INT8-ConvRot-ComfyUI",
+    about:
+      "Uncensored, and twice as fast: adds about 20 seconds to every video, and a music video takes about 45 seconds to plan and 1 minute to write 20 shots. Fits a 16 GB card. Plainer writing than the 27B, and a little more given to repeating places across a music video.",
+    seconds: 25,
   },
 ];
 
 export const DEFAULT_LOCAL_DIRECTOR = LOCAL_DIRECTOR_MODELS[0].id;
+
+/**
+ * The model a run on the local director was made with when the history does
+ * not say: until there were two, Gemma was the only one.
+ */
+export const EARLIEST_LOCAL_DIRECTOR = "gemma-4-12b-heretic";
 
 export function localDirectorModel(id: unknown): LocalDirectorModel {
   return (
     LOCAL_DIRECTOR_MODELS.find((model) => model.id === id) ??
     LOCAL_DIRECTOR_MODELS[0]
   );
+}
+
+/** Which model a file is, if any — for a graph that knows only the file. */
+function modelForFile(file: string): LocalDirectorModel | undefined {
+  const name = file.split(/[\\/]/).pop() ?? file;
+  return LOCAL_DIRECTOR_MODELS.find((model) => model.match.test(name));
 }
 
 /**
@@ -116,10 +174,15 @@ export function findLocalDirectorFile(
 
 /**
  * What a local brief adds to a run, for the first estimate in a combination
- * before this device has timings of its own. Measured: 20–24 seconds for a
- * reference brief on a 3090, the higher figure with the model loaded cold.
+ * before this device has timings of its own. Measured on a 3090 with the model
+ * loaded cold: 20–24 seconds for a reference brief from Gemma, 36–43 from the
+ * 27B. A model the app does not know gets Gemma's.
  */
 export const LOCAL_DIRECTOR_SECONDS = 25;
+
+export function localDirectorSeconds(file: string): number {
+  return modelForFile(file)?.seconds ?? LOCAL_DIRECTOR_SECONDS;
+}
 
 export const LOCAL_CLASS = "TextGenerate";
 export const LOCAL_LOADER_CLASS = "CLIPLoader";
@@ -166,6 +229,7 @@ const MAX_LENGTH = 4096;
  */
 export function applyLocalRewrite(graph: ComfyGraph, file: string): void {
   const roots = terminals(graph);
+  const model = modelForFile(file);
   let converted = false;
   // One loader for every director in the graph, named after the first. A
   // loader each would load the model once per director and hold every copy
@@ -225,6 +289,7 @@ export function applyLocalRewrite(graph: ComfyGraph, file: string): void {
       use_default_template: true,
       ...(systemLink ? { system_prompt: systemLink } : {}),
       ...(image !== undefined ? { image } : {}),
+      ...model?.inputs,
     };
     converted = true;
   }

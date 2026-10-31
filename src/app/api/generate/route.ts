@@ -13,9 +13,9 @@ import { applyParams, ParamError, validateWorkflow } from "@/lib/params";
 import { getWorkflow } from "@/lib/workflows";
 import {
   findLocalDirectorFile,
-  LOCAL_DIRECTOR_SECONDS,
+  LOCAL_DIRECTOR_MODELS,
   LOCAL_LOADER_CLASS,
-  localDirectorModel,
+  localDirectorSeconds,
 } from "@/lib/workflows/local-director";
 import { enabledPatches } from "@/lib/workflows/patches";
 
@@ -103,7 +103,16 @@ export async function POST(request: Request) {
     // `LocalDirectorModel.match`.
     let localDirector: string | undefined;
     if (body.director === "local") {
-      const model = localDirectorModel(body.localDirector);
+      // Refused rather than swapped for another: a run on a model nobody chose
+      // is one whose speed, length and refusals nobody expected.
+      const model = LOCAL_DIRECTOR_MODELS.find(
+        (candidate) => candidate.id === body.localDirector,
+      );
+      if (!model) {
+        throw new ParamError(
+          `There is no local director called "${body.localDirector}". Choose one again in the prompt rewrite dialog.`,
+        );
+      }
       const files = enumValuesFor(
         await getNodeSchema(LOCAL_LOADER_CLASS),
         "clip_name",
@@ -198,6 +207,8 @@ export async function POST(request: Request) {
       // Echoed for the same reason: the history buckets render times by how a
       // run was made, and a local brief adds time to it.
       localDirector: localDirector !== undefined,
+      // And on which model, which the history keeps apart for the same reason.
+      localModel: localDirector !== undefined ? body.localDirector : undefined,
       // The file name a batched run writes under, unique to it: what finds its
       // file again if ComfyUI restarts and forgets the run. See meta-batch.ts.
       runKey: runKey(graph) ?? undefined,
@@ -215,7 +226,7 @@ export async function POST(request: Request) {
             : undefined) ??
           workflow.estimatedSeconds ??
           null,
-        localDirector !== undefined,
+        localDirector,
       ),
     });
   } catch (error) {
@@ -226,7 +237,9 @@ export async function POST(request: Request) {
 /** The gateway-run estimate, plus what writing the brief on the box costs. */
 function withLocalDirector(
   seconds: number | null,
-  local: boolean,
+  file: string | undefined,
 ): number | null {
-  return seconds !== null && local ? seconds + LOCAL_DIRECTOR_SECONDS : seconds;
+  return seconds !== null && file !== undefined
+    ? seconds + localDirectorSeconds(file)
+    : seconds;
 }

@@ -4,6 +4,7 @@
  *
  *   pnpm smoke                                   # Text to Video on localhost:3000
  *   pnpm smoke --director local                  # rewrite on the ComfyUI machine
+ *   pnpm smoke --director local --local-model gemma-4-12b-heretic
  *   pnpm smoke --director none                   # skip the rewrite altogether
  *   pnpm smoke --url https://<app>.vercel.app    # against a deployment
  *   pnpm smoke --workflow minimax-music3
@@ -20,6 +21,7 @@
  * Run directly the script exits 1 or 2 for those; through pnpm both read as 1.
  */
 import { WORKFLOWS } from "../src/lib/workflows";
+import { LOCAL_DIRECTOR_MODELS } from "../src/lib/workflows/local-director";
 import { loadEnvFiles } from "./lib/env";
 
 const arg = (name: string, fallback: string): string => {
@@ -37,6 +39,9 @@ async function main() {
   loadEnvFiles();
   const url = arg("url", "http://localhost:3000").replace(/\/$/, "");
   const director = arg("director", "gateway");
+  // The best of the local models unless told: on a machine without it the
+  // run says so, and names the file.
+  const localModel = arg("local-model", LOCAL_DIRECTOR_MODELS[0].id);
   const workflowId = arg("workflow", "minimax-h3");
   const workflow = WORKFLOWS.find((w) => w.id === workflowId);
   if (!workflow) {
@@ -45,6 +50,10 @@ async function main() {
   }
   if (!["gateway", "local", "none"].includes(director)) {
     console.error('--director is gateway, local or none.');
+    process.exit(2);
+  }
+  if (!LOCAL_DIRECTOR_MODELS.some((model) => model.id === localModel)) {
+    console.error(`--local-model is one of ${LOCAL_DIRECTOR_MODELS.map((model) => model.id).join(", ")}.`);
     process.exit(2);
   }
   const prompt = PROMPTS[workflowId];
@@ -82,11 +91,13 @@ async function main() {
       ...(workflowId === "minimax-h3" ? { duration: 5 } : { duration: 20 }),
       ...(director === "none" ? { literal_prompt: true } : {}),
     },
-    ...(director === "local" ? { director: "local" } : {}),
+    ...(director === "local" ? { director: "local", localDirector: localModel } : {}),
   };
 
   const label = [workflow.name, turbo ? "Turbo" : null, ...patches].filter(Boolean).join(" + ");
-  console.log(`Submitting ${label}, rewrite: ${director}, to ${url}`);
+  console.log(
+    `Submitting ${label}, rewrite: ${director === "local" ? `local (${localModel})` : director}, to ${url}`,
+  );
   const submitted = await fetch(`${url}/api/generate`, {
     method: "POST",
     headers,

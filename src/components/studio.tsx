@@ -307,17 +307,23 @@ function Workbench({
    * the setup rather than the shot. See local-director.ts.
    *
    * Until someone chooses, the local director — unless the machine has been
-   * asked and has no file for it, when a run there could only fail. Before
-   * the machine answers it is local too: a run sent then that cannot find the
-   * file says so and names the way back.
+   * asked and has no local model at all, when a run there could only fail.
+   * Before the machine answers it is local too: a run sent then that cannot
+   * find the file says so and names the way back.
+   *
+   * The model is the one chosen while the machine has it, and otherwise the
+   * best one it does have — a choice made against a machine that has since
+   * lost the file, or never had it, is not one a run can keep.
    */
   const [chosenEngine, setChosenEngine] = useState(readStoredDirectorEngine);
-  const [localDirector, setLocalDirector] = useState(readStoredLocalDirector);
+  const [chosenLocalDirector, setLocalDirector] = useState(readStoredLocalDirector);
+  const installedDirectors = compat?.localDirectors ?? null;
+  const localDirector =
+    installedDirectors && !installedDirectors.includes(chosenLocalDirector)
+      ? (installedDirectors[0] ?? chosenLocalDirector)
+      : chosenLocalDirector;
   const directorEngine: DirectorEngine =
-    chosenEngine ??
-    (compat?.localDirectors && !compat.localDirectors.includes(localDirector)
-      ? "gateway"
-      : "local");
+    chosenEngine ?? (installedDirectors?.length === 0 ? "gateway" : "local");
   const onDirectorEngineChange = useCallback((engine: DirectorEngine) => {
     setChosenEngine(engine);
     writeStoredDirectorEngine(engine);
@@ -1215,6 +1221,7 @@ function Workbench({
               onEngineChange={onDirectorEngineChange}
               localDirector={localDirector}
               onLocalDirectorChange={onLocalDirectorChange}
+              installedDirectors={installedDirectors}
               rewritePicker={rewritePicker}
               rewriteModel={rewriteModel}
               onRewriteModelChange={onRewriteModelChange}

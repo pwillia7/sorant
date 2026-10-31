@@ -91,8 +91,12 @@ afternoon.
 - **The rewrite can also run on the ComfyUI machine.** `local-director.ts`
   swaps every gateway director for ComfyUI's own `TextGenerate`, per run, when
   the user chooses it beside the key — in-process so ComfyUI evicts it before
-  the video models load, and about 20 seconds slower for it. The model file is
-  found by pattern, not name, because downloads mangle its spaces.
+  the video models load, and 20–40 seconds slower for it. There are two
+  models, chosen in a bake-off — Qwen 3.8 27B (the better writer, 24 GB) and
+  an uncensored Gemma 4 12B (twice as fast, 16 GB) — and the app offers
+  whichever the machine has. Each is found by pattern, not name, because
+  downloads mangle filenames; a new one is an entry in `LOCAL_DIRECTOR_MODELS`
+  and a source in `model-sources.ts`, tested through the app's own parsers.
 - **`pnpm typecheck`** before calling anything done. There is no lint script —
   `next lint` was removed in Next 16.
 - **Secrets never enter the repo.** `COMFY_URL`, `COMFY_API_TOKEN` and

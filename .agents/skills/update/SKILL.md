@@ -24,4 +24,9 @@ What it asks of you, worth carrying in before you start:
   `pnpm check:nodes` against it passes on the new version.
 - **Deploy to the existing Vercel project** — never create a second one, never
   re-add its environment variables.
+- **Optional downloads and launch-line advice are not in the fingerprint.**
+  Read the release notes for a **New optional download** (a local director
+  model, recommended by the card's VRAM), and act on what `pnpm check:nodes`
+  flags — `slow … --vram-headroom` means taking that flag off ComfyUI's launch
+  line, which older setups were told to add.
 - **Ask before** restarting ComfyUI and before deploying. Never print a token.
