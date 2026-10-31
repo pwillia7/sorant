@@ -1,5 +1,6 @@
 "use client";
 
+import { LockOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
 import { Dot } from "@/components/ui/panel";
@@ -119,32 +120,18 @@ export function ConnectionPill({
       <span className="font-medium text-fg">{label}</span>
       {/* Unlocked padlock while the ComfyUI leg is unencrypted. */}
       {insecure && health?.reachable ? (
-        <svg
-          viewBox="0 0 16 16"
+        <LockOpen
           className="size-3 text-warning"
-          fill="none"
+          strokeWidth={1.75}
           aria-label="Unencrypted connection to ComfyUI"
           role="img"
-        >
-          <rect
-            x="3.5"
-            y="7"
-            width="9"
-            height="6"
-            rx="1.2"
-            stroke="currentColor"
-            strokeWidth="1.3"
-          />
-          <path
-            d="M5.8 7V5.2a2.2 2.2 0 0 1 4.4 0"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinecap="round"
-          />
-        </svg>
+        />
       ) : null}
       {health?.reachable && !unauthorized && (health.queuePending ?? 0) > 0 ? (
-        <span className="font-mono tabular-nums">+{health.queuePending}</span>
+        <span className="tabular-nums">
+          <span className="sm:hidden">+{health.queuePending}</span>
+          <span className="hidden sm:inline">· {health.queuePending} queued</span>
+        </span>
       ) : null}
       {update ? (
         <span

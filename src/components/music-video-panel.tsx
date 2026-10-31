@@ -1,6 +1,18 @@
 "use client";
 
-import { Images, MessageSquareQuote, Mic, MicVocal, RefreshCw } from "lucide-react";
+import {
+  Ban,
+  Check,
+  Circle,
+  Clock3,
+  Images,
+  LoaderCircle,
+  MessageSquareQuote,
+  Mic,
+  MicVocal,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { MusicVideoController } from "@/hooks/use-music-video";
 import { withToken } from "@/lib/client";
@@ -19,7 +31,7 @@ import {
 } from "@/lib/music-video/project";
 import { clock, MUSIC_VIDEO_PICTURES, STORY_SCENE_SECONDS } from "@/lib/music-video/scenes";
 import { REFERENCE_KEEP_OPTIONS } from "@/lib/workflows/minimax-common";
-import { Badge, Dot, Panel, PanelHeader } from "./ui/panel";
+import { Badge, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
 import { AudioUpload } from "./ui/audio-upload";
 import { ImageUpload } from "./ui/image-upload";
@@ -412,27 +424,51 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
   );
 }
 
+/**
+ * Where a scene's take has got, by shape as well as colour: an empty circle
+ * not rendered, a clock queued, a spinner rendering, a tick done, a cross
+ * failed. Colour alone left "not rendered" and "queued" the same grey chip.
+ */
 function SceneStatus({ job }: { job: Job | undefined }) {
-  if (!job) return <Badge>not rendered</Badge>;
+  const icon = { className: "size-3 shrink-0", strokeWidth: 2, "aria-hidden": true } as const;
+  if (!job) {
+    return (
+      <Badge>
+        <Circle {...icon} /> not rendered
+      </Badge>
+    );
+  }
   switch (job.phase) {
     case "queued":
       return (
         <Badge>
-          <Dot /> queued{job.queuePosition ? ` · ${job.queuePosition} ahead` : ""}
+          <Clock3 {...icon} /> queued{job.queuePosition ? ` · ${job.queuePosition} ahead` : ""}
         </Badge>
       );
     case "running":
       return (
         <Badge tone="accent">
-          <Dot tone="accent" pulse /> rendering
+          <LoaderCircle {...icon} className="size-3 shrink-0 motion-safe:animate-spin" /> rendering
         </Badge>
       );
     case "done":
-      return <Badge tone="success">done</Badge>;
+      return (
+        <Badge tone="success">
+          <Check {...icon} /> done
+        </Badge>
+      );
     case "cancelled":
-      return <Badge tone="warning">cancelled</Badge>;
+      return (
+        <Badge tone="warning">
+          <Ban {...icon} /> cancelled
+        </Badge>
+      );
     default:
-      return <Badge tone="danger">failed</Badge>;
+      return (
+        <Badge tone="danger">
+          <X {...icon} /> failed
+        </Badge>
+      );
   }
 }
 

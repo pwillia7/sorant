@@ -1,5 +1,6 @@
 "use client";
 
+import { Cpu, KeyRound } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -138,8 +139,16 @@ export function RewriteKeyButton({
                 : "border-border-default bg-surface text-fg-muted hover:border-border-strong hover:text-fg"
           }`}
       >
-        {engine === "local" ? <MachineIcon /> : <KeyIcon />}
-        <span>{engine === "local" ? "Local" : "Gateway"}</span>
+        {engine === "local" ? (
+          <Cpu className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+        ) : (
+          <KeyRound className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+        )}
+        {/* What is local, said: "Local" alone read as a mode of the app. */}
+        <span>
+          <span className="hidden sm:inline">Rewrite: </span>
+          {engine === "local" ? "this machine" : "Gateway"}
+        </span>
       </button>
 
       <RewriteKeyModal
@@ -478,39 +487,5 @@ function RewriteKeyModal({
         </p>
       ) : null}
     </Modal>
-  );
-}
-
-/** The gateway: a key, since a key on the box is what the gateway runs on. */
-function KeyIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-      <circle cx="5.5" cy="8" r="2.75" stroke="currentColor" strokeWidth="1.3" />
-      <path
-        d="M8.25 8H14M11.5 8v2.25M13 8v1.75"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-/** The ComfyUI machine: a box with a card's worth of fans. */
-function MachineIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-      <rect
-        x="2"
-        y="3.5"
-        width="12"
-        height="9"
-        rx="1.5"
-        stroke="currentColor"
-        strokeWidth="1.3"
-      />
-      <circle cx="6" cy="8" r="1.75" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="10.5" cy="8" r="1.75" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
   );
 }

@@ -101,8 +101,14 @@ export function TextArea({
         column and swallows a phone screen whole. Capping at half the viewport
         only bites on small screens — a 12-row box is well under 50vh on a
         laptop — so no breakpoint is needed.
+
+        And it grows to fit what is in it, where the browser can
+        (field-sizing), so a long prompt is read whole rather than through a
+        three-line slot. Empty, it is three lines at most, whatever `rows` asks.
       */
-      className={`${CONTROL_BASE} max-h-[50vh] resize-y overflow-y-auto px-3 py-2.5 text-sm leading-relaxed min-h-20`}
+      className={`${CONTROL_BASE} max-h-[50vh] resize-y overflow-y-auto px-3 py-2.5 text-sm leading-relaxed min-h-20
+        [field-sizing:content]`}
+      style={{ minHeight: `calc(${Math.min(rows, 3)} * 1.625em + 1.25rem)` }}
     />
   );
 }

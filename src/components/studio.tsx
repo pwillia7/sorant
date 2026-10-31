@@ -228,13 +228,7 @@ export function Studio() {
 
   if (boot.kind === "locked") return <TokenGate onUnlocked={load} />;
 
-  if (boot.kind === "loading") {
-    return (
-      <main className="grid min-h-dvh place-items-center">
-        <p className="text-[13px] text-fg-subtle">Loading…</p>
-      </main>
-    );
-  }
+  if (boot.kind === "loading") return <StudioSkeleton />;
 
   if (boot.kind === "failed") {
     return (
@@ -1682,6 +1676,34 @@ function Workbench({
           }
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The studio's shape while the workflows load: the header, the form column
+ * and the stage, as blocks. A centred "Loading…" left the screen empty and
+ * then filled it all at once, so the eye had nowhere to start; this way the
+ * layout is already where it will be.
+ */
+function StudioSkeleton() {
+  const block = "rounded-xl bg-bg-subtle motion-safe:animate-pulse";
+  return (
+    <div className="min-h-dvh" aria-busy="true" aria-label="Loading">
+      <div className="h-14 border-b border-border-default" />
+      <div
+        className="mx-auto grid max-w-[1400px] gap-5 px-4 pt-5 sm:px-5 lg:grid-cols-[minmax(340px,460px)_minmax(0,1fr)]
+          lg:pt-6 2xl:grid-cols-[minmax(400px,520px)_minmax(0,1fr)]"
+      >
+        <div className="flex flex-col gap-5">
+          <div className={`${block} h-28`} />
+          <div className={`${block} h-[28rem]`} />
+        </div>
+        <div className="hidden flex-col gap-4 lg:flex">
+          <div className={`${block} aspect-video`} />
+          <div className={`${block} h-40`} />
+        </div>
+      </div>
     </div>
   );
 }
