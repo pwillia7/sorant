@@ -205,6 +205,7 @@ const params: ParamDef[] = [
     default: "",
     placeholder: "[Verse]\nthe words of the song",
     maxLength: 6000,
+    hint: "What the song is about. It shapes the scenes; no line is placed in one.",
     help: "Optional. What the song is about, for the plan — nothing here knows when each line is sung, so they shape the scenes rather than being placed in them.",
     group: "Song",
     hiddenBy: { param: INSTRUMENTAL_PARAM, is: true },

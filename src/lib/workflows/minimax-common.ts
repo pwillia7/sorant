@@ -1855,6 +1855,7 @@ export function wordsParam({
   id,
   label,
   help,
+  hint,
   group,
   placeholder = "[Verse]\nthe words as they are sung",
   revealedBy,
@@ -1864,6 +1865,8 @@ export function wordsParam({
   id: string;
   label: string;
   help: string;
+  /** See `ParamBase.hint`. */
+  hint?: string;
   /**
    * What the empty box shows. Defaults to a lyric sheet, which is what the two
    * music-shaped slots want — a voice reference is more often speech, and a
@@ -1896,6 +1899,7 @@ export function wordsParam({
     placeholder,
     maxLength: 6000,
     help,
+    hint,
     group,
     revealedBy,
     hiddenBy,

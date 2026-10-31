@@ -1256,6 +1256,7 @@ const params: ParamDef[] = [
     label: "Use the track as the soundtrack",
     type: "toggle",
     default: false,
+    hint: "Makes the video to the song, which plays in the finished file exactly as it is.",
     help: "The video is made to the song itself: the model generates only the picture, timed to the music and the vocal, and the finished file has the track exactly as it is. Off, the track is a reference and the model writes its own audio.",
     group: "References",
     revealedBy: AUDIO_PARAM,
@@ -1348,6 +1349,7 @@ const params: ParamDef[] = [
   wordsParam({
     id: LYRICS_PARAM,
     label: "Words in the track",
+    hint: "The words in the track — the single biggest help for a run with one.",
     help: "Optional, and the single biggest thing you can do for a run with a track. Nothing here can hear the file, so without this the model writes its own words over yours. Section tags are read as structure, not sung.",
     group: "References",
     // Only a question about a track that is there. What was typed is kept and
@@ -1622,6 +1624,7 @@ const params: ParamDef[] = [
     max: 1,
     step: 0.05,
     unit: "MP",
+    hint: "Higher is sharper and slower. H3 uses about 1 MP at most.",
     help: "Higher is sharper, and slower — 1 MP takes about three times as long as 0.5 MP, and a 13 s clip nearly twice as long as a 10 s one. H3 is native at about 1 MP, so there is no more detail past it.",
     group: "Output",
     targets: [

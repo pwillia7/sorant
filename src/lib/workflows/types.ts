@@ -79,6 +79,12 @@ interface ParamBase {
   label: string;
   /** Shown under the control. Keep it to one line. */
   help?: string;
+  /**
+   * The help's one-line version, shown under the control with the full help
+   * a click away. Only where the help's own first sentence does not stand on
+   * its own; otherwise that sentence is the hint. See `Field`.
+   */
+  hint?: string;
   /** Every node input this control writes to. One control can drive several. */
   targets: ParamTarget[];
   /** Section heading in the sidebar. Defaults to "Settings". */

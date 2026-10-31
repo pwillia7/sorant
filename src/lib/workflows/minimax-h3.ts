@@ -252,6 +252,7 @@ const params: ParamDef[] = [
     max: 1,
     step: 0.05,
     unit: "MP",
+    hint: "Higher is sharper and slower. H3 uses about 1 MP at most.",
     help: "Higher is sharper, and slower — 1 MP takes about three times as long as 0.5 MP, and a 13 s clip nearly twice as long as a 10 s one. H3 is native at about 1 MP, so there is no more detail past it.",
     group: "Output",
     targets: [{ node: "115", input: "megapixels" }],

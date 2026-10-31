@@ -251,6 +251,7 @@ export function Control({
           id={id}
           label={param.label}
           help={param.help}
+          hint={param.hint}
           note={note}
           error={error}
         >
@@ -271,6 +272,7 @@ export function Control({
           id={id}
           label={param.label}
           help={param.help}
+          hint={param.hint}
           note={note}
           error={error}
         >
@@ -294,6 +296,7 @@ export function Control({
           id={id}
           label={param.label}
           help={param.help}
+          hint={param.hint}
           note={note}
           error={error}
           trailing={
@@ -325,6 +328,7 @@ export function Control({
           id={id}
           label={param.label}
           help={param.help}
+          hint={param.hint}
           note={note}
           error={error}
           trailing={
@@ -358,6 +362,7 @@ export function Control({
           id={id}
           label={param.label}
           help={param.help}
+          hint={param.hint}
           note={note ?? chosen?.help}
           error={error}
         >
@@ -379,6 +384,7 @@ export function Control({
           id={id}
           label={param.label}
           help={param.help}
+          hint={param.hint}
           note={note}
           error={error}
         >
@@ -398,6 +404,7 @@ export function Control({
           id={id}
           label={param.label}
           help={param.help}
+          hint={param.hint}
           note={note}
           error={error}
         >
@@ -420,6 +427,7 @@ export function Control({
           id={id}
           label={param.label}
           help={param.help}
+          hint={param.hint}
           note={note}
           error={error}
         >
@@ -453,6 +461,7 @@ export function Control({
           id={id}
           label={param.label}
           help={param.help}
+          hint={param.hint}
           note={note}
           error={error}
         >
@@ -488,6 +497,7 @@ export function Control({
           id={id}
           label={param.label}
           help={param.help}
+          hint={param.hint}
           note={note}
           error={error}
           trailing={
