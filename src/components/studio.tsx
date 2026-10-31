@@ -1,5 +1,6 @@
 "use client";
 
+import { LayoutGrid, PenLine, SquarePlay } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -448,6 +449,22 @@ function Workbench({
   );
 
   /**
+   * Which of the three screens a phone shows: the form, the result, or the
+   * history. Below lg the studio used to be one column some 4,000 px tall,
+   * with the result under the whole form; now it is three tabs, and the
+   * actions that move between them — submitting, a hand-off, reusing a run's
+   * settings, picking one from the history — switch tab as they used to
+   * scroll. At lg every part is on screen and this changes nothing.
+   */
+  const [mobileTab, setMobileTab] = useState<MobileTab>("create");
+  const showTab = useCallback((tab: MobileTab) => {
+    setMobileTab(tab);
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      requestAnimationFrame(() => window.scrollTo({ top: 0 }));
+    }
+  }, []);
+
+  /**
    * The workflow whose modes a run of this one uses. Itself, except for the
    * music video, whose own graph only plans: its scenes are Reference to Video
    * runs, so Turbo and the switches are that workflow's, offered here and kept
@@ -792,16 +809,9 @@ function Workbench({
         });
         setClipSource({ action, promptId: job.promptId });
 
-        // On mobile the form sits above the stage the button was pressed in,
-        // so without this the settings it just filled in are off-screen.
-        if (window.matchMedia("(max-width: 1023px)").matches) {
-          requestAnimationFrame(() =>
-            settingsRef.current?.scrollIntoView({
-              behavior: "smooth",
-              block: "start",
-            }),
-          );
-        }
+        // On a phone the button was pressed on the Result tab; the settings
+        // it just filled in are on Create.
+        showTab("create");
       } catch (cause) {
         setClipError(
           cause instanceof ApiError
@@ -865,17 +875,9 @@ function Workbench({
       }));
       setSelectedId(target.id);
 
-      // Same reason as the clip hand-off: on mobile the form sits above the
-      // stage this was opened from, so the settings it just filled in would
-      // otherwise be off-screen.
-      if (window.matchMedia("(max-width: 1023px)").matches) {
-        requestAnimationFrame(() =>
-          settingsRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          }),
-        );
-      }
+      // Same reason as the clip hand-off: on a phone the settings it just
+      // filled in are on another tab from the one this was opened on.
+      showTab("create");
       return { target, restored, values };
     },
     [workflows],
@@ -1031,14 +1033,9 @@ function Workbench({
     // The form has been acted on, so the note explaining how it got filled in
     // has served its purpose.
     setClipNotice(null);
-    // On mobile the stage sits below the whole settings panel, so submitting
-    // from the pinned bar would otherwise give no visible sign of anything
-    // happening. Desktop keeps the stage pinned alongside, so leave it alone.
-    if (window.matchMedia("(max-width: 1023px)").matches) {
-      requestAnimationFrame(() =>
-        stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      );
-    }
+    // On a phone the run shows on the Result tab, and submitting from the
+    // form would otherwise give no visible sign of anything happening.
+    showTab("result");
   }, [selected, values, jobs, clipSource, modes, lowVram, runDirector, rewriteModel, musicVideo]);
 
   /**
@@ -1091,14 +1088,9 @@ function Workbench({
         musicVideo: job.musicVideo,
       });
 
-      // On mobile the stage sits below the whole settings panel, so a retry
-      // fired from the history would otherwise give no visible sign of
-      // anything happening. Same reason as `submit`.
-      if (window.matchMedia("(max-width: 1023px)").matches) {
-        requestAnimationFrame(() =>
-          stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-        );
-      }
+      // A retry fired from the history shows on the Result tab. Same reason
+      // as `submit`.
+      showTab("result");
     },
     [jobs, workflows, lowVram, runDirector, rewriteModel],
   );
@@ -1141,13 +1133,9 @@ function Workbench({
       });
       setClipNotice(null);
 
-      // `reuseSettings` scrolled to the form on mobile; the run is what there
-      // is to see now, and it is on the stage.
-      if (window.matchMedia("(max-width: 1023px)").matches) {
-        requestAnimationFrame(() =>
-          stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-        );
-      }
+      // `reuseSettings` went to the form on a phone; the run is what there is
+      // to see now, and it is on Result.
+      showTab("result");
     },
     [jobs, reuseSettings, lowVram, runDirector, rewriteModel],
   );
@@ -1282,8 +1270,11 @@ function Workbench({
           the one under the pointer is the one that moves. Below lg it is an
           ordinary block and the document scrolls as before. */}
       <main
-        className="mx-auto max-w-[1400px] px-4 pb-24 pt-5 sm:px-5 lg:flex
-          lg:h-[calc(100dvh_-_3.5rem)] lg:flex-col lg:overflow-hidden lg:pb-6 lg:pt-6"
+        // Room under the last thing on a phone for the bar pinned there:
+        // taller on Create, which carries Generate as well as the tabs.
+        className={`mx-auto max-w-[1400px] px-4 pt-5 sm:px-5 lg:flex
+          lg:h-[calc(100dvh_-_3.5rem)] lg:flex-col lg:overflow-hidden lg:pb-6 lg:pt-6
+          ${mobileTab === "create" ? "pb-44" : "pb-24"}`}
       >
         <ConnectionNotice health={health} />
         {problems?.length ? (
@@ -1331,8 +1322,9 @@ function Workbench({
               overscroll-contain so that reaching the end of this column stops
               there rather than handing the leftover scroll to the page. */}
           <div
-            className="scroll-pane flex min-w-0 flex-col gap-5 lg:h-full lg:min-h-0
-              lg:overflow-y-auto lg:overscroll-contain lg:pr-2"
+            className={`scroll-pane flex min-w-0 flex-col gap-5 lg:h-full lg:min-h-0
+              lg:overflow-y-auto lg:overscroll-contain lg:pr-2
+              ${mobileTab === "create" ? "" : "max-lg:hidden"}`}
           >
             <Panel className="rise" padded>
               <PanelHeader title="Workflow" />
@@ -1513,12 +1505,18 @@ function Workbench({
                has finished scrolling, so the history below the stage could not
                be reached until the settings column had run out. It scrolls
                itself now instead. */
-            className="flex min-w-0 scroll-mt-20 flex-col gap-4 lg:h-full lg:min-h-0"
+            className={`flex min-w-0 scroll-mt-20 flex-col gap-4 lg:h-full lg:min-h-0
+              ${mobileTab === "create" ? "max-lg:hidden" : ""}`}
           >
             <div
               className="scroll-pane flex min-w-0 flex-col gap-4 lg:min-h-0 lg:flex-1
                 lg:overflow-y-auto lg:overscroll-contain lg:pr-2"
             >
+              {/* The Result tab on a phone: what is wrong, the planned
+                  video's scenes, and the run being looked at. */}
+              <div
+                className={`flex min-w-0 flex-col gap-4 ${mobileTab === "history" ? "max-lg:hidden" : ""}`}
+              >
               {jobs.submitError &&
               (!jobs.submitErrorField || submittedFor !== selectedId) ? (
                 <div
@@ -1579,8 +1577,9 @@ function Workbench({
                 retrying={jobs.submitting}
                 busyAction={sending}
               />
+              </div>
 
-              <Panel padded>
+              <Panel padded className={mobileTab === "result" ? "max-lg:hidden" : undefined}>
                 <PanelHeader
                   title="Generations"
                   hint={
@@ -1593,7 +1592,10 @@ function Workbench({
                   jobs={jobs.jobs}
                   selectedId={viewedJob?.promptId ?? null}
                   now={now}
-                  onSelect={setViewedId}
+                  onSelect={(promptId) => {
+                    setViewedId(promptId);
+                    showTab("result");
+                  }}
                   onCancel={(promptId) => void jobs.cancel(promptId)}
                   onRemove={jobs.remove}
                   onRemoveMany={jobs.removeMany}
@@ -1612,30 +1614,62 @@ function Workbench({
         </div>
       </main>
 
-      {/* Mobile action bar. The settings panel runs to a dozen-plus controls,
-          so an inline Generate button sits well below the fold — pinning it
-          keeps the primary action reachable from anywhere on the page. */}
+      {/* The phone's bar: Generate and what it will run, on Create, above
+          the three tabs. Pinned, so the primary action is never a scroll
+          away and neither is the result. */}
       <div
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border-default
-          bg-bg/90 px-4 pt-3 backdrop-blur-md lg:hidden"
+          bg-bg/90 backdrop-blur-md lg:hidden"
         style={{
           // Clear the iOS home indicator without adding dead space elsewhere.
-          paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+          paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={submit}
-          loading={jobs.submitting || (Boolean(selected?.scenes) && planning)}
-          disabled={!selected}
-          className="w-full"
-        >
-          {queueLabel}
-        </Button>
-        {summary ? (
-          <p className="mt-1.5 truncate text-center text-[12px] text-fg-subtle">{summary}</p>
+        {mobileTab === "create" ? (
+          <div className="px-4 pt-3">
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={submit}
+              loading={jobs.submitting || (Boolean(selected?.scenes) && planning)}
+              disabled={!selected}
+              className="w-full"
+            >
+              {queueLabel}
+            </Button>
+            {summary ? (
+              <p className="mt-1.5 truncate text-center text-[12px] text-fg-subtle">{summary}</p>
+            ) : null}
+          </div>
         ) : null}
+        <nav aria-label="Screens" className="flex justify-around px-2 pb-1.5 pt-1.5">
+          {(
+            [
+              { tab: "create", label: "Create", Icon: PenLine },
+              { tab: "result", label: "Result", Icon: SquarePlay },
+              { tab: "history", label: "History", Icon: LayoutGrid },
+            ] as const
+          ).map(({ tab, label, Icon }) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => showTab(tab)}
+              aria-current={mobileTab === tab ? "page" : undefined}
+              className={`relative flex min-w-20 flex-col items-center gap-0.5 rounded-md px-3 py-1 text-[11px]
+                font-medium transition-colors ${mobileTab === tab ? "text-accent" : "text-fg-muted hover:text-fg"}`}
+            >
+              <Icon className="size-5" strokeWidth={1.75} aria-hidden="true" />
+              {label}
+              {/* Something running is worth a glance from wherever you are. */}
+              {tab === "result" && jobs.activeCount > 0 ? (
+                <span
+                  aria-label={`${jobs.activeCount} running`}
+                  className="absolute right-4 top-0.5 size-2 rounded-full bg-accent motion-safe:animate-pulse"
+                />
+              ) : null}
+            </button>
+          ))}
+        </nav>
       </div>
 
       {tips && selected ? (
@@ -1686,6 +1720,8 @@ function Workbench({
  * then filled it all at once, so the eye had nowhere to start; this way the
  * layout is already where it will be.
  */
+type MobileTab = "create" | "result" | "history";
+
 function StudioSkeleton() {
   const block = "rounded-xl bg-bg-subtle motion-safe:animate-pulse";
   return (
