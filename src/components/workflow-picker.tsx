@@ -133,7 +133,13 @@ export function WorkflowPicker({
                   role="radio"
                   aria-checked={selected}
                   disabled={disabled}
-                  onClick={() => onSelect(workflow.id)}
+                  onClick={() => {
+                    // Closed here as well as when the choice changes: picking
+                    // the workflow already chosen changes nothing, and left
+                    // the list standing open.
+                    setOpen(false);
+                    onSelect(workflow.id);
+                  }}
                   className={`group flex w-full min-w-0 items-start gap-2.5 rounded-lg border p-2.5 text-left
                     transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50
                     ${
