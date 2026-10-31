@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/modal";
 /** Shared by the buttons that open the capture modal. */
 export function CameraIcon({ className = "size-3.5" }: { className?: string }) {
   return (
-    <Camera className={`shrink-0 ${className}`} strokeWidth={1.5} aria-hidden="true" />
+    <Camera className={`shrink-0 stroke-[1.5] ${className}`} aria-hidden="true" />
   );
 }
 

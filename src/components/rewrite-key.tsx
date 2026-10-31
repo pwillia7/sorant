@@ -140,9 +140,9 @@ export function RewriteKeyButton({
           }`}
       >
         {engine === "local" ? (
-          <Cpu className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+          <Cpu className="size-3.5" aria-hidden="true" />
         ) : (
-          <KeyRound className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+          <KeyRound className="size-3.5" aria-hidden="true" />
         )}
         {/* What is local, said: "Local" alone read as a mode of the app. */}
         <span>

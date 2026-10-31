@@ -17,6 +17,6 @@ export function StarIcon({
   className?: string;
 }) {
   return (
-    <Star className={`shrink-0 ${className}`} fill={filled ? "currentColor" : "none"} strokeWidth={1.75} aria-hidden="true" />
+    <Star className={`shrink-0 ${className}`} fill={filled ? "currentColor" : "none"} aria-hidden="true" />
   );
 }

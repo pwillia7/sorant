@@ -1,5 +1,6 @@
 "use client";
 
+import { AddFileRow } from "@/components/ui/add-file-row";
 import { ImagePlus, WandSparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Spinner } from "@/components/ui/button";
@@ -90,7 +91,7 @@ async function prepareForUpload(file: File): Promise<Prepared> {
 
 function WandIcon() {
   return (
-    <WandSparkles className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+    <WandSparkles className="size-3.5" aria-hidden="true" />
   );
 }
 
@@ -244,33 +245,13 @@ export function ImageUpload({
       />
 
       {compact && !previewUrl && !expanded ? (
-        <button
-          type="button"
+        <AddFileRow
+          label={uploading ? "Uploading…" : "Add a picture"}
+          icon={<ImagePlus className="size-4 text-fg-subtle" aria-hidden="true" />}
           disabled={disabled || uploading}
-          onClick={() => setExpanded(true)}
-          onDragOver={(event) => {
-            event.preventDefault();
-            if (!disabled && !uploading) setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setDragging(false);
-            setExpanded(true);
-            if (!disabled && !uploading) pick(event.dataTransfer.files);
-          }}
-          className={`flex w-full items-center gap-2 rounded-lg border border-dashed
-            px-3 py-2.5 text-left text-[13px] transition-colors
-            disabled:pointer-events-none disabled:opacity-50
-            ${
-              dragging
-                ? "border-accent bg-accent-subtle/30 text-fg"
-                : "border-border-strong bg-bg-subtle text-fg-muted hover:border-border-default hover:text-fg"
-            }`}
-        >
-          <ImagePlus className="size-4 text-fg-subtle" strokeWidth={1.75} aria-hidden="true" />
-          <span>{uploading ? "Uploading…" : "Add a picture"}</span>
-        </button>
+          onOpen={() => setExpanded(true)}
+          onFiles={pick}
+        />
       ) : (
       <div
         onDragOver={(event) => {
@@ -481,7 +462,7 @@ export function ImageUpload({
                 </>
               ) : (
                 <>
-                  <ImagePlus className="size-7 text-fg-subtle" strokeWidth={1.5} aria-hidden="true" />
+                  <ImagePlus className="size-7 text-fg-subtle stroke-[1.5]" aria-hidden="true" />
                   <span className="text-[13px] font-medium text-fg">
                     Drop an image or click to choose
                   </span>

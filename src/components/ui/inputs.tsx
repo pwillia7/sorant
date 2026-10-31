@@ -182,7 +182,7 @@ export function Select({
           ),
         )}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-fg-subtle" strokeWidth={1.75} aria-hidden="true" />
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-fg-subtle" aria-hidden="true" />
     </div>
   );
 }

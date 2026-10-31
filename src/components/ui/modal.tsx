@@ -79,7 +79,7 @@ export function Modal({
             className="-mr-1 grid size-8 shrink-0 place-items-center rounded-md
               text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
           >
-            <X className="size-4" strokeWidth={1.75} aria-hidden="true" />
+            <X className="size-4" aria-hidden="true" />
           </button>
         </header>
 

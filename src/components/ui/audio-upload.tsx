@@ -1,5 +1,6 @@
 "use client";
 
+import { AddFileRow } from "@/components/ui/add-file-row";
 import { Music } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button, Spinner } from "@/components/ui/button";
@@ -151,35 +152,12 @@ export function AudioUpload({
       />
 
       {compact && !previewUrl && !expanded ? (
-        <button
-          type="button"
+        <AddFileRow
+          label={uploading ? "Uploading…" : `Add a ${noun}`}
           disabled={disabled || uploading}
-          onClick={() => setExpanded(true)}
-          onDragOver={(event) => {
-            event.preventDefault();
-            if (!disabled && !uploading) setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setDragging(false);
-            setExpanded(true);
-            if (!disabled && !uploading) pick(event.dataTransfer.files);
-          }}
-          className={`flex w-full items-center gap-2 rounded-lg border border-dashed
-            px-3 py-2.5 text-left text-[13px] transition-colors
-            disabled:pointer-events-none disabled:opacity-50
-            ${
-              dragging
-                ? "border-accent bg-accent-subtle/30 text-fg"
-                : "border-border-strong bg-bg-subtle text-fg-muted hover:border-border-default hover:text-fg"
-            }`}
-        >
-          <span aria-hidden="true" className="text-fg-subtle">
-            +
-          </span>
-          <span>{uploading ? "Uploading…" : `Add a ${noun}`}</span>
-        </button>
+          onOpen={() => setExpanded(true)}
+          onFiles={pick}
+        />
       ) : (
         <div
           onDragOver={(event) => {
@@ -279,7 +257,7 @@ export function AudioUpload({
                 </>
               ) : (
                 <>
-                  <Music className="size-7 text-fg-subtle" strokeWidth={1.5} aria-hidden="true" />
+                  <Music className="size-7 text-fg-subtle stroke-[1.5]" aria-hidden="true" />
                   <span className="text-[13px] font-medium text-fg">
                     Drop a {noun} or click to choose
                   </span>

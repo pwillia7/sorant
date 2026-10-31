@@ -156,6 +156,17 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
+
+  /*
+    Every Lucide icon's stroke, in one place rather than on each of them.
+    CSS outranks the `stroke-width` attribute Lucide writes, so this is the
+    default; at no specificity, and in the base layer, so a `stroke-*`
+    utility on an icon still wins — the large empty-state glyphs are lighter,
+    the small status ones heavier.
+  */
+  :where(svg.lucide) {
+    stroke-width: 1.75;
+  }
 }
 
 /*

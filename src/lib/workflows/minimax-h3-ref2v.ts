@@ -42,7 +42,7 @@ import {
  *   works out from the frame count the loader reports — so the rewrite can see
  *   the clip it is editing rather than working blind from the filename. Nothing
  *   from that sample reaches the sampler; an earlier version wired it into
- *   `ref_images.*` as well, which is kept under archive/ for comparison.
+ *   `ref_images.*` as well; that graph is in the history at 16ee0de.
  * - 163 measures the clip's own frames and supplies all three dimensions of
  *   the output: width, height, and length as a frame count. So a remix comes
  *   back the same shape and the same length as what went in, and there is

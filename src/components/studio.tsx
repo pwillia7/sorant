@@ -49,7 +49,6 @@ import {
   hydratePatches,
   hydrateStrengths,
   hydrateTurbo,
-  mergeWithDefaults,
   readStoredDirectorEngine,
   readStoredLocalDirector,
   readStoredLowVram,
@@ -68,7 +67,7 @@ import {
 } from "@/lib/param-storage";
 import { workflowLabel } from "@/lib/workflows/modes";
 import { QualityFold, runSummary } from "./run-bar";
-import { estimateFor } from "./workflow-picker";
+import { runEstimate } from "@/lib/workflows/estimate";
 import type { DirectorEngine } from "@/lib/workflows/local-director";
 import { REWRITE_MODEL } from "@/lib/workflows/rewrite-model";
 import {
@@ -730,8 +729,6 @@ function Workbench({
     promptId: string;
   } | null>(null);
 
-  const stageRef = useRef<HTMLDivElement>(null);
-  const settingsRef = useRef<HTMLElement>(null);
 
   /**
    * Send a finished generation into the workflow that takes it as a source —
@@ -1209,7 +1206,7 @@ function Workbench({
         // until it is planned.
         estimate: selected.scenes
           ? undefined
-          : estimateFor(modesFor ?? selected, turboOn, patchesOn),
+          : runEstimate(modesFor ?? selected, turboOn, patchesOn),
       })
     : "";
 
@@ -1346,8 +1343,7 @@ function Workbench({
 
             {selected ? (
               <Panel
-                ref={settingsRef}
-                className="rise scroll-mt-20"
+                className="rise"
                 style={{ "--delay": "80ms" } as CSSProperties}
                 padded
               >
@@ -1495,7 +1491,6 @@ function Workbench({
           </div>
 
           <div
-            ref={stageRef}
             /* min-w-0 for the same reason as the left column: without it this
                grid item takes min-width:auto and grows past its track.
 
@@ -1505,7 +1500,7 @@ function Workbench({
                has finished scrolling, so the history below the stage could not
                be reached until the settings column had run out. It scrolls
                itself now instead. */
-            className={`flex min-w-0 scroll-mt-20 flex-col gap-4 lg:h-full lg:min-h-0
+            className={`flex min-w-0 flex-col gap-4 lg:h-full lg:min-h-0
               ${mobileTab === "create" ? "max-lg:hidden" : ""}`}
           >
             <div
@@ -1658,7 +1653,7 @@ function Workbench({
               className={`relative flex min-w-20 flex-col items-center gap-0.5 rounded-md px-3 py-1 text-[11px]
                 font-medium transition-colors ${mobileTab === tab ? "text-accent" : "text-fg-muted hover:text-fg"}`}
             >
-              <Icon className="size-5" strokeWidth={1.75} aria-hidden="true" />
+              <Icon className="size-5" aria-hidden="true" />
               {label}
               {/* Something running is worth a glance from wherever you are. */}
               {tab === "result" && jobs.activeCount > 0 ? (

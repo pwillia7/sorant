@@ -72,13 +72,13 @@ export function Poster({
           className="pointer-events-none size-full bg-black object-cover"
         />
       ) : audio ? (
-        <AudioLines className="size-4" strokeWidth={1.75} />
+        <AudioLines className="size-4" />
       ) : (
-        <Icon className="size-4" strokeWidth={1.75} />
+        <Icon className="size-4" />
       )}
       {badge && (still || clip) ? (
         <span className="absolute left-0.5 top-0.5 grid size-4 place-items-center rounded bg-black/55 text-white">
-          <Icon className="size-2.5" strokeWidth={2} />
+          <Icon className="size-2.5 stroke-2" />
         </span>
       ) : null}
     </span>

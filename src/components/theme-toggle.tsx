@@ -40,9 +40,9 @@ export function ThemeToggle() {
         hover:border-border-strong hover:text-fg"
     >
       {theme === "dark" ? (
-        <Sun className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+        <Sun className="size-3.5" aria-hidden="true" />
       ) : (
-        <Moon className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+        <Moon className="size-3.5" aria-hidden="true" />
       )}
     </button>
   );

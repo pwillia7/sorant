@@ -100,10 +100,9 @@ derived from that one input:
 
 An earlier version also wired those five frames into `ref_images.ref_image_0..4`
 on the reference node, handing the model the same footage twice — once as a
-video reference and again as five stills to reconcile with it. That graph is
-kept, unregistered, at `archive/minimax-h3-remix-frame-refs.ts`; it still
-compiles, so a rename in `minimax-common.ts` surfaces there rather than letting
-it rot.
+video reference and again as five stills to reconcile with it. That graph was
+kept under `archive/` for a while and is now only in the history: see
+`src/lib/workflows/archive/minimax-h3-remix-frame-refs.ts` at commit `16ee0de`.
 
 **The clip is the only input the form offers.** There are no image, audio, size
 or duration controls, and that is the point rather than an omission: every one

@@ -3,6 +3,7 @@
 import { ChevronsUpDown, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CompatReport, WorkflowCompat } from "@/lib/compat";
+import { formatEstimate, runEstimate } from "@/lib/workflows/estimate";
 import type { WorkflowSummary } from "@/lib/workflows/types";
 import { WORKFLOW_GROUPS, workflowIcon } from "./workflow-icons";
 
@@ -125,7 +126,7 @@ export function WorkflowPicker({
           <div className="grid gap-1">
             {section.items.map((workflow) => {
               const selected = workflow.id === selectedId;
-              const estimate = estimateFor(workflow, turbo[workflow.id], patches[workflow.id]);
+              const estimate = runEstimate(workflow, turbo[workflow.id], patches[workflow.id]);
               return (
                 <button
                   key={workflow.id}
@@ -184,28 +185,8 @@ function WorkflowGlyph({ icon: Icon }: { icon: LucideIcon }) {
       aria-hidden="true"
       className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-subtle text-accent"
     >
-      <Icon className="size-4" strokeWidth={1.75} />
+      <Icon className="size-4" />
     </span>
-  );
-}
-
-/**
- * Roughly how long a run of this workflow takes in the modes it is in: the
- * last switch with an estimate of its own, then Turbo's, then the plain one.
- */
-export function estimateFor(
-  workflow: WorkflowSummary,
-  turbo: boolean | undefined,
-  on: string[] | undefined,
-): number | undefined {
-  const isTurbo = Boolean(turbo) && Boolean(workflow.turbo);
-  return (
-    workflow.patches
-      .filter((patch) => (on ?? []).includes(patch.id))
-      .map((patch) => patch.estimatedSeconds)
-      .findLast((seconds) => seconds !== undefined) ??
-    (isTurbo ? workflow.turbo?.estimatedSeconds : undefined) ??
-    workflow.estimatedSeconds
   );
 }
 
@@ -247,9 +228,4 @@ function MachineNote({
       ))}
     </div>
   );
-}
-
-export function formatEstimate(seconds: number): string {
-  if (seconds < 90) return `${seconds}s`;
-  return `${Math.round(seconds / 60)}m`;
 }

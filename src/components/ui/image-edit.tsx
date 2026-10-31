@@ -294,7 +294,7 @@ export function ImageEditBar({
           onClick={() => setSettingsOpen(true)}
           className="relative"
         >
-          <SlidersHorizontal className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+          <SlidersHorizontal className="size-3.5" aria-hidden="true" />
           {tuned ? (
             <span
               className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-accent"

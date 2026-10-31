@@ -3,7 +3,7 @@
 import { ChevronRight, Gauge } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { ParamValue, WorkflowSummary } from "@/lib/workflows/types";
-import { formatEstimate } from "./workflow-picker";
+import { formatEstimate } from "@/lib/workflows/estimate";
 
 /**
  * How a run is made — Turbo, the model switches, steps, seed — folded into
@@ -32,7 +32,7 @@ export function QualityFold({
         className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left
           transition-colors hover:bg-surface-hover"
       >
-        <Gauge aria-hidden="true" className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} />
+        <Gauge aria-hidden="true" className="size-4 shrink-0 text-fg-muted" />
         <span className="text-[13px] font-medium text-fg">Quality &amp; speed</span>
         <span className="ml-auto min-w-0 truncate text-[12px] text-fg-subtle">{summary}</span>
         <ChevronRight

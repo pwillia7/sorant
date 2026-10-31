@@ -10,7 +10,7 @@ import { multiScene } from "./multi-scene";
 import { musicVideo } from "./music-video";
 import { multiSceneStitch, musicVideoStitch } from "./music-video-stitch";
 import { upscale } from "./upscale";
-import { toSummary, type WorkflowDef, type WorkflowSummary } from "./types";
+import type { WorkflowDef, WorkflowSummary } from "./types";
 
 /**
  * The predetermined set of workflows the app offers. Add a new file next to
@@ -46,10 +46,6 @@ export const WORKFLOWS: WorkflowDef[] = [
 
 export function getWorkflow(id: string): WorkflowDef | undefined {
   return WORKFLOWS.find((workflow) => workflow.id === id);
-}
-
-export function workflowSummaries(): WorkflowSummary[] {
-  return WORKFLOWS.map(toSummary);
 }
 
 export type { WorkflowDef, WorkflowSummary };

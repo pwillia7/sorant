@@ -272,7 +272,7 @@ export function GenerationsPanel({
               title: "List",
               label: (
                 <span className="flex items-center gap-1.5">
-                  <List className="size-3.5" strokeWidth={1.75} aria-hidden="true" /> List
+                  <List className="size-3.5" aria-hidden="true" /> List
                 </span>
               ),
             },
@@ -281,7 +281,7 @@ export function GenerationsPanel({
               title: "Grid",
               label: (
                 <span className="flex items-center gap-1.5">
-                  <LayoutGrid className="size-3.5" strokeWidth={1.75} aria-hidden="true" /> Grid
+                  <LayoutGrid className="size-3.5" aria-hidden="true" /> Grid
                 </span>
               ),
             },
@@ -629,9 +629,9 @@ function Row({
             ${playing ? "text-accent" : "text-fg-muted"}`}
         >
           {playing ? (
-            <Pause className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+            <Pause className="size-3.5" aria-hidden="true" />
           ) : (
-            <Play className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+            <Play className="size-3.5" aria-hidden="true" />
           )}
         </button>
       ) : null}
@@ -655,7 +655,7 @@ function Row({
             disabled:cursor-not-allowed disabled:opacity-40
             disabled:hover:bg-transparent disabled:hover:text-fg-muted"
         >
-          <RotateCw className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+          <RotateCw className="size-3.5" aria-hidden="true" />
         </button>
       ) : null}
 
@@ -674,7 +674,7 @@ function Row({
             disabled:cursor-not-allowed disabled:opacity-40
             disabled:hover:bg-transparent disabled:hover:text-fg-muted"
         >
-          <RotateCcw className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+          <RotateCcw className="size-3.5" aria-hidden="true" />
         </button>
       ) : null}
 
@@ -705,7 +705,7 @@ function Row({
           className="grid size-7 shrink-0 place-items-center rounded-md
             text-fg-muted transition-colors hover:bg-surface hover:text-danger"
         >
-          <X className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+          <X className="size-3.5" aria-hidden="true" />
         </button>
       ) : (
         <button
@@ -717,7 +717,7 @@ function Row({
             text-fg-subtle opacity-0 transition-all hover:bg-surface
             hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
         >
-          <Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+          <Trash2 className="size-3.5" aria-hidden="true" />
         </button>
       )}
     </div>
@@ -993,7 +993,7 @@ function GridTile({
         <Dot tone={PHASE_TONE[job.phase]} pulse={isActive(job)} />
         <span className="min-w-0 truncate">{job.prompt.trim() || job.workflowName}</span>
         {isFavorite(job) ? (
-          <Star className="ml-auto size-3 shrink-0 fill-current text-accent" strokeWidth={1.75} aria-label="Favorite" />
+          <Star className="ml-auto size-3 shrink-0 fill-current text-accent" aria-label="Favorite" />
         ) : null}
       </span>
     </button>

@@ -184,7 +184,7 @@ export function Disclosure({
       aria-expanded={open}
       onClick={onToggle}
       icon={
-        <ChevronRight className={`size-3 shrink-0 transition-transform duration-200 ${open ? "rotate-90" : ""}`} strokeWidth={1.75} aria-hidden="true" />
+        <ChevronRight className={`size-3 shrink-0 transition-transform duration-200 ${open ? "rotate-90" : ""}`} aria-hidden="true" />
       }
     >
       {children}
@@ -519,9 +519,9 @@ export function Control({
               disabled={readOnly}
               icon={
                 isRandom ? (
-                  <Pin className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+                  <Pin className="size-3.5" aria-hidden="true" />
                 ) : (
-                  <Dices className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+                  <Dices className="size-3.5" aria-hidden="true" />
                 )
               }
               onClick={() => onChange(param.id, isRandom ? roll() : -1)}
@@ -535,7 +535,7 @@ export function Control({
               className="flex h-10 items-center gap-2 rounded-md border border-dashed
                 border-border-strong bg-bg-subtle px-3 text-[13px] text-fg-muted"
             >
-              <Dices className="size-4 text-fg-subtle" strokeWidth={1.75} aria-hidden="true" />
+              <Dices className="size-4 text-fg-subtle" aria-hidden="true" />
               A new seed each run
             </div>
           ) : (
@@ -559,7 +559,7 @@ export function Control({
                 onClick={() => onChange(param.id, roll())}
                 title="Roll another fixed seed"
                 aria-label="Roll another fixed seed"
-                icon={<Dices className="size-4" strokeWidth={1.75} aria-hidden="true" />}
+                icon={<Dices className="size-4" aria-hidden="true" />}
               />
             </div>
           )}

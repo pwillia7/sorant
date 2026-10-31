@@ -122,7 +122,7 @@ export function ConnectionPill({
       {insecure && health?.reachable ? (
         <LockOpen
           className="size-3 text-warning"
-          strokeWidth={1.75}
+         
           aria-label="Unencrypted connection to ComfyUI"
           role="img"
         />

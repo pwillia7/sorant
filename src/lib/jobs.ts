@@ -462,11 +462,6 @@ export function clockMs(job: Job, now: number): number | null {
   return renderMs(job);
 }
 
-/** Whether that number is a wait rather than a render. */
-export function isWaiting(job: Job): boolean {
-  return job.phase === "queued";
-}
-
 /**
  * How long this workflow, in this mode, actually takes on this machine.
  *

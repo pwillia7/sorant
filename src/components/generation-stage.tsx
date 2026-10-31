@@ -148,7 +148,7 @@ function Frame({
 function Empty() {
   return (
     <Frame dashed>
-      <Film className="size-8 text-fg-subtle" strokeWidth={1.5} aria-hidden="true" />
+      <Film className="size-8 text-fg-subtle stroke-[1.5]" aria-hidden="true" />
       <div>
         <p className="text-sm font-medium text-fg">Nothing generated yet</p>
         <p className="mx-auto mt-1 max-w-xs text-[13px] leading-relaxed text-fg-subtle">
@@ -350,7 +350,7 @@ const REUSABLE_VIDEO = /\.(mp4|webm|mkv|mov|m4v)$/i;
  * one — registering a workflow for a new action is all it takes to get one.
  */
 /** Every icon on the stage's buttons: one size and weight. */
-const ICON = { className: "size-3.5 shrink-0", strokeWidth: 1.75, "aria-hidden": true } as const;
+const ICON = { className: "size-3.5 shrink-0", "aria-hidden": true } as const;
 
 const CLIP_BUTTONS: Record<
   ClipAction,

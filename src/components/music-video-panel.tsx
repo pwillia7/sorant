@@ -393,7 +393,7 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
  * failed. Colour alone left "not rendered" and "queued" the same grey chip.
  */
 function SceneStatus({ job }: { job: Job | undefined }) {
-  const icon = { className: "size-3 shrink-0", strokeWidth: 2, "aria-hidden": true } as const;
+  const icon = { className: "size-3 shrink-0 stroke-2", "aria-hidden": true } as const;
   if (!job) {
     return (
       <Badge>
@@ -411,7 +411,7 @@ function SceneStatus({ job }: { job: Job | undefined }) {
     case "running":
       return (
         <Badge tone="accent">
-          <LoaderCircle {...icon} className="size-3 shrink-0 motion-safe:animate-spin" /> rendering
+          <LoaderCircle {...icon} className="size-3 shrink-0 stroke-2 motion-safe:animate-spin" /> rendering
         </Badge>
       );
     case "done":
@@ -577,78 +577,76 @@ function SceneOutline({
   const story = video.project?.kind === "story";
   return (
     <div className="flex flex-col gap-2">
-      <div className="mt-2 flex flex-col gap-2">
-        <label className="text-[12px] text-fg-muted" htmlFor={`scene-${index}-place`}>
-          Where
-        </label>
-        <TextInput
-          id={`scene-${index}-place`}
-          value={scene.place ?? ""}
-          disabled={disabled || rewriting}
-          onChange={(place) => video.editOutline(index, { place })}
-        />
-        <label className="text-[12px] text-fg-muted" htmlFor={`scene-${index}-happens`}>
-          What happens
-        </label>
-        <TextInput
-          id={`scene-${index}-happens`}
-          value={scene.happens ?? ""}
-          disabled={disabled || rewriting}
-          onChange={(happens) => video.editOutline(index, { happens })}
-        />
-        {story ? (
-          <>
-            <label className="text-[12px] text-fg-muted" htmlFor={`scene-${index}-lines`}>
-              Lines
-            </label>
-            <TextArea
-              id={`scene-${index}-lines`}
-              value={scene.lines ?? ""}
-              rows={2}
-              maxLength={1000}
-              placeholder="Nobody speaks. Or, a line per turn — Mara: We're too late."
-              disabled={disabled || rewriting}
-              onChange={(lines) => video.editOutline(index, { lines })}
-            />
-          </>
-        ) : null}
-        <div className="flex flex-wrap items-center gap-3">
-          {story ? null : (
-            <>
-              <Toggle
-                id={`scene-${index}-sings`}
-                checked={scene.sings === true}
-                disabled={disabled || rewriting}
-                describedBy={`scene-${index}-sings-help`}
-                onChange={(sings) => video.editOutline(index, { sings })}
-              />
-              <label className="text-[12px] text-fg" htmlFor={`scene-${index}-sings`}>
-                Sings
-              </label>
-            </>
-          )}
-          <Button
-            variant="quiet"
-            size="xs"
-            className="ml-auto"
+      <label className="text-[12px] text-fg-muted" htmlFor={`scene-${index}-place`}>
+        Where
+      </label>
+      <TextInput
+        id={`scene-${index}-place`}
+        value={scene.place ?? ""}
+        disabled={disabled || rewriting}
+        onChange={(place) => video.editOutline(index, { place })}
+      />
+      <label className="text-[12px] text-fg-muted" htmlFor={`scene-${index}-happens`}>
+        What happens
+      </label>
+      <TextInput
+        id={`scene-${index}-happens`}
+        value={scene.happens ?? ""}
+        disabled={disabled || rewriting}
+        onChange={(happens) => video.editOutline(index, { happens })}
+      />
+      {story ? (
+        <>
+          <label className="text-[12px] text-fg-muted" htmlFor={`scene-${index}-lines`}>
+            Lines
+          </label>
+          <TextArea
+            id={`scene-${index}-lines`}
+            value={scene.lines ?? ""}
+            rows={2}
+            maxLength={1000}
+            placeholder="Nobody speaks. Or, a line per turn — Mara: We're too late."
             disabled={disabled || rewriting}
-            onClick={() => void video.rewriteShot(index)}
-          >
-            {rewriting ? (
-              <>
-                <Spinner /> Rewriting…
-              </>
-            ) : (
-              "Rewrite shot"
-            )}
-          </Button>
-        </div>
-        <p id={`scene-${index}-sings-help`} className="text-[12px] leading-snug text-fg-subtle">
-          {story
-            ? "The shot quotes the lines word for word. Changes here take effect when the shot is rewritten."
-            : "Off for an instrumental stretch: a mouth moving to words where there is no voice looks wrong. Changes here take effect when the shot is rewritten."}
-        </p>
+            onChange={(lines) => video.editOutline(index, { lines })}
+          />
+        </>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-3">
+        {story ? null : (
+          <>
+            <Toggle
+              id={`scene-${index}-sings`}
+              checked={scene.sings === true}
+              disabled={disabled || rewriting}
+              describedBy={`scene-${index}-sings-help`}
+              onChange={(sings) => video.editOutline(index, { sings })}
+            />
+            <label className="text-[12px] text-fg" htmlFor={`scene-${index}-sings`}>
+              Sings
+            </label>
+          </>
+        )}
+        <Button
+          variant="quiet"
+          size="xs"
+          className="ml-auto"
+          disabled={disabled || rewriting}
+          onClick={() => void video.rewriteShot(index)}
+        >
+          {rewriting ? (
+            <>
+              <Spinner /> Rewriting…
+            </>
+          ) : (
+            "Rewrite shot"
+          )}
+        </Button>
       </div>
+      <p id={`scene-${index}-sings-help`} className="text-[12px] leading-snug text-fg-subtle">
+        {story
+          ? "The shot quotes the lines word for word. Changes here take effect when the shot is rewritten."
+          : "Off for an instrumental stretch: a mouth moving to words where there is no voice looks wrong. Changes here take effect when the shot is rewritten."}
+      </p>
     </div>
   );
 }
@@ -959,14 +957,14 @@ function SceneCard({
     {
       id: "pictures",
       label: scene.references ? `Pictures · own (${scene.references.length})` : "Pictures",
-      icon: <Images className="size-3.5" strokeWidth={1.75} aria-hidden="true" />,
+      icon: <Images className="size-3.5" aria-hidden="true" />,
     },
     ...(story
       ? [
           {
             id: "voices" as const,
             label: scene.voices ? `Voices · own (${scene.voices.length})` : "Voices",
-            icon: <Mic className="size-3.5" strokeWidth={1.75} aria-hidden="true" />,
+            icon: <Mic className="size-3.5" aria-hidden="true" />,
           },
         ]
       : []),
@@ -1042,12 +1040,12 @@ function SceneCard({
           ) : null}
           {scene.sings ? (
             <Badge tone="accent">
-              <MicVocal className="size-3" strokeWidth={1.75} aria-hidden="true" /> sings
+              <MicVocal className="size-3" aria-hidden="true" /> sings
             </Badge>
           ) : null}
           {story && scene.lines?.trim() ? (
             <Badge tone="accent">
-              <MessageSquareQuote className="size-3" strokeWidth={1.75} aria-hidden="true" /> lines
+              <MessageSquareQuote className="size-3" aria-hidden="true" /> lines
             </Badge>
           ) : null}
           {sceneHasReferences(project, scene) ? null : (
@@ -1062,7 +1060,7 @@ function SceneCard({
               variant="quiet"
               size="xs"
               className="ml-auto"
-              icon={<RefreshCw className="size-3.5" strokeWidth={1.75} aria-hidden="true" />}
+              icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
               onClick={() => void video.redo(index)}
               title="Render another take on a fresh seed, with the shot as it reads now. The takes you have stay to pick from."
             >

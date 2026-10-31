@@ -4,7 +4,6 @@ import { Bell, BellOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   notificationsEnabled,
-  notificationsSupported,
   permissionState,
   requestNotificationPermission,
   setNotificationsEnabled,
@@ -71,9 +70,9 @@ export function NotifyToggle() {
         }`}
     >
       {enabled ? (
-        <Bell className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+        <Bell className="size-3.5" aria-hidden="true" />
       ) : (
-        <BellOff className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+        <BellOff className="size-3.5" aria-hidden="true" />
       )}
     </button>
   );
