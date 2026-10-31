@@ -19,14 +19,14 @@ import {
   groupByDay,
   isActive,
   isAudioOnly,
-  isImageOnly,
   isFavorite,
   historyEntries,
   partitionFavorites,
   type Job,
   type MusicVideoGroup,
 } from "@/lib/jobs";
-import { RerunIcon } from "@/components/ui/rerun-icon";
+import { ChevronRight, Pause, Play, RotateCcw, RotateCw, Trash2, X } from "lucide-react";
+import { Poster } from "@/components/ui/poster";
 import { StarIcon } from "@/components/ui/star-icon";
 
 const PHASE_LABEL: Record<Job["phase"], string> = {
@@ -267,21 +267,11 @@ export function GenerationsPanel({
                     aria-expanded={open}
                     className="group flex min-w-0 flex-1 items-center gap-1.5 text-left"
                   >
-                    <svg
-                      viewBox="0 0 16 16"
+                    <ChevronRight
+                      aria-hidden="true"
                       className={`size-3 shrink-0 text-fg-subtle transition-transform duration-200
                         ${open ? "rotate-90" : ""}`}
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M6 4l4 4-4 4"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        fill="none"
-                      />
-                    </svg>
+                    />
                     {group.pinned ? (
                       <StarIcon
                         filled
@@ -289,7 +279,7 @@ export function GenerationsPanel({
                       />
                     ) : null}
                     <span
-                      className="truncate text-[11px] font-medium uppercase tracking-[0.08em]
+                      className="truncate text-[12px] font-semibold
                         text-fg-subtle transition-colors group-hover:text-fg-muted"
                     >
                       {group.label}
@@ -534,9 +524,10 @@ function Row({
         aria-current={selected || undefined}
         className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
       >
-        <Dot tone={PHASE_TONE[job.phase]} pulse={active} />
+        <Poster job={job} />
         <span className="min-w-0 flex-1">
-          <span className="flex items-baseline gap-2">
+          <span className="flex items-center gap-2">
+            <Dot tone={PHASE_TONE[job.phase]} pulse={active} />
             <span className="truncate text-[12px] font-medium text-fg">
               {PHASE_LABEL[job.phase]}
             </span>
@@ -548,42 +539,6 @@ function Row({
             </span>
           </span>
           <span className="mt-0.5 flex items-center gap-1 text-[11px] text-fg-subtle">
-            {/* Which kind of file this row leads to, for a list that now holds
-                three. Deliberately small and in the muted colour the line it sits
-                on already uses: it is a distinction worth being able to see at
-                a glance and not worth a badge. Nothing marks a video — the
-                absence is the other half of the signal, and marking both would
-                put a glyph on every row and distinguish nothing. */}
-            {isAudioOnly(job) ? (
-              <svg
-                viewBox="0 0 16 16"
-                className="size-2.5 shrink-0"
-                fill="none"
-                role="img"
-                aria-label="Audio"
-              >
-                <path
-                  d="M6 11.5V3.5l6-1.2v8"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle cx="4.5" cy="11.5" r="1.7" stroke="currentColor" strokeWidth="1.4" />
-                <circle cx="10.5" cy="10.3" r="1.7" stroke="currentColor" strokeWidth="1.4" />
-              </svg>
-            ) : isImageOnly(job) ? (
-              <svg
-                viewBox="0 0 16 16"
-                className="size-2.5 shrink-0"
-                fill="none"
-                role="img"
-                aria-label="Image"
-              >
-                <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-                <path d="M2.5 11l3.5-3.5 3 3 1.5-1.5 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-              </svg>
-            ) : null}
             {caption ? (
               <span className="shrink-0 font-medium text-fg-muted">{caption}</span>
             ) : null}
@@ -615,25 +570,9 @@ function Row({
             ${playing ? "text-accent" : "text-fg-muted"}`}
         >
           {playing ? (
-            <svg viewBox="0 0 16 16" className="size-3.5" aria-hidden="true">
-              <path
-                d="M6 3.5v9M10 3.5v9"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                fill="none"
-              />
-            </svg>
+            <Pause className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
           ) : (
-            <svg viewBox="0 0 16 16" className="size-3.5" aria-hidden="true">
-              <path
-                d="M5.5 3.6v8.8l7-4.4-7-4.4Z"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-                fill="currentColor"
-              />
-            </svg>
+            <Play className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
           )}
         </button>
       ) : null}
@@ -657,15 +596,7 @@ function Row({
             disabled:cursor-not-allowed disabled:opacity-40
             disabled:hover:bg-transparent disabled:hover:text-fg-muted"
         >
-          <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-            <path
-              d="M13 8a5 5 0 1 1-1.7-3.75M13 2.5V5.5h-3"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <RotateCw className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
         </button>
       ) : null}
 
@@ -684,7 +615,7 @@ function Row({
             disabled:cursor-not-allowed disabled:opacity-40
             disabled:hover:bg-transparent disabled:hover:text-fg-muted"
         >
-          <RerunIcon className="size-3.5" />
+          <RotateCcw className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
         </button>
       ) : null}
 
@@ -715,14 +646,7 @@ function Row({
           className="grid size-7 shrink-0 place-items-center rounded-md
             text-fg-muted transition-colors hover:bg-surface hover:text-danger"
         >
-          <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-            <path
-              d="M4 4l8 8M12 4l-8 8"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
+          <X className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
         </button>
       ) : (
         <button
@@ -734,15 +658,7 @@ function Row({
             text-fg-subtle opacity-0 transition-all hover:bg-surface
             hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
         >
-          <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-            <path
-              d="M3 4.5h10M6.5 4.5V3.5h3v1M5 4.5l.5 8h5l.5-8"
-              stroke="currentColor"
-              strokeWidth="1.3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
         </button>
       )}
     </div>
@@ -878,9 +794,19 @@ function MusicVideoEntry({
         aria-expanded={open}
         className="flex w-full min-w-0 items-center gap-2.5 p-2 text-left"
       >
-        <Dot tone={tone} pulse={active.length > 0} />
+        {/* The video at a glance: its first finished scenes, side by side. */}
+        <span className="flex shrink-0 gap-px overflow-hidden rounded-md">
+          {(scenes.filter((job) => job.phase === "done").slice(0, 3).length > 0
+            ? scenes.filter((job) => job.phase === "done").slice(0, 3)
+            : scenes.slice(0, 1)
+          ).map((job) => (
+            <Poster key={job.promptId} job={job} badge={false} className="h-10 w-9 rounded-none" />
+          ))}
+          {scenes.length === 0 ? <Poster job={group.jobs[0]} className="h-10 w-16" /> : null}
+        </span>
         <span className="min-w-0 flex-1">
-          <span className="flex items-baseline gap-2">
+          <span className="flex items-center gap-2">
+            <Dot tone={tone} pulse={active.length > 0} />
             <span className="shrink-0 text-[12px] font-medium text-fg">
               {group.label}
             </span>
@@ -895,22 +821,12 @@ function MusicVideoEntry({
             {summary.join(" · ")}
           </span>
         </span>
-        <svg
-          viewBox="0 0 16 16"
+        <ChevronRight
+          aria-hidden="true"
           className={`size-3 shrink-0 text-fg-subtle transition-transform duration-150 ${
             open ? "rotate-90" : ""
           }`}
-          fill="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M6 4l4 4-4 4"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        />
       </button>
 
       {open ? (
@@ -918,7 +834,7 @@ function MusicVideoEntry({
           {sections.map((section, index) => (
             <section key={section.part} className="flex flex-col gap-1.5">
               {sections[index - 1]?.heading === section.heading ? null : (
-                <h4 className="px-0.5 text-[10px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
+                <h4 className="px-0.5 text-[11px] font-semibold text-fg-subtle">
                   {section.heading}
                 </h4>
               )}
@@ -940,7 +856,7 @@ function MusicVideoEntry({
           ))}
           {group.untagged.length > 0 ? (
             <section className="flex flex-col gap-1.5">
-              <h4 className="px-0.5 text-[10px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
+              <h4 className="px-0.5 text-[11px] font-semibold text-fg-subtle">
                 Also made from this video
               </h4>
               <ul className="flex flex-col gap-1.5">

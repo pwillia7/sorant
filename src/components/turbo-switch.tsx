@@ -46,7 +46,7 @@ export function TurboSwitch({
     <div className="mb-6 rounded-lg border border-border-default bg-bg-subtle p-3">
       <div className="flex items-center gap-3">
         <span
-          className="text-[11px] font-medium uppercase tracking-[0.08em] text-fg-subtle"
+          className="text-[12px] font-semibold text-fg-subtle"
           id="turbo-switch-label"
         >
           Speed

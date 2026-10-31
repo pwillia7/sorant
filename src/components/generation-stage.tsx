@@ -1,5 +1,17 @@
 "use client";
 
+import {
+  Disc3,
+  Download,
+  FastForward,
+  Film,
+  ImagePlay,
+  RotateCcw,
+  Scaling,
+  Shuffle,
+  SlidersHorizontal,
+  Sprout,
+} from "lucide-react";
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { Badge, Dot } from "@/components/ui/panel";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -12,7 +24,6 @@ import {
   isFavorite,
   type Job,
 } from "@/lib/jobs";
-import { RerunIcon } from "@/components/ui/rerun-icon";
 import { StarIcon } from "@/components/ui/star-icon";
 import type { ClipAction, ClipHandoff } from "@/lib/workflows/types";
 
@@ -370,129 +381,23 @@ const REUSABLE_VIDEO = /\.(mp4|webm|mkv|mov|m4v)$/i;
  * rendered from whatever the registry offers rather than written out one by
  * one — registering a workflow for a new action is all it takes to get one.
  */
+/** Every icon on the stage's buttons: one size and weight. */
+const ICON = { className: "size-3.5 shrink-0", strokeWidth: 1.75, "aria-hidden": true } as const;
+
 const CLIP_BUTTONS: Record<
   ClipAction,
   { label: string; title: string; icon: React.ReactNode }
 > = {
-  remix: {
-    label: "Remix",
-    title: "Rebuild this clip into a new take",
-    icon: (
-      <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-        <path
-          d="M10 2.5l2 2-2 2M6 13.5l-2-2 2-2"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M12 4.5H6a2.5 2.5 0 0 0-2.5 2.5M4 11.5h6A2.5 2.5 0 0 0 12.5 9"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-        />
-      </svg>
-    ),
-  },
-  extend: {
-    label: "Extend",
-    title: "Carry on from where this clip ends",
-    icon: (
-      // The clip, then the seam it continues past.
-      <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-        <rect
-          x="2"
-          y="4"
-          width="6"
-          height="8"
-          rx="1.5"
-          stroke="currentColor"
-          strokeWidth="1.4"
-        />
-        <path
-          d="M9.5 8h4M12 6l2 2-2 2"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  upscale: {
-    label: "Upscale",
-    title: "Make this clip larger and sharper",
-    icon: (
-      // A small frame, and the corner it is pulled out to.
-      <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-        <rect
-          x="2"
-          y="8"
-          width="6"
-          height="6"
-          rx="1.2"
-          stroke="currentColor"
-          strokeWidth="1.4"
-        />
-        <path
-          d="M9 7l4.5-4.5M10 2.5h3.5V6"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
+  remix: { label: "Remix", title: "Rebuild this clip into a new take", icon: <Shuffle {...ICON} /> },
+  extend: { label: "Extend", title: "Carry on from where this clip ends", icon: <FastForward {...ICON} /> },
+  upscale: { label: "Upscale", title: "Make this clip larger and sharper", icon: <Scaling {...ICON} /> },
   musicvideo: {
     label: "Music video",
     title: "Make a whole music video to this track, scene by scene",
-    icon: (
-      // A strip of three frames.
-      <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-        <rect x="1.5" y="4" width="13" height="8" rx="1.2" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M6 4v8M10 4v8" stroke="currentColor" strokeWidth="1.4" />
-      </svg>
-    ),
+    icon: <Disc3 {...ICON} />,
   },
-  animate: {
-    label: "Animate",
-    title: "Make a video that starts on this picture",
-    icon: (
-      // A frame, and the play mark it is set going by.
-      <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-        <rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M6.5 6v4l3.5-2-3.5-2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  illustrate: {
-    label: "Create video",
-    title: "Build a video around this track",
-    icon: (
-      // A note, and the frame it is being carried into.
-      <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-        <path
-          d="M5.5 10V3.5l4-.75V9"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <circle cx="4.25" cy="10.5" r="1.75" stroke="currentColor" strokeWidth="1.4" />
-        <rect
-          x="8.5"
-          y="8.5"
-          width="6"
-          height="5"
-          rx="1.2"
-          stroke="currentColor"
-          strokeWidth="1.4"
-        />
-      </svg>
-    ),
-  },
+  animate: { label: "Animate", title: "Make a video that starts on this picture", icon: <ImagePlay {...ICON} /> },
+  illustrate: { label: "Create video", title: "Build a video around this track", icon: <Film {...ICON} /> },
 };
 
 function Result({
@@ -549,8 +454,11 @@ function Result({
   const compact = useCompactRow(rowRef, measureRef);
 
   /**
-   * The result's buttons, labelled or as icons alone. Icons alone keep their
-   * label for screen readers and as a tooltip, so nothing is lost but width.
+   * What can be done with this result itself, labelled or as icons alone.
+   * Icons alone keep their label for screen readers and as a tooltip, so
+   * nothing is lost but width. What can be made from it — the hand-offs —
+   * is a row of its own below: two kinds of action that used to sit in one
+   * row of equal buttons, which made every one of them look as likely.
    */
   const actions = (iconsOnly: boolean) => {
     const size = iconsOnly ? "icon-sm" : "sm";
@@ -590,11 +498,11 @@ function Result({
             size={size}
             variant="quiet"
             onClick={onShowSettings}
-            title="What this was run with"
+            title="See what this was run with, and load it into the form"
             className="shrink-0"
-            icon={<SettingsIcon />}
+            icon={<SlidersHorizontal {...ICON} />}
           >
-            {label("Settings")}
+            {label("Use settings")}
           </Button>
         ) : null}
         {typeof seed === "number" && onReuseSeed ? (
@@ -604,7 +512,7 @@ function Result({
             onClick={() => onReuseSeed(seed)}
             title="Put this seed in the form, to get this take again"
             className="shrink-0"
-            icon={<SeedIcon />}
+            icon={<Sprout {...ICON} />}
           >
             {label("Reuse seed")}
           </Button>
@@ -612,22 +520,49 @@ function Result({
         {onRerun ? (
           <Button
             size={size}
-            variant="secondary"
+            variant="quiet"
             onClick={onRerun}
             disabled={rerunning}
             title="Load these settings and run them again with a new seed"
             className="shrink-0"
-            icon={<RerunIcon className="size-3.5" />}
+            icon={<RotateCcw {...ICON} />}
           >
             {label("Rerun")}
           </Button>
         ) : null}
+        {/* An anchor, not a button: `download` is what saves the file, and
+            there is no way to keep that on a <button>. Borrowing the button
+            recipe keeps it from drifting out of step with the row. The one
+            primary: keeping the file is what a finished result is for. */}
+        <a
+          href={src}
+          download={primary.filename}
+          title="Download"
+          className={buttonClasses({
+            variant: "primary",
+            size,
+            className: "shrink-0",
+          })}
+        >
+          <Download {...ICON} />
+          {label("Download")}
+        </a>
+      </>
+    );
+  };
+
+  const handoffs =
+    offered.length > 0 ? (
+      <div className="flex flex-wrap items-center gap-2 border-t border-border-default pt-3">
+        <span className="mr-1 text-[12px] text-fg-subtle">
+          Make from this {isAudioOnly(job) ? "track" : isImageOnly(job) ? "picture" : "clip"}
+        </span>
         {offered.map(({ action }) => {
           const button = CLIP_BUTTONS[action];
           return (
             <Button
               key={action}
-              size={size}
+              size="sm"
               variant="secondary"
               loading={busyAction === action}
               // One copy at a time: both buttons move the same bytes out of
@@ -639,38 +574,12 @@ function Result({
               className="shrink-0"
               icon={button.icon}
             >
-              {label(button.label)}
+              {button.label}
             </Button>
           );
         })}
-        {/* An anchor, not a button: `download` is what saves the file, and
-            there is no way to keep that on a <button>. Borrowing the button
-            recipe keeps it from drifting out of step with the row. */}
-        <a
-          href={src}
-          download={primary.filename}
-          title="Download"
-          className={buttonClasses({
-            variant: "secondary",
-            size,
-            className: "shrink-0",
-          })}
-        >
-          <svg viewBox="0 0 16 16" className="size-3.5" aria-hidden="true">
-            <path
-              d="M8 2v8m0 0L5 7m3 3l3-3M3 13h10"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          </svg>
-          {label("Download")}
-        </a>
-      </>
-    );
-  };
+      </div>
+    ) : null;
 
   return (
     <div className="flex flex-1 flex-col gap-3">
@@ -750,6 +659,8 @@ function Result({
         </div>
       </div>
 
+      {handoffs}
+
       {rest.length > 0 ? (
         <p className="text-[12px] text-fg-subtle">
           Also produced{" "}
@@ -804,32 +715,3 @@ function useCompactRow(
   return compact;
 }
 
-function SettingsIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="size-3.5 shrink-0" fill="none" aria-hidden="true">
-      <path
-        d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-      <circle cx="10" cy="4.5" r="1.5" stroke="currentColor" strokeWidth="1.4" />
-      <circle cx="6" cy="11.5" r="1.5" stroke="currentColor" strokeWidth="1.4" />
-    </svg>
-  );
-}
-
-/** A sprout — the seed, grown into the take it made. */
-function SeedIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="size-3.5 shrink-0" fill="none" aria-hidden="true">
-      <path
-        d="M8 14V8M8 8C8 5 6 3.5 3 3.5c0 3 2 4.5 5 4.5ZM8 9.5c0-2.5 1.8-4 4.5-4 0 2.5-1.8 4-4.5 4Z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}

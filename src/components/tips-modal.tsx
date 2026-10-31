@@ -40,7 +40,7 @@ export function TipsModal({
       {tips.sections.map((section) => (
         <section key={section.heading}>
           <h3
-            className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em]
+            className="mb-2 text-[12px] font-semibold
               text-fg-subtle"
           >
             {section.heading}

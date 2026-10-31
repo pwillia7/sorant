@@ -272,7 +272,7 @@ function Section({
   return (
     <section>
       <h3
-        className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em]
+        className="mb-2 text-[12px] font-semibold
           text-fg-subtle"
       >
         {heading}
@@ -300,7 +300,7 @@ function Brief({ heading, brief }: { heading: string; brief: string }) {
       <details className="group">
         <summary
           className="flex cursor-pointer list-none items-center justify-between gap-2
-            text-[11px] font-medium uppercase tracking-[0.08em] text-fg-subtle
+            text-[12px] font-semibold text-fg-subtle
             hover:text-fg-muted"
         >
           <span>

@@ -56,7 +56,7 @@ export function StatusPanel({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h3 className="text-[11px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
+      <h3 className="text-[12px] font-semibold text-fg-subtle">
         {title}
       </h3>
       <div className="mt-2 text-[13px] leading-relaxed text-fg-muted">{children}</div>
