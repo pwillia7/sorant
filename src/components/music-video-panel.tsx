@@ -5,13 +5,18 @@ import type { MusicVideoController } from "@/hooks/use-music-video";
 import { withToken } from "@/lib/client";
 import type { Job } from "@/lib/jobs";
 import {
+  keepsVideoLook,
   MUSIC_VIDEO_FRAME_RATES,
   MUSIC_VIDEO_UPSCALE_SIZES,
+  videoReferences,
+  type SceneReference,
 } from "@/lib/music-video/project";
-import { clock } from "@/lib/music-video/scenes";
+import { clock, MUSIC_VIDEO_PICTURES } from "@/lib/music-video/scenes";
+import { REFERENCE_KEEP_OPTIONS } from "@/lib/workflows/minimax-common";
 import { Badge, Dot, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
-import { TextArea, TextInput, Toggle } from "./ui/inputs";
+import { ImageUpload } from "./ui/image-upload";
+import { Select, TextArea, TextInput, Toggle } from "./ui/inputs";
 
 /**
  * The music video's own stage: the scene list, each scene's take as it
@@ -243,6 +248,7 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                           video={video}
                         />
                       ) : null}
+                      <ScenePictures index={index} disabled={busy} video={video} />
                     </div>
                     {clip ? (
                       <video
@@ -648,6 +654,127 @@ function SceneOutline({
           Off for an instrumental stretch: a mouth moving to words where there is no voice looks wrong. Changes here
           take effect when the shot is rewritten.
         </p>
+      </div>
+    </details>
+  );
+}
+
+/**
+ * The pictures a scene renders from: the video's, until it is given its own.
+ * Giving it its own starts from a copy of the video's, so adding someone who
+ * appears only here is one more picture rather than all of them again.
+ */
+function ScenePictures({
+  index,
+  disabled,
+  video,
+}: {
+  index: number;
+  disabled: boolean;
+  video: MusicVideoController;
+}) {
+  const project = video.project;
+  const scene = project?.scenes[index];
+  if (!project || !scene) return null;
+  const own = scene.references;
+  const shared = videoReferences(project);
+  const look = keepsVideoLook(project, scene);
+  // Kept contiguous, as the form keeps its slots: a cleared picture closes up.
+  const set = (update: (current: SceneReference[]) => SceneReference[]) =>
+    video.editReferences(index, (current) =>
+      update(current ?? []).filter((reference) => reference.image),
+    );
+  const slots = own ? Math.min(own.length + 1, MUSIC_VIDEO_PICTURES) : 0;
+  return (
+    <details className="group mt-2">
+      <summary className="cursor-pointer list-none text-[12px] text-fg-subtle hover:text-fg-muted">
+        <span className="mr-1.5 inline-block transition-transform group-open:rotate-90">›</span>
+        Pictures
+        <span className="ml-1.5">
+          {own ? `· this scene's own (${own.length})` : shared.length > 0 ? "· the video's" : ""}
+        </span>
+      </summary>
+      <div className="mt-2 flex flex-col gap-3">
+        {own ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {Array.from({ length: slots }, (_, slot) => {
+                const reference = own[slot];
+                const id = `scene-${index}-picture-${slot + 1}`;
+                return (
+                  // Keyed by its picture, so a message about one that went
+                  // missing leaves with it rather than sitting on the next.
+                  <div key={`${slot}-${reference?.image ?? ""}`} className="flex min-w-0 flex-col gap-1.5">
+                    <label className="text-[12px] text-fg-muted" htmlFor={id}>
+                      &lt;Picture {slot + 1}&gt;
+                    </label>
+                    <ImageUpload
+                      id={id}
+                      label={`Scene ${index + 1}, picture ${slot + 1}`}
+                      value={reference?.image ?? ""}
+                      disabled={disabled}
+                      onChange={(image) =>
+                        set((current) => {
+                          // By the picture it showed, not the slot: another
+                          // slot's change may have moved it up already.
+                          const at = reference ? current.findIndex((other) => other.image === reference.image) : -1;
+                          const next = [...current];
+                          next[at === -1 ? current.length : at] = { image, keep: reference?.keep ?? "everything" };
+                          return next;
+                        })
+                      }
+                    />
+                    {reference ? (
+                      <Select
+                        id={`${id}-keep`}
+                        value={reference.keep}
+                        disabled={disabled}
+                        options={REFERENCE_KEEP_OPTIONS}
+                        onChange={(keep) =>
+                          set((current) =>
+                            current.map((other) => (other.image === reference.image ? { ...other, keep } : other)),
+                          )
+                        }
+                      />
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="min-w-0 flex-1 text-[12px] leading-snug text-fg-subtle">
+                {look
+                  ? "Name a picture added here in the shot by its number, as the shot names the rest."
+                  : "These no longer start with the video's pictures, so this scene is not given the look above: its director describes the people from these pictures. Name them in the shot by number."}{" "}
+                Applies when the scene is next rendered.
+              </p>
+              <Button
+                variant="quiet"
+                size="xs"
+                disabled={disabled}
+                onClick={() => video.editReferences(index, undefined)}
+              >
+                Use the video&apos;s pictures
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="min-w-0 flex-1 text-[12px] leading-snug text-fg-subtle">
+              {shared.length > 0
+                ? `Renders from the video's ${shared.length === 1 ? "picture" : `${shared.length} pictures`}.`
+                : "The video has no pictures, so this scene renders from the idea alone."}
+            </p>
+            <Button
+              variant="quiet"
+              size="xs"
+              disabled={disabled}
+              onClick={() => video.editReferences(index, shared)}
+            >
+              Use different pictures
+            </Button>
+          </div>
+        )}
       </div>
     </details>
   );

@@ -1141,16 +1141,44 @@ export function referenceKeepParam(
       index === 1 ? "What to keep" : `What to keep from the ${ordinal(index)}`,
     type: "select",
     default: DEFAULT_KEEP,
-    options: Object.entries(KEEP_MODES).map(([value, mode]) => ({
-      value,
-      label: mode.label,
-    })),
+    options: REFERENCE_KEEP_OPTIONS,
     help: "What this image pins. Everything else is the scene's to decide.",
     group: "References",
     advanced,
     revealedBy,
     targets: [director],
   };
+}
+
+/** The choices a picture's "what to keep" offers, for a control outside the form. */
+export const REFERENCE_KEEP_OPTIONS = Object.entries(KEEP_MODES).map(([value, mode]) => ({
+  value,
+  label: mode.label,
+}));
+
+/** The filled reference slots, in order, as picture and what it keeps. */
+export function referencesIn(
+  values: Record<string, ParamValue>,
+  count: number,
+): Array<{ image: string; keep: KeepMode }> {
+  return Array.from({ length: leadingReferences(values, count) }, (_, index) => ({
+    image: String(values[imageParamId(index + 1)]),
+    keep: referenceKeep(values, index + 1),
+  }));
+}
+
+/** The same slots written back, emptying those past the end of the list. */
+export function referenceValues(
+  references: Array<{ image: string; keep: string }>,
+  count: number,
+): Record<string, ParamValue> {
+  const values: Record<string, ParamValue> = {};
+  for (let index = 1; index <= count; index += 1) {
+    const reference = references[index - 1];
+    values[imageParamId(index)] = reference?.image ?? "";
+    values[keepParamId(index)] = reference?.keep ?? DEFAULT_KEEP;
+  }
+  return values;
 }
 
 /** Both halves of a reference slot, named by the convention below. */

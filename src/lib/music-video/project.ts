@@ -1,7 +1,13 @@
-import { leadingReferences, referenceKeep } from "@/lib/workflows/minimax-common";
+import {
+  leadingReferences,
+  referenceKeep,
+  referencesIn,
+  referenceValues,
+} from "@/lib/workflows/minimax-common";
 import type { ParamValue } from "@/lib/workflows/types";
 import {
   clock,
+  MUSIC_VIDEO_PICTURES,
   renderSeconds,
   SCENES_HEADING,
   shotBrief,
@@ -113,6 +119,42 @@ export interface ProjectScene extends SceneWindow, Partial<OutlineScene> {
   retries?: number;
   /** The job that upscaled its clip, if the video has been upscaled. */
   upscalePromptId?: string;
+  /**
+   * The pictures this scene renders from instead of the video's, once someone
+   * gives it its own: someone who appears only here, a place, a prop. Absent
+   * means the video's, so a change to those still reaches it.
+   */
+  references?: SceneReference[];
+}
+
+/** One of a scene's own pictures, as ComfyUI's input directory names it. */
+export interface SceneReference {
+  image: string;
+  keep: string;
+}
+
+/** The pictures every scene renders from unless it has its own. */
+export function videoReferences(project: MusicVideoProject): SceneReference[] {
+  return referencesIn(project.values, MUSIC_VIDEO_PICTURES);
+}
+
+/**
+ * Whether the video's look is still true of a scene's pictures.
+ *
+ * The look is written from the video's pictures and names them by slot —
+ * "the man in <Picture 1>" — so it holds for a scene whose own pictures
+ * still start with the video's, in the same slots and keeping the same
+ * things, whatever is added after them. Swap or drop one and the look would
+ * describe a picture the scene does not have, so that scene's director is
+ * left to describe its own.
+ */
+export function keepsVideoLook(project: MusicVideoProject, scene: ProjectScene): boolean {
+  if (!scene.references) return true;
+  return videoReferences(project).every(
+    (reference, index) =>
+      scene.references?.[index]?.image === reference.image &&
+      scene.references[index].keep === reference.keep,
+  );
 }
 
 /**
@@ -301,7 +343,7 @@ export function readShots(briefs: Record<string, string>, count: number): string
  * Starts from the form's own values — every one of them scoped to the scenes
  * shares its id with the scene workflow's control, so it lands on the right
  * one — and sets what is the scene's own: its stretch of the song, locked in;
- * its length; its shot; its seed.
+ * its length; its shot; its seed; its pictures, where it has its own.
  *
  * The prompt carries the whole video's idea as well as the scene, marked as
  * background, so each scene's director knows what it is a part of without
@@ -327,13 +369,14 @@ export function sceneValues(
 
   const seed = Number(project.values.seed ?? -1);
   const idea = String(project.values.prompt ?? "").trim();
-  const look = project.look?.trim() ?? "";
+  const look = keepsVideoLook(project, scene) ? (project.look?.trim() ?? "") : "";
   const lookNote = look
     ? `\n\n(How they look, in this scene and every other one in the video: ${look} — use these words as the observed detail in each subject's definition, and describe them no other way. They outrank anything below about anyone's appearance or how the video is rendered.)`
     : "";
   const shot = `${scene.shot}${lookNote}`;
   return {
     ...values,
+    ...(scene.references ? referenceValues(scene.references, MUSIC_VIDEO_PICTURES) : {}),
     reference_audio: project.song,
     reference_track_seconds: project.songSeconds,
     reference_track_lock: true,

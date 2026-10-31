@@ -29,6 +29,7 @@ import {
   shotRequest,
   type MusicVideoProject,
   type ProjectScene,
+  type SceneReference,
 } from "@/lib/music-video/project";
 import {
   CAST_BRIEF,
@@ -88,6 +89,19 @@ export interface MusicVideoController {
   /** Write one scene's shot again from its outline line. */
   rewriteShot: (index: number) => Promise<void>;
   editLook: (look: string) => void;
+  /**
+   * Give a scene pictures of its own, or with none, put it back on the
+   * video's. Read when the scene is next sent, like every other edit. Takes
+   * an update of the scene's current pictures as well, for edits that can
+   * land together: two pictures found missing on the box in one render.
+   */
+  editReferences: (
+    index: number,
+    references:
+      | SceneReference[]
+      | undefined
+      | ((current: SceneReference[] | undefined) => SceneReference[] | undefined),
+  ) => void;
   /** Queue every scene that has no job, or whose job failed. */
   renderAll: () => Promise<void>;
   /** The finished video, once the stitch has run. */
@@ -607,6 +621,24 @@ export function useMusicVideo({
     setProject((previous) => (previous ? { ...previous, look } : previous));
   }, []);
 
+  const editReferences = useCallback<MusicVideoController["editReferences"]>((index, references) => {
+    setProject((previous) =>
+      previous
+        ? {
+            ...previous,
+            scenes: previous.scenes.map((scene, i) =>
+              i === index
+                ? {
+                    ...scene,
+                    references: typeof references === "function" ? references(scene.references) : references,
+                  }
+                : scene,
+            ),
+          }
+        : previous,
+    );
+  }, []);
+
   /** Which form ids every scene run inherits — the ones scoped to scenes. */
   const scoped = useMemo(
     () => (workflow?.params ?? []).filter((param) => param.scope === "scenes").map((param) => param.id),
@@ -963,6 +995,7 @@ export function useMusicVideo({
     editOutline,
     rewriteShot,
     editLook,
+    editReferences,
     renderAll,
     redo,
     takesFor,
