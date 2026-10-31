@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AudioUpload } from "@/components/ui/audio-upload";
 import { Button } from "@/components/ui/button";
@@ -183,22 +184,7 @@ export function Disclosure({
       aria-expanded={open}
       onClick={onToggle}
       icon={
-        <svg
-          viewBox="0 0 16 16"
-          className={`size-3 shrink-0 transition-transform duration-200 ${
-            open ? "rotate-90" : ""
-          }`}
-          aria-hidden="true"
-        >
-          <path
-            d="M6 4l4 4-4 4"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-        </svg>
+        <ChevronRight className={`size-3 shrink-0 transition-transform duration-200 ${open ? "rotate-90" : ""}`} strokeWidth={1.75} aria-hidden="true" />
       }
     >
       {children}

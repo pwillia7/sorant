@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 
 /**
@@ -78,14 +79,7 @@ export function Modal({
             className="-mr-1 grid size-8 shrink-0 place-items-center rounded-md
               text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
           >
-            <svg viewBox="0 0 16 16" className="size-4" fill="none" aria-hidden="true">
-              <path
-                d="M4 4l8 8M12 4l-8 8"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <X className="size-4" strokeWidth={1.75} aria-hidden="true" />
           </button>
         </header>
 

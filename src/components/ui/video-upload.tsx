@@ -1,5 +1,6 @@
 "use client";
 
+import { Film } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button, Spinner } from "@/components/ui/button";
 import { CameraIcon } from "@/components/ui/camera-capture";
@@ -512,28 +513,7 @@ export function VideoUpload({
                   </>
                 ) : (
                   <>
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="size-7 text-fg-subtle"
-                      fill="none"
-                      aria-hidden="true"
-                    >
-                      <rect
-                        x="2.5"
-                        y="5.5"
-                        width="19"
-                        height="13"
-                        rx="2"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
-                      />
-                      <path
-                        d="M10 9.5l4.5 2.5L10 14.5v-5Z"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+                    <Film className="size-7 text-fg-subtle" strokeWidth={1.5} aria-hidden="true" />
                     <span className="text-[13px] font-medium text-fg">
                       Drop a video or click to choose
                     </span>

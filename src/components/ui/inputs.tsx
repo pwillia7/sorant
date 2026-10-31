@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import type { ChangeEvent } from "react";
 
 export const CONTROL_BASE = `w-full bg-bg-subtle border border-border-default rounded-md
@@ -181,20 +182,7 @@ export function Select({
           ),
         )}
       </select>
-      <svg
-        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-fg-subtle"
-        viewBox="0 0 16 16"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M4 6l4 4 4-4"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-fg-subtle" strokeWidth={1.75} aria-hidden="true" />
     </div>
   );
 }

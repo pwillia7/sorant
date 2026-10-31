@@ -1,5 +1,6 @@
 "use client";
 
+import { Music } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button, Spinner } from "@/components/ui/button";
 import { ApiError, withToken } from "@/lib/client";
@@ -278,37 +279,7 @@ export function AudioUpload({
                 </>
               ) : (
                 <>
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="size-7 text-fg-subtle"
-                    fill="none"
-                    aria-hidden="true"
-                  >
-                    {/* A quaver: the stem, its flag, and the notehead. */}
-                    <path
-                      d="M9.5 17V5.5l8-1.5V15"
-                      stroke="currentColor"
-                      strokeWidth="1.3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <ellipse
-                      cx="7.25"
-                      cy="17"
-                      rx="2.25"
-                      ry="2"
-                      stroke="currentColor"
-                      strokeWidth="1.3"
-                    />
-                    <ellipse
-                      cx="15.25"
-                      cy="15"
-                      rx="2.25"
-                      ry="2"
-                      stroke="currentColor"
-                      strokeWidth="1.3"
-                    />
-                  </svg>
+                  <Music className="size-7 text-fg-subtle" strokeWidth={1.5} aria-hidden="true" />
                   <span className="text-[13px] font-medium text-fg">
                     Drop a {noun} or click to choose
                   </span>

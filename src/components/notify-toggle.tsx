@@ -1,5 +1,6 @@
 "use client";
 
+import { Bell, BellOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   notificationsEnabled,
@@ -70,41 +71,9 @@ export function NotifyToggle() {
         }`}
     >
       {enabled ? (
-        <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-          <path
-            d="M4 6.5a4 4 0 0 1 8 0c0 2.5.6 3.6 1.1 4.2.3.3.1.8-.3.8H3.2c-.4 0-.6-.5-.3-.8C3.4 10.1 4 9 4 6.5Z"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M6.5 13a1.6 1.6 0 0 0 3 0"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinecap="round"
-          />
-        </svg>
+        <Bell className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
       ) : (
-        <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-          <path
-            d="M4 6.5a4 4 0 0 1 8 0c0 2.5.6 3.6 1.1 4.2.3.3.1.8-.3.8H3.2c-.4 0-.6-.5-.3-.8C3.4 10.1 4 9 4 6.5Z"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M6.5 13a1.6 1.6 0 0 0 3 0"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinecap="round"
-          />
-          <path
-            d="M2.5 2.5l11 11"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinecap="round"
-          />
-        </svg>
+        <BellOff className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
       )}
     </button>
   );

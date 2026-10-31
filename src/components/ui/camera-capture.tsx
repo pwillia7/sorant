@@ -1,5 +1,6 @@
 "use client";
 
+import { Camera } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Spinner } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -7,20 +8,7 @@ import { Modal } from "@/components/ui/modal";
 /** Shared by the buttons that open the capture modal. */
 export function CameraIcon({ className = "size-3.5" }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      className={`shrink-0 ${className}`}
-    >
-      <path
-        d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2a1 1 0 0 0 .83-.45l.73-1.1A1 1 0 0 1 9.1 5h5.8a1 1 0 0 1 .84.45l.73 1.1a1 1 0 0 0 .83.45h2.2A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-9Z"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-      />
-      <circle cx="12" cy="12.4" r="3.2" stroke="currentColor" strokeWidth="1.3" />
-    </svg>
+    <Camera className={`shrink-0 ${className}`} strokeWidth={1.5} aria-hidden="true" />
   );
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { SlidersHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Control } from "@/components/param-form";
 import { Button, Spinner } from "@/components/ui/button";
@@ -293,16 +294,7 @@ export function ImageEditBar({
           onClick={() => setSettingsOpen(true)}
           className="relative"
         >
-          <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-            <path
-              d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-            <circle cx="10" cy="4.5" r="1.5" stroke="currentColor" strokeWidth="1.5" />
-            <circle cx="6" cy="11.5" r="1.5" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
+          <SlidersHorizontal className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
           {tuned ? (
             <span
               className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-accent"

@@ -1,17 +1,6 @@
 "use client";
 
-import {
-  Disc3,
-  Download,
-  FastForward,
-  Film,
-  ImagePlay,
-  RotateCcw,
-  Scaling,
-  Shuffle,
-  SlidersHorizontal,
-  Sprout,
-} from "lucide-react";
+import { Disc3, Download, FastForward, Film, ImagePlay, RotateCcw, Scaling, Shuffle, SlidersHorizontal, Sprout } from "lucide-react";
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { Badge, Dot } from "@/components/ui/panel";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -159,28 +148,7 @@ function Frame({
 function Empty() {
   return (
     <Frame dashed>
-      <svg
-        viewBox="0 0 24 24"
-        className="size-8 text-fg-subtle"
-        fill="none"
-        aria-hidden="true"
-      >
-        <rect
-          x="2.5"
-          y="5.5"
-          width="19"
-          height="13"
-          rx="2"
-          stroke="currentColor"
-          strokeWidth="1.3"
-        />
-        <path
-          d="M10 9.5l4.5 2.5L10 14.5v-5Z"
-          stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <Film className="size-8 text-fg-subtle" strokeWidth={1.5} aria-hidden="true" />
       <div>
         <p className="text-sm font-medium text-fg">Nothing generated yet</p>
         <p className="mx-auto mt-1 max-w-xs text-[13px] leading-relaxed text-fg-subtle">

@@ -1,5 +1,6 @@
 "use client";
 
+import { ImagePlus, WandSparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Spinner } from "@/components/ui/button";
 import {
@@ -89,14 +90,7 @@ async function prepareForUpload(file: File): Promise<Prepared> {
 
 function WandIcon() {
   return (
-    <svg viewBox="0 0 16 16" className="size-3.5" fill="none" aria-hidden="true">
-      <path
-        d="M2.5 13.5l7-7M9.5 3v2M8.5 4h2M12.5 6.5v1.5M11.75 7.25h1.5M12 1.5v1M11.5 2h1"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
-    </svg>
+    <WandSparkles className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
   );
 }
 
@@ -453,30 +447,7 @@ export function ImageUpload({
                 </>
               ) : (
                 <>
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="size-7 text-fg-subtle"
-                    fill="none"
-                    aria-hidden="true"
-                  >
-                    <rect
-                      x="3"
-                      y="4"
-                      width="18"
-                      height="16"
-                      rx="2"
-                      stroke="currentColor"
-                      strokeWidth="1.3"
-                    />
-                    <circle cx="8.5" cy="9.5" r="1.6" stroke="currentColor" strokeWidth="1.3" />
-                    <path
-                      d="M4 17l5-4.5 4 3.5 3-2.5 4 3.5"
-                      stroke="currentColor"
-                      strokeWidth="1.3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <ImagePlus className="size-7 text-fg-subtle" strokeWidth={1.5} aria-hidden="true" />
                   <span className="text-[13px] font-medium text-fg">
                     Drop an image or click to choose
                   </span>
