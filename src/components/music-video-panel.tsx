@@ -35,7 +35,7 @@ import { Badge, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
 import { AudioUpload } from "./ui/audio-upload";
 import { ImageUpload } from "./ui/image-upload";
-import { NumberInput, Select, TextArea, TextInput, Toggle } from "./ui/inputs";
+import { NumberInput, Segmented, Select, TextArea, TextInput, Toggle } from "./ui/inputs";
 
 /**
  * The music video's own stage: the scene list, each scene's take as it
@@ -328,74 +328,37 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                     </span>
                   ) : (
                     <>
-                    <div
-                      role="radiogroup"
-                      aria-label="Upscale size"
-                      className="flex rounded-md border border-border-default bg-bg p-0.5"
-                    >
-                      {MUSIC_VIDEO_UPSCALE_SIZES.map(({ px }) => {
-                        const selected = px === upscaleSize;
-                        const useful = enlarges(px);
-                        return (
-                          <button
-                            key={px}
-                            type="button"
-                            role="radio"
-                            aria-checked={selected}
-                            disabled={!useful}
-                            title={
-                              useful
-                                ? undefined
-                                : `The scenes are already ${smallestSide} px on their shorter side`
-                            }
-                            onClick={() => setChosenSize(px)}
-                            className={`rounded px-3 py-1 text-[12px] font-medium transition-colors duration-150
-                              disabled:cursor-not-allowed disabled:opacity-40
-                              ${
-                                selected
-                                  ? "bg-accent-subtle text-fg"
-                                  : "text-fg-subtle enabled:hover:text-fg"
-                              }`}
-                          >
+                    <Segmented
+                      label="Upscale size"
+                      value={upscaleSize}
+                      onChange={setChosenSize}
+                      options={MUSIC_VIDEO_UPSCALE_SIZES.map(({ px }) => ({
+                        value: px,
+                        disabled: !enlarges(px),
+                        title: enlarges(px)
+                          ? undefined
+                          : `The scenes are already ${smallestSide} px on their shorter side`,
+                        label: (
+                          <>
                             {px === 2160 ? "4K" : `${px} px`}
-                            <span className="ml-1.5 font-normal text-fg-subtle">
-                              ~{upscaleTime(px)}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div
-                      role="radiogroup"
-                      aria-label="Upscale frame rate"
-                      className="flex rounded-md border border-border-default bg-bg p-0.5"
-                    >
-                      {MUSIC_VIDEO_FRAME_RATES.map(({ multiplier, label }) => {
-                        const selected = multiplier === upscaleRate;
-                        return (
-                          <button
-                            key={multiplier}
-                            type="button"
-                            role="radio"
-                            aria-checked={selected}
-                            title={
-                              multiplier > 1
-                                ? "Makes a new frame between every pair with RIFE, for smoother motion. The song is unchanged."
-                                : "Keeps H3's own frames."
-                            }
-                            onClick={() => setChosenRate(multiplier)}
-                            className={`rounded px-3 py-1 text-[12px] font-medium transition-colors duration-150
-                              ${
-                                selected
-                                  ? "bg-accent-subtle text-fg"
-                                  : "text-fg-subtle hover:text-fg"
-                              }`}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                    </div>
+                            <span className="ml-1.5 font-normal text-fg-subtle">~{upscaleTime(px)}</span>
+                          </>
+                        ),
+                      }))}
+                    />
+                    <Segmented
+                      label="Upscale frame rate"
+                      value={upscaleRate}
+                      onChange={setChosenRate}
+                      options={MUSIC_VIDEO_FRAME_RATES.map(({ multiplier, label }) => ({
+                        value: multiplier,
+                        label,
+                        title:
+                          multiplier > 1
+                            ? "Makes a new frame between every pair with RIFE, for smoother motion. The song is unchanged."
+                            : "Keeps H3's own frames.",
+                      }))}
+                    />
                     </>
                   )}
                 </div>

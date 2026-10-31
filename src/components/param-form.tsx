@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Dices, Pin } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AudioUpload } from "@/components/ui/audio-upload";
 import { Button } from "@/components/ui/button";
@@ -500,6 +500,10 @@ export function Control({
     case "seed": {
       const current = Number(value ?? param.default);
       const isRandom = current < 0;
+      // A real seed rather than 0 when one is fixed: 0 is as arbitrary as any
+      // other, and pinning to it on every click made "fixed" mean "the same
+      // number everyone gets".
+      const roll = () => Math.floor(Math.random() * 2 ** 32);
       return (
         <Field
           id={id}
@@ -513,30 +517,51 @@ export function Control({
               variant="quiet"
               size="xs"
               disabled={readOnly}
-              onClick={() => onChange(param.id, isRandom ? 0 : -1)}
+              icon={
+                isRandom ? (
+                  <Pin className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+                ) : (
+                  <Dices className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+                )
+              }
+              onClick={() => onChange(param.id, isRandom ? roll() : -1)}
             >
-              {isRandom ? "Set manually" : "Randomise"}
+              {isRandom ? "Fix a seed" : "Random each run"}
             </Button>
           }
         >
           {isRandom ? (
             <div
-              className="flex h-10 items-center rounded-md border border-dashed
-                border-border-strong bg-bg-subtle px-3 font-mono text-[13px] text-fg-subtle"
+              className="flex h-10 items-center gap-2 rounded-md border border-dashed
+                border-border-strong bg-bg-subtle px-3 text-[13px] text-fg-muted"
             >
-              random each run
+              <Dices className="size-4 text-fg-subtle" strokeWidth={1.75} aria-hidden="true" />
+              A new seed each run
             </div>
           ) : (
-            <NumberInput
-              id={id}
-              value={current}
-              min={0}
-              max={Number.MAX_SAFE_INTEGER}
-              step={1}
-              onChange={(next) => onChange(param.id, next)}
-              disabled={readOnly}
-              describedBy={describedBy}
-            />
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <NumberInput
+                  id={id}
+                  value={current}
+                  min={0}
+                  max={Number.MAX_SAFE_INTEGER}
+                  step={1}
+                  onChange={(next) => onChange(param.id, next)}
+                  disabled={readOnly}
+                  describedBy={describedBy}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                size="icon-md"
+                disabled={readOnly}
+                onClick={() => onChange(param.id, roll())}
+                title="Roll another fixed seed"
+                aria-label="Roll another fixed seed"
+                icon={<Dices className="size-4" strokeWidth={1.75} aria-hidden="true" />}
+              />
+            </div>
           )}
         </Field>
       );

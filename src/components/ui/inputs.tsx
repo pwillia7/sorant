@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import type { ChangeEvent } from "react";
+import { useRef, type ChangeEvent, type ReactNode } from "react";
 
 export const CONTROL_BASE = `w-full bg-bg-subtle border border-border-default rounded-md
   text-fg placeholder:text-fg-subtle transition-colors duration-150
@@ -297,5 +297,85 @@ export function Toggle({
           ${checked ? "translate-x-6" : "translate-x-1"}`}
       />
     </button>
+  );
+}
+
+/**
+ * A few mutually exclusive choices side by side: Speed, an upscale's size and
+ * frame rate. One component so they cannot drift apart, with a radio group's
+ * keyboard handling — Tab reaches the chosen one, the arrow keys move the
+ * choice — which each copy of it lacked.
+ */
+export function Segmented<T extends string | number | boolean>({
+  value,
+  onChange,
+  options,
+  label,
+  labelledBy,
+  describedBy,
+  className = "",
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: Array<{ value: T; label: ReactNode; title?: string; disabled?: boolean }>;
+  /** The group's name, where nothing on screen labels it. */
+  label?: string;
+  labelledBy?: string;
+  describedBy?: string;
+  className?: string;
+}) {
+  const buttons = useRef<Array<HTMLButtonElement | null>>([]);
+  // Focus goes with the choice, as in any radio group: left on the button
+  // just unchosen, the next arrow press would count from the wrong place.
+  const move = (from: number, step: number) => {
+    for (let i = 1; i <= options.length; i += 1) {
+      const at = (((from + step * i) % options.length) + options.length) % options.length;
+      if (options[at].disabled) continue;
+      onChange(options[at].value);
+      buttons.current[at]?.focus();
+      return;
+    }
+  };
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      aria-labelledby={labelledBy}
+      aria-describedby={describedBy}
+      className={`flex rounded-md border border-border-default bg-bg p-0.5 ${className}`}
+    >
+      {options.map((option, index) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={String(option.value)}
+            ref={(element) => {
+              buttons.current[index] = element;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            tabIndex={selected ? 0 : -1}
+            disabled={option.disabled}
+            title={option.title}
+            onClick={() => onChange(option.value)}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+                event.preventDefault();
+                move(index, 1);
+              } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+                event.preventDefault();
+                move(index, -1);
+              }
+            }}
+            className={`rounded px-3 py-1 text-[12px] font-medium transition-colors duration-150
+              disabled:cursor-not-allowed disabled:opacity-40
+              ${selected ? "bg-accent-subtle text-fg" : "text-fg-subtle enabled:hover:text-fg"}`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/inputs";
 import { Dot } from "@/components/ui/panel";
 import { withToken } from "@/lib/client";
 import {
@@ -22,10 +23,11 @@ import {
   isFavorite,
   historyEntries,
   partitionFavorites,
+  type HistoryEntry,
   type Job,
   type MusicVideoGroup,
 } from "@/lib/jobs";
-import { ChevronRight, Pause, Play, RotateCcw, RotateCw, Trash2, X } from "lucide-react";
+import { ChevronRight, LayoutGrid, List, Pause, Play, RotateCcw, RotateCw, Star, Trash2, X } from "lucide-react";
 import { Poster } from "@/components/ui/poster";
 import { StarIcon } from "@/components/ui/star-icon";
 
@@ -61,6 +63,7 @@ type Pending = { day: string; action: "download" | "delete" } | null;
  * sits above. It cannot collide with one: those are `YYYY-MM-DD`.
  */
 const FAVORITES_KEY = "favorites";
+const VIEW_KEY = "sorant-history-view";
 
 /**
  * Past and in-flight generations for this device, grouped by the day they were
@@ -126,6 +129,26 @@ export function GenerationsPanel({
   const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>(
     {},
   );
+  /**
+   * List or grid. The list carries everything — lineage, retry, rerun, a
+   * music video's parts — and the grid only the pictures, for finding one by
+   * eye. Kept per browser.
+   */
+  const [view, setView] = useState<"list" | "grid">(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === "grid" ? "grid" : "list";
+    } catch {
+      return "list";
+    }
+  });
+  const chooseView = (next: "list" | "grid") => {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      // Storage blocked: the choice lasts this visit.
+    }
+  };
   const [pending, setPending] = useState<Pending>(null);
 
   /**
@@ -237,6 +260,34 @@ export function GenerationsPanel({
 
   return (
     <div className="flex flex-col gap-2">
+      {jobs.length > 0 ? (
+        <Segmented
+          label="History view"
+          className="self-end"
+          value={view}
+          onChange={chooseView}
+          options={[
+            {
+              value: "list",
+              title: "List",
+              label: (
+                <span className="flex items-center gap-1.5">
+                  <List className="size-3.5" strokeWidth={1.75} aria-hidden="true" /> List
+                </span>
+              ),
+            },
+            {
+              value: "grid",
+              title: "Grid",
+              label: (
+                <span className="flex items-center gap-1.5">
+                  <LayoutGrid className="size-3.5" strokeWidth={1.75} aria-hidden="true" /> Grid
+                </span>
+              ),
+            },
+          ]}
+        />
+      ) : null}
       <div className="flex flex-col gap-3">
         {groups.map((group, index) => {
           // Favourites and the newest day both open by default: the section is
@@ -337,7 +388,15 @@ export function GenerationsPanel({
                 )}
               </header>
 
-              {open ? (
+              {open && view === "grid" ? (
+                <ul className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">
+                  {historyEntries(group.jobs).map((entry) => (
+                    <li key={entry.kind === "job" ? entry.job.promptId : `mv-${entry.group.projectId}`}>
+                      <GridTile entry={entry} selectedId={selectedId} onSelect={onSelect} inUse={inUse} />
+                    </li>
+                  ))}
+                </ul>
+              ) : open ? (
                 <ul className="flex flex-col gap-1.5">
                   {historyEntries(group.jobs).map((entry) =>
                     entry.kind === "music-video" ? (
@@ -869,5 +928,74 @@ function MusicVideoEntry({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * One history entry as a picture in the grid: a result's frame, or a planned
+ * video's first scenes side by side. Selecting it is all a tile does; the
+ * list is where the rest of a row's buttons are.
+ */
+function GridTile({
+  entry,
+  selectedId,
+  onSelect,
+  inUse,
+}: {
+  entry: HistoryEntry;
+  selectedId: string | null;
+  onSelect: (promptId: string) => void;
+  inUse?: ReadonlySet<string>;
+}) {
+  if (entry.kind === "music-video") {
+    const { group } = entry;
+    const pick = (slot: Job[]) => slot.find((job) => inUse?.has(job.promptId)) ?? slot[0];
+    // The finished video where there is one, else its first scene.
+    const joined = [...group.parts["upscaled-join"], ...group.parts.join]
+      .map(pick)
+      .find((job) => job.phase === "done");
+    const scenes = group.parts.scene.map(pick);
+    const target = joined ?? scenes[0] ?? group.jobs[0];
+    const selected = group.jobs.some((job) => job.promptId === selectedId);
+    return (
+      <button
+        type="button"
+        onClick={() => onSelect(target.promptId)}
+        aria-current={selected || undefined}
+        title={`${group.label}: ${group.title}`}
+        className={`group flex w-full flex-col gap-1 rounded-lg p-1 text-left transition-colors
+          ${selected ? "bg-accent-subtle/40 ring-2 ring-accent" : "hover:bg-surface-hover"}`}
+      >
+        <span className="grid aspect-video w-full grid-cols-3 gap-px overflow-hidden rounded-md">
+          {(scenes.length > 0 ? scenes.slice(0, 3) : [target]).map((job) => (
+            <Poster key={job.promptId} job={job} badge={false} className="size-full rounded-none border-0" />
+          ))}
+        </span>
+        <span className="truncate px-0.5 text-[11px] text-fg-muted">
+          {group.label} · {group.title}
+        </span>
+      </button>
+    );
+  }
+  const { job } = entry;
+  const selected = job.promptId === selectedId;
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(job.promptId)}
+      aria-current={selected || undefined}
+      title={job.prompt.trim() || job.workflowName}
+      className={`group relative flex w-full flex-col gap-1 rounded-lg p-1 text-left transition-colors
+        ${selected ? "bg-accent-subtle/40 ring-2 ring-accent" : "hover:bg-surface-hover"}`}
+    >
+      <Poster job={job} className="aspect-video w-full" />
+      <span className="flex items-center gap-1.5 px-0.5 text-[11px] text-fg-muted">
+        <Dot tone={PHASE_TONE[job.phase]} pulse={isActive(job)} />
+        <span className="min-w-0 truncate">{job.prompt.trim() || job.workflowName}</span>
+        {isFavorite(job) ? (
+          <Star className="ml-auto size-3 shrink-0 fill-current text-accent" strokeWidth={1.75} aria-label="Favorite" />
+        ) : null}
+      </span>
+    </button>
   );
 }

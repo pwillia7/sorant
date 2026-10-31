@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 type Variant = "primary" | "secondary" | "quiet" | "quiet-danger" | "danger";
-type Size = "xs" | "sm" | "md" | "lg" | "icon-sm";
+type Size = "xs" | "sm" | "md" | "lg" | "icon-sm" | "icon-md";
 
 /**
  * Four weights, and the gap between them is what makes a screen readable: one
@@ -48,6 +48,8 @@ const SIZES: Record<Size, string> = {
   lg: "h-12 px-5 text-[15px] rounded-lg gap-2",
   // `sm`'s height, square, for a button whose label is only for screen readers.
   "icon-sm": "size-7 text-[12px] rounded-md",
+  // `md`'s height, square: beside an input, which is that tall.
+  "icon-md": "size-10 shrink-0 text-sm rounded-md",
 };
 
 /**

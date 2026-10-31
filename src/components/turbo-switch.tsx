@@ -1,6 +1,6 @@
 "use client";
 
-import { Slider } from "@/components/ui/inputs";
+import { Segmented, Slider } from "@/components/ui/inputs";
 import type { ClientTurbo } from "@/lib/workflows/turbo";
 
 /**
@@ -52,36 +52,17 @@ export function TurboSwitch({
           Speed
         </span>
 
-        <div
-          role="radiogroup"
-          aria-labelledby="turbo-switch-label"
-          aria-describedby="turbo-switch-help"
-          className="ml-auto flex rounded-md border border-border-default bg-bg p-0.5"
-        >
-          {[
+        <Segmented
+          labelledBy="turbo-switch-label"
+          describedBy="turbo-switch-help"
+          className="ml-auto"
+          value={on}
+          onChange={onChange}
+          options={[
             { label: "Standard", value: false },
             { label: "Turbo", value: true },
-          ].map((option) => {
-            const selected = option.value === on;
-            return (
-              <button
-                key={option.label}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                onClick={() => onChange(option.value)}
-                className={`rounded px-3 py-1 text-[12px] font-medium transition-colors duration-150
-                  ${
-                    selected
-                      ? "bg-accent-subtle text-fg"
-                      : "text-fg-subtle hover:text-fg"
-                  }`}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
+          ]}
+        />
       </div>
 
       <p
