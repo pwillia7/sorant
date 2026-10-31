@@ -36,7 +36,8 @@ soundtrack:
 - **Extend** — carries a clip on from where it stopped.
 - **Music video** — a whole song and one idea: the song is cut into scenes on
   its beats, each scene is planned and rendered with the song under it, and
-  the scenes are joined.
+  the scenes are joined. Any scene can be given pictures of its own after
+  the plan, for someone or something that appears only there.
 
 And **Text to Image**, an H3 still from a prompt.
 

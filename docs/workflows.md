@@ -259,6 +259,14 @@ drift. What holds them together is the plan.
    alone is plain text with nothing to parse. Each scene's outline line can be
    edited in the panel and just that shot rewritten.
 4. **The scenes** render as Reference to Video runs, the song under each one.
+   A scene renders from the video's pictures unless it is given its own under
+   **Pictures** — someone who appears only there, a place, a prop. Its own
+   start as a copy of the video's; while they still start with the video's,
+   in the same slots and keeping the same things, the cast description is
+   handed to it as to every scene, and once one is swapped or dropped it is
+   left out, since it names the pictures by slot (`keepsVideoLook` in
+   `project.ts`). The shot writer does not see a scene's own pictures, so a new
+   one is named in the shot by number.
    Redo keeps every take, and the take used is picked under the scene. Scenes
    whose runs were lost track of — a ComfyUI restart, a dropped connection —
    can be found again on the machine by their file order and length
