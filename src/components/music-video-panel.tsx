@@ -735,6 +735,7 @@ function ScenePictures({
                     <ImageUpload
                       id={id}
                       label={`Scene ${index + 1}, picture ${slot + 1}`}
+                      compact={slot > 0}
                       value={reference?.image ?? ""}
                       disabled={disabled}
                       onChange={(image) =>

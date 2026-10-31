@@ -418,6 +418,7 @@ export function Control({
           <ImageUpload
             id={id}
             label={param.label}
+            compact={param.compact}
             value={String(value ?? "")}
             onChange={(next) => onChange(param.id, next)}
             disabled={readOnly}

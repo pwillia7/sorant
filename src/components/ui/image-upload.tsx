@@ -118,10 +118,13 @@ export function ImageUpload({
   onChange,
   disabled,
   describedBy,
+  compact = false,
 }: {
   id: string;
   /** The param's own label, echoed in the camera modal's header. */
   label?: string;
+  /** See `ImageParam.compact`. */
+  compact?: boolean;
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
@@ -157,6 +160,8 @@ export function ImageUpload({
    */
   const [versions, setVersions] = useState<string[]>(value ? [value] : []);
   const [editOpen, setEditOpen] = useState(false);
+  /** Opened by asking, when compact. See the audio control, which does the same. */
+  const [expanded, setExpanded] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   /** Held down on Compare: the original is showing in place of the edit. */
   const [comparing, setComparing] = useState(false);
@@ -238,6 +243,35 @@ export function ImageUpload({
         onChange={(event) => pick(event.target.files)}
       />
 
+      {compact && !previewUrl && !expanded ? (
+        <button
+          type="button"
+          disabled={disabled || uploading}
+          onClick={() => setExpanded(true)}
+          onDragOver={(event) => {
+            event.preventDefault();
+            if (!disabled && !uploading) setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            setExpanded(true);
+            if (!disabled && !uploading) pick(event.dataTransfer.files);
+          }}
+          className={`flex w-full items-center gap-2 rounded-lg border border-dashed
+            px-3 py-2.5 text-left text-[13px] transition-colors
+            disabled:pointer-events-none disabled:opacity-50
+            ${
+              dragging
+                ? "border-accent bg-accent-subtle/30 text-fg"
+                : "border-border-strong bg-bg-subtle text-fg-muted hover:border-border-default hover:text-fg"
+            }`}
+        >
+          <ImagePlus className="size-4 text-fg-subtle" strokeWidth={1.75} aria-hidden="true" />
+          <span>{uploading ? "Uploading…" : "Add a picture"}</span>
+        </button>
+      ) : (
       <div
         onDragOver={(event) => {
           event.preventDefault();
@@ -477,6 +511,7 @@ export function ImageUpload({
           </>
         )}
       </div>
+      )}
 
       <CameraCapture
         open={cameraOpen}

@@ -279,6 +279,12 @@ export interface ImageParam extends ParamBase {
   default: "";
   /** Block submission until something is uploaded. */
   required?: boolean;
+  /**
+   * Collapsed to a row until asked for, or until filled — as the clip and
+   * track slots are. For the second picture onwards, where a full drop target
+   * apiece was most of a screen for slots most runs leave empty.
+   */
+  compact?: boolean;
 }
 
 /**

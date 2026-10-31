@@ -1240,6 +1240,9 @@ export function referenceSlot({
         : `Optional. Refer to it as <Picture ${index}>.`,
     group: "References",
     revealedBy: index === 1 ? undefined : imageParamId(index - 1),
+    // The first stays a full drop target: it is what the workflow is built
+    // around. The rest are a row until used.
+    compact: index > 1,
     targets: [{ node, input: "image" }],
   };
 
