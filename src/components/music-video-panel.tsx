@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Images, MessageSquareQuote, Mic, MicVocal, RefreshCw } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import type { MusicVideoController } from "@/hooks/use-music-video";
 import { withToken } from "@/lib/client";
 import type { Job } from "@/lib/jobs";
@@ -219,104 +220,40 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
               const clip = sceneClip(job);
               const busy = job?.phase === "queued" || job?.phase === "running";
               return (
-                <li
-                  key={`${scene.start}-${index}`}
-                  className="rounded-lg border border-border-default p-3"
-                >
-                  <div className="mb-2 flex items-center gap-2 text-[12px] text-fg-muted">
-                    <span className="font-medium text-fg">Scene {index + 1}</span>
-                    <span className="font-mono">
-                      {clock(scene.start)}–{clock(scene.end)}
-                    </span>
-                    {story ? (
-                      <label className="flex items-center gap-1" title="How long this scene runs. The scenes after it move along; a scene already rendered keeps its length until it is redone.">
-                        <span className="sr-only">Scene {index + 1} length</span>
-                        <select
-                          value={Math.round(scene.seconds ?? scene.end - scene.start)}
-                          disabled={busy}
-                          onChange={(event) => video.editLength(index, Number(event.target.value))}
-                          className="rounded border border-border-default bg-bg px-1 py-0.5 text-[12px] text-fg disabled:opacity-50"
-                        >
-                          {STORY_LENGTHS.map((seconds) => (
-                            <option key={seconds} value={seconds}>
-                              {seconds} s
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : (
-                      <span>{(scene.end - scene.start).toFixed(1)} s</span>
-                    )}
-                    {scene.part ? (
-                      <span title="Where the planner thinks this scene falls in the song. It cannot hear the song, so it is a guess from the lyrics and the loudness.">
-                        {scene.part}
-                        {scene.sings ? " · sings" : ""}
-                      </span>
-                    ) : null}
-                    <SceneStatus job={job} />
-                    {job && (job.phase === "done" || ["error", "cancelled", "unknown"].includes(job.phase)) ? (
-                      <Button
-                        variant="quiet"
-                        size="xs"
-                        className="ml-auto"
-                        onClick={() => void video.redo(index)}
-                        title="Render another take on a fresh seed, with the shot as it reads now. The takes you have stay below to pick from."
-                      >
-                        Redo
-                      </Button>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <div className="min-w-0 flex-1">
-                      <TextArea
-                        id={`scene-${index}`}
-                        value={scene.shot}
-                        rows={3}
-                        maxLength={2000}
-                        // Editable except while its take is in the queue: the
-                        // run has already been handed what it said. And while
-                        // the shot is being rewritten, which would replace it.
-                        disabled={busy || Boolean(scene.rewritePromptId)}
-                        onChange={(value) => video.editShot(index, value)}
-                      />
-                      {scene.place || scene.happens ? (
-                        <SceneOutline
-                          index={index}
-                          scene={scene}
-                          disabled={busy}
-                          video={video}
-                        />
-                      ) : null}
-                      <ScenePictures index={index} disabled={busy} video={video} />
-                      {story ? <SceneVoices index={index} disabled={busy} video={video} /> : null}
-                    </div>
-                    {clip ? (
-                      <video
-                        src={withToken(clip.url)}
-                        onLoadedMetadata={(event) => measure(clip.url, event.currentTarget)}
-                        muted
-                        loop
-                        playsInline
-                        controls
-                        preload="metadata"
-                        className="w-full rounded-md border border-border-default bg-black sm:w-48"
-                      />
-                    ) : null}
-                  </div>
-                  <TakePicker
-                    takes={video.takesFor(index)}
-                    using={scene.promptId}
-                    onPick={(promptId) => video.pickTake(index, promptId)}
+                <li key={`${scene.start}-${index}`}>
+                  <SceneCard
+                    index={index}
+                    job={job}
+                    clip={clip}
+                    busy={busy}
+                    story={story}
+                    video={video}
+                    onMeasure={measure}
                   />
-                  {job?.phase === "error" && job.error ? (
-                    <p className="mt-2 text-[12px] leading-relaxed text-danger">{job.error}</p>
-                  ) : null}
                 </li>
               );
             })}
           </ol>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          {/* Pinned to the foot of the stage while the scenes scroll under
+              it, so what to do next is never forty scenes away. */}
+          <div
+            className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-4 flex flex-wrap items-center gap-3 sm:-mx-5 sm:-mb-5
+              rounded-b-xl border-t border-border-default bg-surface/95 px-4 py-3 backdrop-blur-md sm:px-5"
+          >
+            <div
+              role="progressbar"
+              aria-label="Scenes rendered"
+              aria-valuemin={0}
+              aria-valuemax={scenes.length}
+              aria-valuenow={finished}
+              className="h-1 w-full overflow-hidden rounded-full bg-track"
+            >
+              <div
+                className="h-full rounded-full bg-accent transition-[width] duration-300"
+                style={{ width: `${scenes.length ? (finished / scenes.length) * 100 : 0}%` }}
+              />
+            </div>
             {video.lostCount > 0 ? (
               <Button
                 variant="primary"
@@ -640,11 +577,7 @@ function SceneOutline({
   const rewriting = Boolean(scene.rewritePromptId);
   const story = video.project?.kind === "story";
   return (
-    <details className="group mt-2">
-      <summary className="cursor-pointer list-none text-[12px] text-fg-subtle hover:text-fg-muted">
-        <span className="mr-1.5 inline-block transition-transform group-open:rotate-90">›</span>
-        Outline
-      </summary>
+    <div className="flex flex-col gap-2">
       <div className="mt-2 flex flex-col gap-2">
         <label className="text-[12px] text-fg-muted" htmlFor={`scene-${index}-place`}>
           Where
@@ -717,7 +650,7 @@ function SceneOutline({
             : "Off for an instrumental stretch: a mouth moving to words where there is no voice looks wrong. Changes here take effect when the shot is rewritten."}
         </p>
       </div>
-    </details>
+    </div>
   );
 }
 
@@ -748,14 +681,7 @@ function ScenePictures({
     );
   const slots = own ? Math.min(own.length + 1, MUSIC_VIDEO_PICTURES) : 0;
   return (
-    <details className="group mt-2">
-      <summary className="cursor-pointer list-none text-[12px] text-fg-subtle hover:text-fg-muted">
-        <span className="mr-1.5 inline-block transition-transform group-open:rotate-90">›</span>
-        Pictures
-        <span className="ml-1.5">
-          {own ? `· this scene's own (${own.length})` : shared.length > 0 ? "· the video's" : ""}
-        </span>
-      </summary>
+    <div className="flex flex-col gap-2">
       <div className="mt-2 flex flex-col gap-3">
         {own ? (
           <>
@@ -840,7 +766,7 @@ function ScenePictures({
           </div>
         )}
       </div>
-    </details>
+    </div>
   );
 }
 
@@ -871,23 +797,7 @@ function SceneVoices({
   const guessed = openerOf({ ...scene, opener: undefined }, voices);
   const named = (voice: SceneVoice | undefined, fallback: string) => voice?.owner || fallback;
   return (
-    <details className="group mt-2">
-      <summary className="cursor-pointer list-none text-[12px] text-fg-subtle hover:text-fg-muted">
-        <span className="mr-1.5 inline-block transition-transform group-open:rotate-90">›</span>
-        Voices
-        <span className="ml-1.5">
-          {own
-            ? `· this scene's own (${own.length})`
-            : shared.length > 0
-              ? "· the video's"
-              : "· none"}
-        </span>
-        {sceneHasReferences(project, scene) ? null : (
-          <span className="ml-1.5" title="With no pictures and no voices, this scene is made from its words alone.">
-            · Text to Video
-          </span>
-        )}
-      </summary>
+    <div className="flex flex-col gap-2">
       <div className="mt-2 flex flex-col gap-3">
         {own ? (
           <>
@@ -1005,6 +915,217 @@ function SceneVoices({
           </Button>
         </div>
       </div>
-    </details>
+    </div>
+  );
+}
+
+/**
+ * One scene as a storyboard frame: its take on the left (or its number and
+ * time, before there is one), and on the right what it is and what it says,
+ * a tab at a time.
+ *
+ * It used to be a text box with three disclosures stacked under it, which
+ * made forty scenes a long column of text with the pictures off to the side;
+ * a storyboard is what tells you whether the cast and the look hold from one
+ * cut to the next.
+ */
+type SceneTab = "shot" | "outline" | "pictures" | "voices" | "takes";
+
+function SceneCard({
+  index,
+  job,
+  clip,
+  busy,
+  story,
+  video,
+  onMeasure,
+}: {
+  index: number;
+  job: Job | undefined;
+  clip: ReturnType<typeof sceneClip>;
+  busy: boolean;
+  story: boolean;
+  video: MusicVideoController;
+  onMeasure: (url: string, element: HTMLVideoElement) => void;
+}) {
+  const [tab, setTab] = useState<SceneTab>("shot");
+  const project = video.project;
+  const scene = project?.scenes[index];
+  if (!project || !scene) return null;
+  const takes = video.takesFor(index);
+  const tabs: Array<{ id: SceneTab; label: string; icon?: ReactNode }> = [
+    { id: "shot", label: "Shot" },
+    ...(scene.place || scene.happens ? [{ id: "outline" as const, label: "Outline" }] : []),
+    {
+      id: "pictures",
+      label: scene.references ? `Pictures · own (${scene.references.length})` : "Pictures",
+      icon: <Images className="size-3.5" strokeWidth={1.75} aria-hidden="true" />,
+    },
+    ...(story
+      ? [
+          {
+            id: "voices" as const,
+            label: scene.voices ? `Voices · own (${scene.voices.length})` : "Voices",
+            icon: <Mic className="size-3.5" strokeWidth={1.75} aria-hidden="true" />,
+          },
+        ]
+      : []),
+    ...(takes.length > 1 ? [{ id: "takes" as const, label: `Takes · ${takes.length}` }] : []),
+  ];
+  const shown = tabs.some((entry) => entry.id === tab) ? tab : "shot";
+  const finished = job && (job.phase === "done" || ["error", "cancelled", "unknown"].includes(job.phase));
+
+  return (
+    <div className="grid gap-3 rounded-lg border border-border-default p-3 sm:grid-cols-[176px_minmax(0,1fr)]">
+      <div className="flex flex-col gap-1.5">
+        {clip ? (
+          <video
+            src={withToken(clip.url)}
+            onLoadedMetadata={(event) => onMeasure(clip.url, event.currentTarget)}
+            muted
+            loop
+            playsInline
+            controls
+            preload="metadata"
+            className="aspect-video w-full rounded-md border border-border-default bg-black object-contain"
+          />
+        ) : (
+          <div
+            className="grid aspect-video w-full place-items-center rounded-md border border-dashed
+              border-border-strong bg-bg-subtle text-center"
+          >
+            <span className="flex flex-col items-center gap-0.5">
+              <span className="text-[13px] font-medium text-fg">Scene {index + 1}</span>
+              <span className="font-mono text-[11px] text-fg-subtle">
+                {clock(scene.start)}–{clock(scene.end)}
+              </span>
+            </span>
+          </div>
+        )}
+        <span className="flex items-center justify-between font-mono text-[11px] text-fg-subtle">
+          <span>{clip ? `Scene ${index + 1}` : null}</span>
+          <span>{clip ? `${clock(scene.start)}–${clock(scene.end)}` : null}</span>
+        </span>
+      </div>
+
+      <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-fg-muted">
+          <SceneStatus job={job} />
+          {story ? (
+            <label
+              className="flex items-center gap-1"
+              title="How long this scene runs. The scenes after it move along; a scene already rendered keeps its length until it is redone."
+            >
+              <span className="sr-only">Scene {index + 1} length</span>
+              <select
+                value={Math.round(scene.seconds ?? scene.end - scene.start)}
+                disabled={busy}
+                onChange={(event) => video.editLength(index, Number(event.target.value))}
+                className="rounded-md border border-border-default bg-bg px-1.5 py-0.5 text-[12px] text-fg disabled:opacity-50"
+              >
+                {STORY_LENGTHS.map((seconds) => (
+                  <option key={seconds} value={seconds}>
+                    {seconds} s
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <Badge>{(scene.end - scene.start).toFixed(1)} s</Badge>
+          )}
+          {scene.part ? (
+            <Badge>
+              <span title="Where the planner thinks this scene falls in the song. It cannot hear the song, so it is a guess from the lyrics and the loudness.">
+                {scene.part}
+              </span>
+            </Badge>
+          ) : null}
+          {scene.sings ? (
+            <Badge tone="accent">
+              <MicVocal className="size-3" strokeWidth={1.75} aria-hidden="true" /> sings
+            </Badge>
+          ) : null}
+          {story && scene.lines?.trim() ? (
+            <Badge tone="accent">
+              <MessageSquareQuote className="size-3" strokeWidth={1.75} aria-hidden="true" /> lines
+            </Badge>
+          ) : null}
+          {sceneHasReferences(project, scene) ? null : (
+            <Badge>
+              <span title="With no pictures and no voices, this scene is made from its words alone.">
+                Text to Video
+              </span>
+            </Badge>
+          )}
+          {finished ? (
+            <Button
+              variant="quiet"
+              size="xs"
+              className="ml-auto"
+              icon={<RefreshCw className="size-3.5" strokeWidth={1.75} aria-hidden="true" />}
+              onClick={() => void video.redo(index)}
+              title="Render another take on a fresh seed, with the shot as it reads now. The takes you have stay to pick from."
+            >
+              Redo
+            </Button>
+          ) : null}
+        </div>
+
+        <div role="tablist" aria-label={`Scene ${index + 1}`} className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border-default [scrollbar-width:none]">
+          {tabs.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              role="tab"
+              id={`scene-${index}-tab-${entry.id}`}
+              aria-selected={shown === entry.id}
+              aria-controls={`scene-${index}-panel`}
+              onClick={() => setTab(entry.id)}
+              className={`-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 px-2 py-1.5 text-[12px] transition-colors
+                ${
+                  shown === entry.id
+                    ? "border-fg font-medium text-fg"
+                    : "border-transparent text-fg-muted hover:text-fg"
+                }`}
+            >
+              {entry.icon}
+              {entry.label}
+            </button>
+          ))}
+        </div>
+
+        <div id={`scene-${index}-panel`} role="tabpanel" aria-labelledby={`scene-${index}-tab-${shown}`}>
+          {shown === "shot" ? (
+            <TextArea
+              id={`scene-${index}`}
+              value={scene.shot}
+              rows={3}
+              maxLength={2000}
+              // Editable except while its take is in the queue: the run has
+              // already been handed what it said. And while the shot is being
+              // rewritten, which would replace it.
+              disabled={busy || Boolean(scene.rewritePromptId)}
+              onChange={(value) => video.editShot(index, value)}
+            />
+          ) : shown === "outline" ? (
+            <SceneOutline index={index} scene={scene} disabled={busy} video={video} />
+          ) : shown === "pictures" ? (
+            <ScenePictures index={index} disabled={busy} video={video} />
+          ) : shown === "voices" ? (
+            <SceneVoices index={index} disabled={busy} video={video} />
+          ) : (
+            <TakePicker
+              takes={takes}
+              using={scene.promptId}
+              onPick={(promptId) => video.pickTake(index, promptId)}
+            />
+          )}
+        </div>
+
+        {job?.phase === "error" && job.error ? (
+          <p className="text-[12px] leading-relaxed text-danger">{job.error}</p>
+        ) : null}
+      </div>
+    </div>
   );
 }

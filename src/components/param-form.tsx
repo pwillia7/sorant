@@ -30,7 +30,7 @@ const DEFAULT_GROUP = "Settings";
  * its references first, which put the prompt two and a half screens down.
  * Groups not named here keep their declared order, after these.
  */
-const GROUP_ORDER = ["Source", "Image", "Prompt", "Video", "Song", "References", "Voices", "Output"];
+const GROUP_ORDER = ["Source", "Image", "Song", "Prompt", "Video", "References", "Voices", "Output"];
 const groupRank = (group: string) => {
   const at = GROUP_ORDER.indexOf(group);
   return at === -1 ? GROUP_ORDER.length : at;
