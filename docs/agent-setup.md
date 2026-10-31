@@ -199,7 +199,7 @@ All but Nvidia VFX are required: Turbo and SageAttention start switched on, so
 a video run fails without their packs; Spectrum starts off but `check:nodes`
 still asks for its pack, since the switch is offered; and ComfyUI-Login is the
 lock. A pack that genuinely will not install can be worked around by turning
-its switch off in the app's settings panel — say which.
+its switch off under **Quality & speed** in the app's settings — say which.
 
 **Nvidia VFX Nodes is Upscale, and only Upscale.** It needs an NVIDIA RTX card
 (20 series or later) and a CUDA 13 PyTorch (`cu130` in `torch.__version__`).
@@ -562,8 +562,8 @@ they already have a Vercel account they want to use:
    `pnpm models:download --comfy <ComfyUI folder> --extras local-director-27b`
    (or `local-director`, or both). The app offers whichever the machine has,
    the 27B first, and a browser that has not chosen starts on this machine
-   with it. The person can change it from the **Local** / **Gateway** button
-   in the header — *Where is the prompt rewritten?* and *Local model*; the
+   with it. The person can change it from the **Rewrite** button in the
+   header (it reads *Rewrite: this machine* or *Rewrite: Gateway*) — *Where is the prompt rewritten?* and *Local model*; the
    choice is remembered per browser.
 2. **The Vercel AI Gateway — a key.** Hosted models, faster, each with a content
    policy. The person creates a key at
@@ -850,7 +850,7 @@ On the ComfyUI machine:
 | A run fails naming a node class | `pnpm check:nodes` — a pack is missing |
 | Only the **Edit** button fails | One of the FLUX Kontext files; `models:download --workflows image-edit` |
 | Fails at the rewrite, no key | Set up a rewrite — Phase 7. Either a gateway key, or the local director chosen in the app |
-| Fails at the rewrite, no reason | Usually a refusal. Change **Rewrite model** behind the header's Gateway button, or use the local director |
+| Fails at the rewrite, no reason | Usually a refusal. Change **Rewrite model** behind the header's **Rewrite** button, or use the local director |
 | Rewrite refused: model not in the list | The gateway retired it. Redeploy: the build runs `pnpm sync:models`. Never commit the regenerated file in a person's clone — it blocks the next `git pull` |
 | `check:nodes` fails only on models for workflows they did not choose | Run it with `--workflows` and the set from Phase 3 |
 | 12 GB card, Linux: `illegal memory access`, Xid errors in `dmesg`, or a ComfyUI that will not let go of its port | Dynamic VRAM on a small card. Add `--disable-dynamic-vram`; if Xid errors continue, the `comfy-kitchen` CUDA backend is the next suspect. Then leave ComfyUI at its normal VRAM policy with `--reserve-vram 1.5` rather than `--lowvram` |

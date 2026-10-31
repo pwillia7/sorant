@@ -94,7 +94,7 @@ Restart ComfyUI after installing. Three things in that table are easy to miss:
 
 - **Turbo and SageAttention start switched on.** That is how the graphs are
   meant to run, but it means a first video run needs their packs. If one is
-  genuinely unavailable, turn its switch off in the settings panel. Spectrum
+  genuinely unavailable, turn its switch off under **Quality & speed** in the settings. Spectrum
   starts off, so its pack only matters once you turn that switch on.
 - **SageAttention also needs a Python package.** The node patches in a kernel
   rather than shipping one, so install `sageattention` into ComfyUI's own Python
@@ -115,7 +115,7 @@ VFX (or only VideoHelperSuite with SeedVR2). Edit needs none.
 
 Every workflow that generates runs your prompt through a language model first,
 which turns one line into the detailed format MiniMax H3 was trained on. You
-choose where that happens, from the **Gateway** button in the app's header, and
+choose where that happens, from the **Rewrite** button in the app's header, and
 you can switch at any time:
 
 - **On your ComfyUI machine — no account needed.** A model runs through
@@ -131,7 +131,7 @@ you can switch at any time:
   It is the default: a browser that has not chosen starts here whenever the
   machine has a model, the 27B if it has both, and on the gateway when it has
   neither. Change it from *Where is the prompt rewritten?* and *Local model*
-  behind the header's **Local** / **Gateway** button; the choice is remembered
+  behind the header's **Rewrite** button; the choice is remembered
   per browser. The easiest way to start.
 - **On the Vercel AI Gateway — a key.** Hosted models: faster, each with a
   content policy. Create a key at

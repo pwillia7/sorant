@@ -2,7 +2,8 @@
 
 [← Back to the README](../README.md)
 
-The switches in each video workflow's settings panel, and what each one does to
+The switches under **Quality & speed** at the foot of each video workflow's
+settings, and what each one does to
 the graph. You do not need any of this to run the app — it is here for when a
 switch does something you did not expect, or you want to change one.
 
@@ -16,7 +17,7 @@ switch does something you did not expect, or you want to change one.
 
 Every H3 workflow you pick and run directly — the five video ones and Text to
 Image; a music video's scenes take Reference to Video's — offers a **Turbo**
-switch in the settings panel, **on by default**. It splices a
+switch under **Quality & speed** in the settings, **on by default**. It splices a
 `MiniMaxH3TurboLoRA` node between the graph's `UNETLoader` and
 everything that reads it — in practice `BasicScheduler` and `BasicGuider`, both
 of which have to move or the sigmas would be scheduled against the distilled

@@ -245,7 +245,7 @@ takes them one at a time.
 The settings kept are the **resolved** ones — what the server made of the form,
 not what the form held. That distinction is the point: a run submitted with the
 seed on "random" records the number it actually got, which is what makes the
-take reproducible. **Settings** on the stage opens them for whichever generation
+take reproducible. **Use settings** on the stage opens them for whichever generation
 is being viewed, failed ones included, where the first question is usually what
 it was run with.
 
