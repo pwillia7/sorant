@@ -23,6 +23,19 @@ import {
 
 const DEFAULT_GROUP = "Settings";
 
+/**
+ * The order groups are shown in, whatever order a workflow declares them:
+ * the thing the workflow works on, then what to make of it, then what comes
+ * out. A workflow file is ordered by its graph — Reference to Video declared
+ * its references first, which put the prompt two and a half screens down.
+ * Groups not named here keep their declared order, after these.
+ */
+const GROUP_ORDER = ["Source", "Image", "Prompt", "Video", "Song", "References", "Voices", "Output"];
+const groupRank = (group: string) => {
+  const at = GROUP_ORDER.indexOf(group);
+  return at === -1 ? GROUP_ORDER.length : at;
+};
+
 export function ParamForm({
   params,
   values,
@@ -64,7 +77,8 @@ export function ParamForm({
       if (existing) existing.push(param);
       else ordered.set(key, [param]);
     }
-    return [...ordered.entries()];
+    // Stable: groups of one rank keep their declared order.
+    return [...ordered.entries()].sort(([a], [b]) => groupRank(a) - groupRank(b));
   }, [params]);
 
   return (
@@ -91,8 +105,15 @@ export function ParamForm({
             className="flex min-w-0 flex-col gap-4"
             disabled={disabled}
           >
+            {/* No heading over a group that opens on a control of the same
+                name — "Prompt" above "Prompt" says it twice. Still a legend
+                for the fieldset, for screen readers. */}
             <legend
-              className="mb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-fg-subtle"
+              className={
+                visible[0]?.label === group
+                  ? "sr-only"
+                  : "mb-1 text-[12px] font-semibold text-fg-muted"
+              }
             >
               {group}
             </legend>

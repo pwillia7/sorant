@@ -66,6 +66,8 @@ import {
   writeStoredTurbo,
 } from "@/lib/param-storage";
 import { workflowLabel } from "@/lib/workflows/modes";
+import { QualityFold, runSummary } from "./run-bar";
+import { estimateFor } from "./workflow-picker";
 import type { DirectorEngine } from "@/lib/workflows/local-director";
 import { REWRITE_MODEL } from "@/lib/workflows/rewrite-model";
 import {
@@ -1202,6 +1204,33 @@ function Workbench({
   const planning =
     musicVideo.step === "cutting" || musicVideo.step === "planning";
 
+  // The form, split in two: what the run is, and how it is made. See
+  // QualityFold. The rewrite model is chosen for the whole app, in the key's
+  // dialog; see `rewriteModel`.
+  const formParams = (selected?.params ?? []).filter((param) => param.id !== REWRITE_MODEL);
+  const howParams = formParams.filter((param) => param.group === "Sampling");
+  const whatParams = formParams.filter((param) => param.group !== "Sampling");
+  const stepsValue = runValues.steps ?? howParams.find((param) => param.id === "steps")?.default;
+  const qualitySummary = [
+    modesWorkflow?.turbo ? (turboOn ? "Turbo" : "Standard") : null,
+    ...(modesWorkflow?.patches ?? [])
+      .filter((patch) => patchesOn.includes(patch.id))
+      .map((patch) => patch.label),
+    stepsValue !== undefined ? `${stepsValue} steps` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const summary = selected
+    ? runSummary(selected, values, {
+        turbo: Boolean(modesWorkflow?.turbo) && turboOn,
+        // A planned video's time is a scene count times a scene's, unknown
+        // until it is planned.
+        estimate: selected.scenes
+          ? undefined
+          : estimateFor(modesFor ?? selected, turboOn, patchesOn),
+      })
+    : "";
+
   return (
     /* At lg the shell is exactly the viewport and nothing outside a column
        scrolls, so the height is pinned rather than a minimum — a fractional
@@ -1312,10 +1341,7 @@ function Workbench({
               lg:overflow-y-auto lg:overscroll-contain lg:pr-2"
           >
             <Panel className="rise" padded>
-              <PanelHeader
-                title="Workflow"
-                hint="Preconfigured graphs on the ComfyUI instance."
-              />
+              <PanelHeader title="Workflow" />
               <WorkflowPicker
                 workflows={workflows}
                 turbo={turboByWorkflow}
@@ -1341,11 +1367,6 @@ function Workbench({
               >
                 <PanelHeader
                   title="Settings"
-                  hint={workflowLabel(
-                    selected.name,
-                    runModes,
-                    modesWorkflow?.patches ?? selected.patches,
-                  )}
                   action={
                     <div className="flex shrink-0 items-center gap-2">
                       {tips ? (
@@ -1373,37 +1394,6 @@ function Workbench({
                     </div>
                   }
                 />
-                {modesWorkflow?.turbo ? (
-                  <TurboSwitch
-                    turbo={modesWorkflow.turbo}
-                    on={turboOn}
-                    onChange={setTurbo}
-                    strength={strengths[TURBO_STRENGTH]}
-                    onStrengthChange={(value) =>
-                      setStrength(TURBO_STRENGTH, value)
-                    }
-                  />
-                ) : null}
-
-                <ModelOptions
-                  patches={modesWorkflow?.patches ?? []}
-                  on={patchesOn}
-                  values={runValues}
-                  onPatchChange={setPatch}
-                  turbo={modesWorkflow?.turbo}
-                  turboOn={turboOn}
-                  lowVram={lowVram}
-                  onLowVramChange={setLowVram}
-                  strengths={strengths}
-                  onStrengthChange={setStrength}
-                  alternateBase={alternateBase}
-                  onAlternateBaseChange={setAlternateBaseFor}
-                  lora={lora}
-                  onLoraChange={setLoraFor}
-                  tier={tier}
-                  onTierChange={setTierFor}
-                />
-
                 {clipNotice &&
                 selected.clipTarget?.action === clipNotice.action ? (
                   <div
@@ -1436,12 +1426,85 @@ function Workbench({
                   key={selected.id}
                   // The rewrite model is chosen for the whole app, in the
                   // key's dialog; see `rewriteModel`.
-                  params={selected.params.filter((param) => param.id !== REWRITE_MODEL)}
+                  params={whatParams}
                   values={values}
                   onChange={onParamChange}
                   fieldError={fieldError}
                 />
+
+                {modesWorkflow?.turbo || (modesWorkflow?.patches.length ?? 0) > 0 || howParams.length > 0 ? (
+                  <QualityFold summary={qualitySummary}>
+                    {modesWorkflow?.turbo ? (
+                      <TurboSwitch
+                        turbo={modesWorkflow.turbo}
+                        on={turboOn}
+                        onChange={setTurbo}
+                        strength={strengths[TURBO_STRENGTH]}
+                        onStrengthChange={(value) =>
+                          setStrength(TURBO_STRENGTH, value)
+                        }
+                      />
+                    ) : null}
+
+                    <ModelOptions
+                      patches={modesWorkflow?.patches ?? []}
+                      on={patchesOn}
+                      values={runValues}
+                      onPatchChange={setPatch}
+                      turbo={modesWorkflow?.turbo}
+                      turboOn={turboOn}
+                      lowVram={lowVram}
+                      onLowVramChange={setLowVram}
+                      strengths={strengths}
+                      onStrengthChange={setStrength}
+                      alternateBase={alternateBase}
+                      onAlternateBaseChange={setAlternateBaseFor}
+                      lora={lora}
+                      onLoraChange={setLoraFor}
+                      tier={tier}
+                      onTierChange={setTierFor}
+                    />
+
+                    <ParamForm
+                      key={`${selected.id}-how`}
+                      params={howParams}
+                      values={values}
+                      onChange={onParamChange}
+                      fieldError={fieldError}
+                    />
+                  </QualityFold>
+                ) : null}
               </Panel>
+            ) : null}
+
+            {/* Where the form ends, so the button is beside the last thing
+                filled in, with what it is about to run. At lg only; below it,
+                the bar pinned to the screen's foot does this. */}
+            {selected ? (
+              <div
+                className="sticky bottom-0 z-10 -mt-2 hidden shrink-0 flex-col gap-1.5 border-t
+                  border-border-default bg-bg/95 pb-1 pt-3 backdrop-blur-md lg:flex"
+              >
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={submit}
+                    loading={jobs.submitting || (Boolean(selected?.scenes) && planning)}
+                    className="flex-1"
+                  >
+                    {queueLabel}
+                  </Button>
+                  <kbd
+                    title="Press ⌘↵ (Ctrl+Enter) to run from anywhere"
+                    className="rounded border border-border-default bg-bg-subtle
+                      px-1.5 py-0.5 font-mono text-[11px] text-fg-subtle"
+                  >
+                    ⌘↵
+                  </kbd>
+                </div>
+                {summary ? <p className="truncate text-[12px] text-fg-subtle">{summary}</p> : null}
+              </div>
             ) : null}
           </div>
 
@@ -1458,32 +1521,6 @@ function Workbench({
                itself now instead. */
             className="flex min-w-0 scroll-mt-20 flex-col gap-4 lg:h-full lg:min-h-0"
           >
-            {/* On mobile this lives in the pinned bar at the bottom instead,
-                so the primary action is never a scroll away. On desktop it sits
-                outside the scroller below, so it stays put while the stage and
-                the history move under it. */}
-            <div className="hidden shrink-0 items-center gap-3 lg:flex">
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={submit}
-                loading={jobs.submitting || (Boolean(selected?.scenes) && planning)}
-                disabled={!selected}
-                className="flex-1 sm:flex-none sm:min-w-44"
-              >
-                {queueLabel}
-              </Button>
-              <span className="hidden text-[12px] text-fg-subtle lg:block">
-                or press{" "}
-                <kbd
-                  className="rounded border border-border-default bg-bg-subtle
-                    px-1.5 py-0.5 font-mono text-[11px]"
-                >
-                  ⌘↵
-                </kbd>
-              </span>
-            </div>
-
             <div
               className="scroll-pane flex min-w-0 flex-col gap-4 lg:min-h-0 lg:flex-1
                 lg:overflow-y-auto lg:overscroll-contain lg:pr-2"
@@ -1602,6 +1639,9 @@ function Workbench({
         >
           {queueLabel}
         </Button>
+        {summary ? (
+          <p className="mt-1.5 truncate text-center text-[12px] text-fg-subtle">{summary}</p>
+        ) : null}
       </div>
 
       {tips && selected ? (

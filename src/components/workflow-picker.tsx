@@ -1,8 +1,10 @@
 "use client";
 
+import { ChevronsUpDown, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CompatReport, WorkflowCompat } from "@/lib/compat";
 import type { WorkflowSummary } from "@/lib/workflows/types";
+import { WORKFLOW_GROUPS, workflowIcon } from "./workflow-icons";
 
 /**
  * The predetermined workflow list. Radio semantics rather than buttons so
@@ -72,6 +74,7 @@ export function WorkflowPicker({
   const current = workflows.find((workflow) => workflow.id === selectedId);
 
   if (!open && current) {
+    const Icon = workflowIcon(current.id);
     return (
       <div>
         <button
@@ -79,93 +82,124 @@ export function WorkflowPicker({
           disabled={disabled}
           onClick={() => setOpen(true)}
           aria-expanded={false}
-          className="group flex w-full items-center gap-2 rounded-lg border border-border-default
-            bg-bg-subtle p-3 text-left transition-colors duration-150
+          className="group flex w-full items-center gap-3 rounded-lg border border-border-default
+            bg-bg-subtle p-2.5 text-left transition-colors duration-150
             hover:border-border-strong hover:bg-surface-hover
             disabled:pointer-events-none disabled:opacity-50"
         >
-          <span className="min-w-0 truncate text-[13px] font-medium tracking-[-0.01em] text-fg">
-            {current.name}
+          <WorkflowGlyph icon={Icon} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-medium tracking-[-0.01em] text-fg">
+              {current.name}
+            </span>
+            <span className="block truncate text-[12px] text-fg-muted">{current.description}</span>
           </span>
-          {Boolean(turbo[current.id]) && Boolean(current.turbo) ? (
-            <Badge>Turbo</Badge>
-          ) : null}
-          <span className="ml-auto shrink-0 text-[12px] text-fg-subtle">
+          <span className="shrink-0 text-[12px] text-fg-subtle group-hover:text-fg-muted">
             Change
           </span>
-          <Chevron />
+          <ChevronsUpDown aria-hidden="true" className="size-3.5 shrink-0 text-fg-subtle" />
         </button>
-        <p className="mt-1.5 px-3 text-[12px] leading-relaxed text-fg-muted">
-          {current.description}
-        </p>
         <MachineNote status={compat?.workflows[current.id]} className="px-3" />
       </div>
     );
   }
 
-  return (
-    <div role="radiogroup" aria-label="Workflow" className="flex flex-col gap-2">
-      {workflows.map((workflow) => {
-        const selected = workflow.id === selectedId;
-        const isTurbo = Boolean(turbo[workflow.id]) && Boolean(workflow.turbo);
-        const on = patches[workflow.id] ?? [];
-        const estimate =
-          workflow.patches
-            .filter((patch) => on.includes(patch.id))
-            .map((patch) => patch.estimatedSeconds)
-            .findLast((seconds) => seconds !== undefined) ??
-          (isTurbo ? workflow.turbo?.estimatedSeconds : undefined) ??
-          workflow.estimatedSeconds;
-        return (
-          <button
-            key={workflow.id}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            disabled={disabled}
-            onClick={() => onSelect(workflow.id)}
-            className={`group w-full rounded-lg border p-3 text-left transition-all duration-150
-              disabled:opacity-50 disabled:pointer-events-none
-              ${
-                selected
-                  ? "border-accent bg-accent-subtle/40"
-                  : "border-border-default bg-bg-subtle hover:border-border-strong hover:bg-surface-hover"
-              }`}
-          >
-            <div className="flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                className={`grid size-3.5 shrink-0 place-items-center rounded-full border transition-colors
-                  ${selected ? "border-accent" : "border-border-strong"}`}
-              >
-                {selected ? (
-                  <span className="size-1.5 rounded-full bg-accent" />
-                ) : null}
-              </span>
-              {/* min-w-0 and truncate so a long name gives way rather than
-                  widening the row past the card, as the badges used to. */}
-              <span className="min-w-0 truncate text-[13px] font-medium tracking-[-0.01em] text-fg">
-                {workflow.name}
-              </span>
-              {isTurbo ? <Badge>Turbo</Badge> : null}
-              {estimate ? (
-                <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-fg-subtle">
-                  ~{formatEstimate(estimate)}
-                </span>
-              ) : null}
-            </div>
+  // By what someone is trying to do, so the choice is narrowed before a
+  // description has been read. See WORKFLOW_GROUPS.
+  const listed = new Set(WORKFLOW_GROUPS.flatMap((group) => group.ids));
+  const sections = [
+    ...WORKFLOW_GROUPS.map((group) => ({
+      title: group.title,
+      items: group.ids
+        .map((id) => workflows.find((workflow) => workflow.id === id))
+        .filter((workflow): workflow is WorkflowSummary => Boolean(workflow)),
+    })),
+    { title: "More", items: workflows.filter((workflow) => !listed.has(workflow.id)) },
+  ].filter((section) => section.items.length > 0);
 
-            <p className="mt-1.5 pl-[22px] text-[12px] leading-relaxed text-fg-muted">
-              {workflow.description}
-            </p>
-            <MachineNote
-              status={compat?.workflows[workflow.id]}
-              className="pl-[22px]"
-            />
-          </button>
-        );
-      })}
+  return (
+    <div role="radiogroup" aria-label="Workflow" className="flex flex-col gap-4">
+      {sections.map((section) => (
+        <div key={section.title} className="flex flex-col gap-1.5">
+          <p className="px-1 text-[12px] font-medium text-fg-muted">{section.title}</p>
+          <div className="grid gap-1">
+            {section.items.map((workflow) => {
+              const selected = workflow.id === selectedId;
+              const estimate = estimateFor(workflow, turbo[workflow.id], patches[workflow.id]);
+              return (
+                <button
+                  key={workflow.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  disabled={disabled}
+                  onClick={() => onSelect(workflow.id)}
+                  className={`group flex w-full min-w-0 items-start gap-2.5 rounded-lg border p-2.5 text-left
+                    transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50
+                    ${
+                      selected
+                        ? "border-accent bg-accent-subtle/40"
+                        : "border-transparent hover:border-border-default hover:bg-surface-hover"
+                    }`}
+                >
+                  <WorkflowGlyph icon={workflowIcon(workflow.id)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-2">
+                      {/* min-w-0 and truncate so a long name gives way rather
+                          than widening the row past the card. */}
+                      <span className="min-w-0 truncate text-[13px] font-medium tracking-[-0.01em] text-fg">
+                        {workflow.name}
+                      </span>
+                      {estimate ? (
+                        <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-fg-subtle">
+                          ~{formatEstimate(estimate)}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="mt-0.5 line-clamp-2 block text-[12px] leading-snug text-fg-muted">
+                      {workflow.description}
+                    </span>
+                    <MachineNote status={compat?.workflows[workflow.id]} />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
+  );
+}
+
+/** A workflow's icon on its tile, the same everywhere a workflow is picked. */
+function WorkflowGlyph({ icon: Icon }: { icon: LucideIcon }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-subtle text-accent"
+    >
+      <Icon className="size-4" strokeWidth={1.75} />
+    </span>
+  );
+}
+
+/**
+ * Roughly how long a run of this workflow takes in the modes it is in: the
+ * last switch with an estimate of its own, then Turbo's, then the plain one.
+ */
+export function estimateFor(
+  workflow: WorkflowSummary,
+  turbo: boolean | undefined,
+  on: string[] | undefined,
+): number | undefined {
+  const isTurbo = Boolean(turbo) && Boolean(workflow.turbo);
+  return (
+    workflow.patches
+      .filter((patch) => (on ?? []).includes(patch.id))
+      .map((patch) => patch.estimatedSeconds)
+      .findLast((seconds) => seconds !== undefined) ??
+    (isTurbo ? workflow.turbo?.estimatedSeconds : undefined) ??
+    workflow.estimatedSeconds
   );
 }
 
@@ -209,43 +243,7 @@ function MachineNote({
   );
 }
 
-/**
- * A mode the card is currently in, named on the card. Only Turbo earns one: it
- * moves the step range the next screen shows, so the card would otherwise state
- * an estimate for a mode nothing on it mentions.
- */
-function Badge({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      className="shrink-0 rounded bg-accent-subtle px-1.5 py-0.5 text-[10px] font-medium
-        uppercase tracking-[0.06em] text-fg-muted"
-    >
-      {children}
-    </span>
-  );
-}
-
-/** Points down, because opening the list grows the column downwards. */
-function Chevron() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      className="size-3.5 shrink-0 text-fg-subtle"
-      fill="none"
-    >
-      <path
-        d="M4 6l4 4 4-4"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function formatEstimate(seconds: number): string {
+export function formatEstimate(seconds: number): string {
   if (seconds < 90) return `${seconds}s`;
   return `${Math.round(seconds / 60)}m`;
 }
