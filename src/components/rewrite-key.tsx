@@ -129,7 +129,7 @@ export function RewriteKeyButton({
         onClick={() => setOpen(true)}
         title={label}
         aria-label={label}
-        className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-[12px] font-medium
+        className={`inline-flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-md border px-2 text-[12px] font-medium
           transition-colors duration-150
           ${
             warn
@@ -144,9 +144,12 @@ export function RewriteKeyButton({
         ) : (
           <KeyRound className="size-3.5" aria-hidden="true" />
         )}
-        {/* What is local, said: "Local" alone read as a mode of the app. */}
-        <span>
-          <span className="hidden sm:inline">Rewrite: </span>
+        {/* What is local, said: "Local" alone read as a mode of the app.
+            On a phone the header has no room for it — the row ran a few
+            pixels past the screen and pushed the theme toggle off the edge —
+            so there the icon and its colour say it, and aria-label the rest. */}
+        <span className="hidden sm:inline">
+          Rewrite:{" "}
           {engine === "local" ? "this machine" : "Gateway"}
         </span>
       </button>

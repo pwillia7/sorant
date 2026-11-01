@@ -1214,8 +1214,9 @@ function Workbench({
     /* At lg the shell is exactly the viewport and nothing outside a column
        scrolls, so the height is pinned rather than a minimum — a fractional
        dvh would otherwise leave the document a pixel taller than the window
-       and grow a page scrollbar with nowhere to go. */
-    <div className="min-h-dvh lg:h-dvh lg:overflow-hidden">
+       and grow a page scrollbar with nowhere to go. Relative so that clip
+       also holds anything absolute outside the two columns. */
+    <div className="relative min-h-dvh lg:h-dvh lg:overflow-hidden">
       <header
         className="sticky top-0 z-20 border-b border-border-default
           bg-bg/80 backdrop-blur-md"

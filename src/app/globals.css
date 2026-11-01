@@ -199,7 +199,15 @@
   flex-shrink: 0;
 }
 
+/*
+ * Positioned so it is the containing block for anything absolute inside it —
+ * every `sr-only` label and file input is. With no positioned ancestor those
+ * resolve against the initial containing block instead, outside this scroller
+ * and outside the shell's overflow:hidden, and one sitting far down a column
+ * stretches the document: the whole app scrolls up over empty space.
+ */
 .scroll-pane {
+  position: relative;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
