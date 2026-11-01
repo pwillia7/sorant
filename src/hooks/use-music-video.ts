@@ -299,6 +299,13 @@ export function useMusicVideo({
 
   useEffect(() => writeProject(kind, project), [kind, project]);
 
+  // The project as last rendered, for a loop that outlives the render it
+  // started in. See renderAll.
+  const latest = useRef(project);
+  useEffect(() => {
+    latest.current = project;
+  }, [project]);
+
   // Runs this project submitted before runs were tagged with it, found by the
   // ids it kept. A redo it has since replaced is no longer among them; the
   // history still files that one with the video, through what it was made from.
@@ -849,9 +856,18 @@ export function useMusicVideo({
     // One at a time, so the queue receives them in song order and each id is
     // recorded as it arrives — a refusal part-way leaves the rest unsubmitted
     // rather than half-tracked.
-    let current = project;
-    for (let index = 0; index < current.scenes.length; index += 1) {
+    //
+    // Each scene is read as it is when its turn comes, and only its id is
+    // written back. Sending fourteen takes a while, and a copy of the project
+    // taken at the click both sent a later scene as it was then and, written
+    // back whole, undid whatever was changed in the meantime — a picture set
+    // to Style only while the earlier scenes went out was lost both ways.
+    const { id } = project;
+    for (let index = 0; index < project.scenes.length; index += 1) {
+      const current = latest.current;
+      if (current?.id !== id) break;
       const scene = current.scenes[index];
+      if (!scene) break;
       const job = jobFor(scene);
       if (scene.promptId && !failed(job)) continue;
       const promptId = await submitScene(current, index, failed(job));
@@ -859,11 +875,17 @@ export function useMusicVideo({
         setError(`Scene ${index + 1} was refused — see the message above.`);
         break;
       }
-      current = {
-        ...current,
-        scenes: current.scenes.map((s, i) => (i === index ? { ...s, promptId } : s)),
-      };
-      setProject(current);
+      const recorded = (previous: MusicVideoProject | null) =>
+        previous?.id === id
+          ? {
+              ...previous,
+              scenes: previous.scenes.map((s, i) => (i === index ? { ...s, promptId } : s)),
+            }
+          : previous;
+      // Into the ref as well as the state, so the next scene sees this one
+      // as sent even before React has rendered it.
+      latest.current = recorded(latest.current);
+      setProject(recorded);
     }
   }, [project, jobFor, submitScene]);
 

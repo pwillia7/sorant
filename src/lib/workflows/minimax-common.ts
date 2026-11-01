@@ -947,6 +947,7 @@ const KEEP_MODES = {
     restyled: {
       facets: "identity, proportions, costume, accessories and markings",
       marker: "partially_preserved",
+      note: "Only the performance and the setting are the scene's to choose; how this subject is rendered is the style picture's.",
     },
   },
   identity: {
@@ -957,6 +958,7 @@ const KEEP_MODES = {
     restyled: {
       facets: "identity and proportions",
       marker: "partially_preserved",
+      note: "Costume, accessories and markings are released: whatever the user's prompt calls for is what this subject wears, and the reference's own clothing carries no weight. Their face and build are unchanged.",
     },
   },
   costume: {
@@ -983,8 +985,11 @@ const KEEP_MODES = {
      * subject held at its own subject style would be drawn in two manners at
      * once — a photograph of someone beside a cel-shaded style picture is a
      * request for them cel-shaded — so the style picture takes that facet.
+     *
+     * With its own note, because the plain one can say the subject's rendering
+     * is kept — the opposite of the "released" line that follows it.
      */
-    restyled?: { facets: string; marker: string };
+    restyled?: { facets: string; marker: string; note: string };
   }
 >;
 
@@ -1952,12 +1957,12 @@ export function referenceFacets(
     for (let index = 1; index <= filled; index += 1) {
       const mode = keepMode(values[keepParamId(index)]);
       const restyled = styles.length > 0 && "restyled" in mode ? mode.restyled : null;
-      const { facets, marker } = restyled ?? mode;
+      const { facets, marker, note } = restyled ?? mode;
       const released = restyled
         ? ` Its subject style is released too, to ${pictureList(styles)}: render this subject in that picture's medium and manner, not the one it has here. Its line in retention_analysis reads: "<Subject N> (appears in [Shot 1]): partially_preserved - ${facets} are retained; subject style is released to ${pictureList(styles)}, whose medium this subject is drawn in."`
         : "";
       lines.push(
-        `<Picture ${index}>: keep ${facets}. Its marker in retention_analysis is ${marker}. ${mode.note}${released}`,
+        `<Picture ${index}>: keep ${facets}. Its marker in retention_analysis is ${marker}. ${note}${released}`,
       );
     }
 
