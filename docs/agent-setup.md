@@ -585,7 +585,7 @@ as the normal way to run.
 pnpm check:nodes --workflows minimax-h3,minimax-music3   # the set from Phase 3; exit 0
 pnpm check:workflows        # the app's own definitions; needs no ComfyUI
 pnpm dev                    # in the background
-pnpm smoke --director local --local-model <qwen38-27b | gemma-4-12b-heretic> # or --director gateway
+pnpm smoke --director local # picks the best director the machine has; or --director gateway
 ```
 
 `check:nodes` asks ComfyUI for every node class, model file and dropdown option
@@ -826,7 +826,9 @@ On the ComfyUI machine:
    - If the person deploys through Git instead (a fork connected to Vercel):
      **Sync fork** on GitHub, and the push to `main` deploys.
    - Local-only installs: restart `pnpm dev` or `pnpm start`; nothing to deploy.
-3. Verify on the deployment: `pnpm smoke --url https://<app>` passes (add
+3. Verify on the deployment once it reads **Ready** — until then the
+   production URL still serves the previous version, so a check run early
+   tests the old one. `pnpm smoke --url https://<app>` passes (add
    `--director local` if they use the local rewrite), and the person sees no
    update notice in the header and no workflow card saying the ComfyUI machine
    is missing something.

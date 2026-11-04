@@ -3,7 +3,7 @@
  * waits for it: the end-to-end proof that a setup works.
  *
  *   pnpm smoke                                   # Text to Video on localhost:3000
- *   pnpm smoke --director local                  # rewrite on the ComfyUI machine
+ *   pnpm smoke --director local                  # rewrite on the ComfyUI machine, best model it has
  *   pnpm smoke --director local --local-model gemma-4-12b-heretic
  *   pnpm smoke --director none                   # skip the rewrite altogether
  *   pnpm smoke --url https://<app>.vercel.app    # against a deployment
@@ -39,9 +39,9 @@ async function main() {
   loadEnvFiles();
   const url = arg("url", "http://localhost:3000").replace(/\/$/, "");
   const director = arg("director", "gateway");
-  // The best of the local models unless told: on a machine without it the
-  // run says so, and names the file.
-  const localModel = arg("local-model", LOCAL_DIRECTOR_MODELS[0].id);
+  // Unless told, the best local model the machine has — asked of the app once
+  // it is known to be reachable, below.
+  let localModel = arg("local-model", "");
   const workflowId = arg("workflow", "minimax-h3");
   const workflow = WORKFLOWS.find((w) => w.id === workflowId);
   if (!workflow) {
@@ -52,7 +52,7 @@ async function main() {
     console.error('--director is gateway, local or none.');
     process.exit(2);
   }
-  if (!LOCAL_DIRECTOR_MODELS.some((model) => model.id === localModel)) {
+  if (localModel && !LOCAL_DIRECTOR_MODELS.some((model) => model.id === localModel)) {
     console.error(`--local-model is one of ${LOCAL_DIRECTOR_MODELS.map((model) => model.id).join(", ")}.`);
     process.exit(2);
   }
@@ -78,6 +78,25 @@ async function main() {
   if (health.body.reachable !== true || health.body.authorized === false) {
     console.error(`The app cannot use ComfyUI: ${JSON.stringify(health.body)}`);
     process.exit(2);
+  }
+
+  if (director === "local" && !localModel) {
+    // The same answer the app uses to offer local directors. Unknown (the
+    // encoders could not be listed) falls back to the best one, and the run
+    // names the missing file if it is not there.
+    const compat = (await fetch(`${url}/api/compat`, { headers })
+      .then((r) => r.json())
+      .catch(() => ({}))) as { localDirectors?: string[] | null };
+    const installed = compat.localDirectors;
+    if (Array.isArray(installed) && installed.length === 0) {
+      console.error(
+        `The ComfyUI machine has no local director model. Download one (pnpm models:download --extras local-director, or local-director-27b), or use --director gateway.`,
+      );
+      process.exit(2);
+    }
+    localModel = (
+      LOCAL_DIRECTOR_MODELS.find((model) => installed?.includes(model.id)) ?? LOCAL_DIRECTOR_MODELS[0]
+    ).id;
   }
 
   const turbo = workflow.turbo?.defaultOn === true;
