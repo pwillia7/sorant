@@ -37,7 +37,7 @@ import { SorantMark } from "@/components/sorant-logo";
 import { useJobs } from "@/hooks/use-jobs";
 import { useMusicVideo } from "@/hooks/use-music-video";
 import { useCompat } from "@/hooks/use-compat";
-import { isActive, isRerunnable, isRetryable, type Job } from "@/lib/jobs";
+import { isActive, isRerunnable, isRetryable, lostTrackOf, type Job } from "@/lib/jobs";
 import { restoreFrom } from "@/lib/restore";
 import { api, ApiError, getToken } from "@/lib/client";
 import {
@@ -259,9 +259,16 @@ function Workbench({
   const [selectedId, setSelectedId] = useState(workflows[0]?.id ?? "");
   const jobs = useJobs();
   const health = useHealth();
-  const compat = useCompat(
-    health?.reachable === true && health.authorized !== false,
-  );
+  const comfyOnline = health?.reachable === true && health.authorized !== false;
+  const compat = useCompat(comfyOnline);
+
+  // Catch up with runs this device lost track of whenever ComfyUI starts
+  // answering — on load, and each time the connection comes back. Most of
+  // them finished while nobody was looking. See `applyRecheck`.
+  const { recheckLost } = jobs;
+  useEffect(() => {
+    if (comfyOnline) void recheckLost();
+  }, [comfyOnline, recheckLost]);
   const updates = useUpdates();
   const [statusOpen, setStatusOpen] = useState(false);
 
@@ -1569,6 +1576,11 @@ function Workbench({
                 }
                 onToggleFavorite={jobs.toggleFavorite}
                 onRetry={viewedJob && retryable(viewedJob) ? retry : undefined}
+                onCheckAgain={
+                  viewedJob && lostTrackOf(viewedJob)
+                    ? () => jobs.recheckLost([viewedJob.promptId])
+                    : undefined
+                }
                 onRerun={viewedJob && rerunnable(viewedJob) ? rerun : undefined}
                 retrying={jobs.submitting}
                 busyAction={sending}

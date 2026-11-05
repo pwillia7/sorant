@@ -251,6 +251,84 @@ export function lostTrackOf(job: Job): boolean {
 }
 
 /**
+ * A run this device lost track of, brought up to date by asking ComfyUI about
+ * it again. See `useJobs().recheckLost`.
+ *
+ * The usual way to lose one is the connection, not the box: the tab stayed
+ * open while the internet went, the poll loop gave up, and the run carried on
+ * and finished. ComfyUI's history still has it under the same prompt id until
+ * it restarts, so asking again is the whole recovery — no matching files to
+ * runs, which only the music video needs, for runs a restart did forget.
+ *
+ * What ComfyUI says is authoritative, so the answer replaces the lost state
+ * outright: a finished run gets its outputs, a failed one its real error, and
+ * one still queued or running goes back to being polled. An `unknown` answer
+ * changes nothing — the run stays as it was, with its Try again button, and
+ * the music video's file search is still there for it.
+ *
+ * The finish time is ComfyUI's, held between submitting and now so another
+ * machine's clock cannot put it somewhere impossible. The moment of asking
+ * would count the outage as render time and teach the estimate a lie.
+ */
+export function applyRecheck(
+  job: Job,
+  status: RecheckStatus | undefined,
+  now = Date.now(),
+): Job {
+  if (!status || !lostTrackOf(job)) return job;
+  const cleared = {
+    ...job,
+    queuePosition: null,
+    error: undefined,
+    lostContact: undefined,
+    recovered: undefined,
+  };
+  const finished = Math.min(now, Math.max(job.submittedAt, status.finishedAt ?? now));
+
+  switch (status.state) {
+    case "done":
+      return {
+        ...cleared,
+        phase: "done",
+        outputs: status.outputs,
+        briefs: status.briefs ?? job.briefs,
+        completedAt: finished,
+      };
+    case "error":
+      return {
+        ...cleared,
+        phase: "error",
+        outputs: [],
+        error: status.error ?? "The workflow failed while executing.",
+        briefs: status.briefs ?? job.briefs,
+        completedAt: finished,
+      };
+    case "running":
+    case "queued":
+      return {
+        ...cleared,
+        phase: status.state,
+        queuePosition: status.queuePosition,
+        completedAt: undefined,
+        startedAt:
+          status.state === "running" ? (job.startedAt ?? now) : job.startedAt,
+      };
+    default:
+      return job;
+  }
+}
+
+/** The part of `/api/status`'s answer a recheck reads. */
+export interface RecheckStatus {
+  state: "queued" | "running" | "done" | "error" | "unknown";
+  queuePosition: number | null;
+  outputs: JobOutput[];
+  error?: string;
+  briefs?: Record<string, string>;
+  finishedAt?: number;
+}
+
+/**
  * Whether this run is one to offer another take of — the same settings, new
  * noise. Only a finished one: it is the phase with a result worth repeating,
  * where a failure gets `isRetryable`'s exact repeat instead.

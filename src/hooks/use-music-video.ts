@@ -5,6 +5,7 @@ import type { JobsController } from "@/hooks/use-jobs";
 import { api, ApiError, getToken } from "@/lib/client";
 import {
   isActive,
+  applyRecheck,
   lostTrackOf,
   type Job,
   type JobOutput,
@@ -1092,7 +1093,7 @@ export function useMusicVideo({
   // what went wrong.
   const resuming = useRef(false);
   const upscaling = upscaleJobs.some((job) => job !== undefined && isActive(job));
-  const { recover: recoverJobs } = jobs;
+  const { recover: recoverJobs, recheckLost } = jobs;
   useEffect(() => {
     if (!online || !project?.upscaleRequested || upscaling || resuming.current) return;
     const lost = project.scenes.flatMap((scene, index) => {
@@ -1103,13 +1104,24 @@ export function useMusicVideo({
     resuming.current = true;
     void (async () => {
       try {
-        const { found } = await recoverUpscales(project, jobs.jobs).catch(() => ({
+        // Asked by prompt id first: an upscale the connection lost is usually
+        // still running or finished, and sending it again would render it
+        // twice. Only one ComfyUI has no record of goes on to the file search
+        // and, failing that, is sent again — and none while ComfyUI cannot be
+        // asked at all.
+        const lostIds = lost.flatMap((index) => project.scenes[index].upscalePromptId ?? []);
+        const statuses = await recheckLost(lostIds);
+        if (statuses === null) return;
+        const current = jobs.jobs.map((job) => applyRecheck(job, statuses[job.promptId]));
+        const { found } = await recoverUpscales(project, current).catch(() => ({
           found: {} as Record<string, never>,
         }));
         recoverJobs(found);
         const resend = lost.filter((index) => {
           const promptId = project.scenes[index].upscalePromptId;
-          return !promptId || !found[promptId];
+          if (!promptId) return true;
+          const known = statuses[promptId]?.state;
+          return (!known || known === "unknown") && !found[promptId];
         });
         if (resend.length > 0 && project.upscaleSize) {
           await sendUpscales(project.upscaleSize, project.upscaleFrameRate ?? 1, resend);
@@ -1118,7 +1130,7 @@ export function useMusicVideo({
         resuming.current = false;
       }
     })();
-  }, [online, project, upscaling, upscaleFor, jobs.jobs, recoverJobs, sendUpscales]);
+  }, [online, project, upscaling, upscaleFor, jobs.jobs, recheckLost, recoverJobs, sendUpscales]);
 
   const lostCount = project
     ? lostScenes(project, (id) => byId.get(id)).length +
@@ -1132,13 +1144,28 @@ export function useMusicVideo({
     setRecoveryNote(null);
     setRecovering(true);
     try {
+      const lookup = (list: Job[]) => {
+        const map = new Map(list.map((job) => [job.promptId, job]));
+        return (id: string) => map.get(id);
+      };
+      const lostJobs = [
+        ...lostScenes(project, lookup(jobs.jobs)),
+        ...lostUpscales(project, lookup(jobs.jobs)),
+      ];
+      const lost = lostJobs.length;
+      // ComfyUI asked by prompt id first, which settles every run it still
+      // remembers — the usual case, when the connection rather than the box
+      // went. The file searches are for what a restart made it forget, and
+      // run on the jobs as that answer left them.
+      const statuses = await recheckLost(lostJobs.map((job) => job.promptId));
+      if (statuses === null) throw new Error("Could not reach ComfyUI to look for the lost scenes.");
+      const current = jobs.jobs.map((job) => applyRecheck(job, statuses[job.promptId]));
       // The upscales first: found by name, they need nothing the scenes'
       // search can fail for.
-      const upscales = await recoverUpscales(project, jobs.jobs);
+      const upscales = await recoverUpscales(project, current);
       recoverJobs(upscales.found);
-      const scenes = await recoverScenes(project, jobs.jobs);
+      const scenes = await recoverScenes(project, current);
       recoverJobs(scenes.found);
-      const lost = scenes.lost + upscales.lost;
       const stillMissing = scenes.stillMissing + upscales.stillMissing;
       const count = lost - stillMissing;
       setRecoveryNote(
@@ -1151,7 +1178,7 @@ export function useMusicVideo({
     } finally {
       setRecovering(false);
     }
-  }, [project, jobs.jobs, recoverJobs]);
+  }, [project, jobs.jobs, recheckLost, recoverJobs]);
 
   const clear = useCallback(() => {
     setProject(null);

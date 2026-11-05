@@ -65,7 +65,8 @@ A few things make it more than a form over a graph:
 - **Fast by default.** Turbo and SageAttention start on, cutting a run to a few
   minutes on a 24 GB card. Spectrum is there too, off by default.
 - **Runs queue and keep going.** Queue several and walk away: they finish on
-  your machine even if you close the tab, and the history picks them back up.
+  your machine even if you close the tab or lose your connection, and the
+  history picks them back up once the app can reach ComfyUI again.
   Every result can be replayed, downloaded, rerun, or handed straight to Remix,
   Extend or Upscale.
 

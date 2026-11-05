@@ -277,13 +277,36 @@ would kill a good render over a few seconds of nothing, while an unreachable hos
 is usually blackholed rather than refused, and a single check then burns the
 route's whole 20-second ComfyUI timeout, which is not evidence of anything yet.
 
-The cancel is best effort and goes out after the job is already marked, because
-if ComfyUI is unreachable the cancel fails exactly as the status checks did and
-waiting on two more timeouts to be told what you already know is worse than
-being told the run may outlive the tab. When it does land — the box is up but
-something in between is not — it saves the GPU several minutes on a clip nothing
-will collect. Either way the failure names what happened, rather than leaving a
-progress bar filling against an estimate for a run that stopped being watched.
+No cancel is sent. The failure names what happened rather than leaving a
+progress bar filling against an estimate for a run that stopped being watched,
+and the run is left to finish, because something will collect it.
+
+**A run the app lost track of is asked about again when ComfyUI answers.** The
+usual way to lose one is this end's connection, not the box: the tab stayed
+open while the internet went, the app gave up, and the render carried on and
+finished. ComfyUI's history still holds it under the same prompt id until
+ComfyUI restarts, so asking again is the whole recovery. `recheckLost` in
+`use-jobs.ts` does it on load and each time the header's health check goes from
+unreachable to reachable, for every lost run of any kind: music, video, image,
+edit, upscale. A lost run is one given up on this way, or marked `unknown`. Up to
+the 100 newest are checked, 25 to a request. What ComfyUI says replaces the lost
+state (`applyRecheck` in `jobs.ts`):
+
+- **Finished:** the run gets its outputs, stamped with ComfyUI's own finish
+  time. The time of asking would count the outage as render time and skew the
+  estimates.
+- **Failed:** the run shows its real error.
+- **Still queued or running:** it goes back to being polled.
+- **No record:** the run stays as it was, with Try again.
+
+A lost run on the stage also has **Check again**, which does the same for that
+run on demand and says so when ComfyUI has no record of it.
+
+A run is only gone for good when ComfyUI restarted before it was asked about.
+The music video goes one step further for its own scenes and upscales: it finds
+their files on the box (`src/lib/music-video/recover.ts`). It still asks by
+prompt id first, and resends a lost upscale only when ComfyUI has no record of
+it, so a render still running is never sent twice.
 
 **Desktop notifications.** The bell in the header opts in (the permission prompt
 has to be tied to a click, which is why it is a button). Each finished or failed

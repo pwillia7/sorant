@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { StatusPayload } from "@/app/api/status/route";
 import { api, ApiError } from "@/lib/client";
 import {
+  applyRecheck,
   expireStale,
   learnedEstimateSeconds,
   isActive,
@@ -48,6 +49,10 @@ const SETTLE_GRACE_MS = 60_000;
  */
 const MAX_POLL_FAILURES = 3;
 const GIVE_UP_AFTER_MS = 45_000;
+
+/** How many lost runs one recheck asks about, and how many per request. */
+const RECHECK_LIMIT = 100;
+const RECHECK_BATCH = 25;
 
 /** Backoff for the nth consecutive failure, capped to stay responsive. */
 function retryDelayMs(failures: number): number {
@@ -112,6 +117,12 @@ export interface JobsController {
    * `lostTrackOf` and `recoverScenes`.
    */
   recover: (found: Record<string, { outputs: JobOutput[]; completedAt: number }>) => void;
+  /**
+   * Ask ComfyUI again about runs this device lost track of — every one, or
+   * these. Resolves to what it said by prompt id, or null when it could not be
+   * asked. See `applyRecheck`.
+   */
+  recheckLost: (promptIds?: string[]) => Promise<Record<string, StatusPayload> | null>;
   cancel: (promptId: string) => Promise<void>;
   remove: (promptId: string) => void;
   /** Drop several at once, so a day's worth is one state write. */
@@ -227,7 +238,7 @@ export function useJobs(): JobsController {
   );
 
   /**
-   * Stop waiting on the given jobs, and try to stop the box working on them.
+   * Stop waiting on the given jobs, and say so.
    *
    * Reached only from the poll loop, once the status checks have failed for long
    * enough that the connection is the broken thing. The alternative is what this
@@ -236,49 +247,87 @@ export function useJobs(): JobsController {
    * quietly relabels it a day later. A generation nobody is waiting on any more
    * should say so.
    *
-   * The cancel is best effort and deliberately sent after the state is settled.
-   * If ComfyUI is unreachable it will fail exactly as the status checks did, and
-   * making the user watch two more timeouts to be told what already happened
-   * would be worse than telling them the run might outlive the tab. When it does
-   * land — the box is up but something between here and it is not — it saves a
-   * GPU several minutes of work on a clip nothing will collect.
+   * It used to send a cancel as well, to save the GPU a clip nothing would
+   * collect. Something does collect it now — `recheckLost`, once the connection
+   * is back — and the usual cause is this end's internet rather than the box,
+   * so the run is left to finish.
    */
-  const abandonActive = useCallback(
-    async (promptIds: string[], cause: unknown) => {
-      const detail =
-        cause instanceof ApiError
-          ? cause.message
-          : "Lost contact with the server.";
-      const doomed = new Set(promptIds);
+  const abandonActive = useCallback((promptIds: string[], cause: unknown) => {
+    const detail =
+      cause instanceof ApiError ? cause.message : "Lost contact with the server.";
+    const doomed = new Set(promptIds);
 
-      setJobs((previous) =>
-        previous.map((job) =>
-          doomed.has(job.promptId) && isActive(job)
-            ? {
-                ...job,
-                phase: "error" as const,
-                queuePosition: null,
-                completedAt: Date.now(),
-                lostContact: true,
-                error:
-                  `${detail} Gave up after ${MAX_POLL_FAILURES} failed status checks ` +
-                  "and sent a cancel — if the machine is unreachable the cancel will " +
-                  "not have arrived either, so the run may still finish on its own.",
-              }
-            : job,
-        ),
-      );
+    setJobs((previous) =>
+      previous.map((job) =>
+        doomed.has(job.promptId) && isActive(job)
+          ? {
+              ...job,
+              phase: "error" as const,
+              queuePosition: null,
+              completedAt: Date.now(),
+              lostContact: true,
+              error:
+                `${detail} Gave up after ${MAX_POLL_FAILURES} failed status checks. ` +
+                "The run carries on on the ComfyUI machine, and this is checked " +
+                "again when the connection is back.",
+            }
+          : job,
+      ),
+    );
+  }, []);
 
-      await Promise.all(
-        promptIds.map((promptId) =>
-          api("/api/cancel", {
-            method: "POST",
-            body: JSON.stringify({ promptId }),
-          }).catch(() => {
-            // Expected when the box is the thing that is gone.
-          }),
-        ),
-      );
+  // The latest jobs, for `recheckLost`, which is called from effects that
+  // should not re-run every time a poll moves a progress bar.
+  const jobsRef = useRef(jobs);
+  useEffect(() => {
+    jobsRef.current = jobs;
+  }, [jobs]);
+  const recheckInFlight = useRef<Promise<Record<string, StatusPayload> | null> | null>(null);
+
+  /**
+   * Ask ComfyUI again about runs this device lost track of. See `applyRecheck`.
+   *
+   * Every lost run when no ids are given, newest first and at most
+   * `RECHECK_LIMIT` of them — anything older has almost certainly outlived
+   * ComfyUI's history, and the route takes `RECHECK_BATCH` ids a request. One
+   * check at a time: a second caller while one is in flight shares its answer.
+   * Null when ComfyUI could not be asked, so a caller about to send a run again
+   * can tell "it has no record" from "nobody answered".
+   */
+  const recheckLost = useCallback(
+    (promptIds?: string[]): Promise<Record<string, StatusPayload> | null> => {
+      if (recheckInFlight.current) return recheckInFlight.current;
+      const wanted = promptIds ? new Set(promptIds) : null;
+      const ids = jobsRef.current
+        .filter((job) => lostTrackOf(job) && (!wanted || wanted.has(job.promptId)))
+        .sort((a, b) => b.submittedAt - a.submittedAt)
+        .slice(0, RECHECK_LIMIT)
+        .map((job) => job.promptId);
+      if (ids.length === 0) return Promise.resolve({});
+
+      const check = (async () => {
+        try {
+          const statuses: Record<string, StatusPayload> = {};
+          for (let from = 0; from < ids.length; from += RECHECK_BATCH) {
+            const batch = ids.slice(from, from + RECHECK_BATCH).join(",");
+            const answer = await api<{ statuses: Record<string, StatusPayload> }>(
+              `/api/status?promptIds=${encodeURIComponent(batch)}`,
+            );
+            Object.assign(statuses, answer.statuses);
+          }
+          setJobs((previous) => {
+            const next = previous.map((job) => applyRecheck(job, statuses[job.promptId]));
+            return next.some((job, index) => job !== previous[index]) ? next : previous;
+          });
+          return statuses;
+        } catch {
+          return null;
+        } finally {
+          recheckInFlight.current = null;
+        }
+      })();
+      recheckInFlight.current = check;
+      return check;
     },
     [],
   );
@@ -338,7 +387,7 @@ export function useJobs(): JobsController {
         ) {
           // Nothing reschedules from here: giving up settles every job in
           // flight, which empties activeIds and tears this loop down.
-          void abandonActive(activeIds.split(","), cause);
+          abandonActive(activeIds.split(","), cause);
           return;
         }
 
@@ -566,6 +615,7 @@ export function useJobs(): JobsController {
     submit,
     tagMusicVideo,
     recover,
+    recheckLost,
     cancel,
     remove,
     removeMany,

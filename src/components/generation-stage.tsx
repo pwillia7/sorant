@@ -15,6 +15,7 @@ import {
 } from "@/lib/jobs";
 import { StarIcon } from "@/components/ui/star-icon";
 import type { ClipAction, ClipHandoff } from "@/lib/workflows/types";
+import type { RecheckStatus } from "@/lib/jobs";
 
 /**
  * The canvas: whichever generation is being viewed. Progress while it runs,
@@ -31,6 +32,7 @@ export function GenerationStage({
   onShowSettings,
   onToggleFavorite,
   onRetry,
+  onCheckAgain,
   onRerun,
   retrying,
   busyAction = null,
@@ -56,6 +58,12 @@ export function GenerationStage({
    * button off rather than leaving one that cannot work.
    */
   onRetry?: (job: Job) => void;
+  /**
+   * Ask ComfyUI about this run again, on one this device lost track of — it
+   * usually finished. Resolves to what ComfyUI said, or null when it could not
+   * be asked. See `applyRecheck`.
+   */
+  onCheckAgain?: () => Promise<Record<string, RecheckStatus> | null>;
   /**
    * Run a finished generation again: its settings back in the form, a new
    * seed, submitted. Absent on the same grounds as `onRetry`.
@@ -93,6 +101,7 @@ export function GenerationStage({
           job={job}
           onShowSettings={onShowSettings}
           onRetry={onRetry ? () => onRetry(job) : undefined}
+          onCheckAgain={onCheckAgain}
           retrying={retrying}
         />
       ) : job.phase === "queued" || job.phase === "running" ? (
@@ -118,7 +127,7 @@ export function GenerationStage({
           A run is only in flight while something says it is. Anything else is
           over, whatever it is, and Closed says so.
         */
-        <Closed job={job} />
+        <Closed job={job} onCheckAgain={onCheckAgain} />
       )}
     </div>
   );
@@ -259,11 +268,13 @@ function Failure({
   job,
   onShowSettings,
   onRetry,
+  onCheckAgain,
   retrying,
 }: {
   job: Job;
   onShowSettings?: () => void;
   onRetry?: () => void;
+  onCheckAgain?: () => Promise<Record<string, RecheckStatus> | null>;
   retrying?: boolean;
 }) {
   return (
@@ -280,10 +291,17 @@ function Failure({
             was not. The history row offers the same retry, but this is the
             screen a failure lands you on, and sending someone back to the list
             to press the button they are looking at is not offering it. */}
-        {onRetry || onShowSettings ? (
-          <div className="mt-5 flex items-center justify-center gap-2">
+        {/* A run this device lost contact with is asked about first, since
+            it usually finished: Try again would render it from scratch. */}
+        {onRetry || onShowSettings || onCheckAgain ? (
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            {onCheckAgain ? <CheckAgain job={job} onCheck={onCheckAgain} /> : null}
             {onRetry ? (
-              <Button size="sm" onClick={onRetry} disabled={retrying}>
+              <Button
+                size="sm"
+                onClick={onRetry}
+                disabled={retrying}
+              >
                 {retrying ? "Submitting…" : "Try again"}
               </Button>
             ) : null}
@@ -299,7 +317,51 @@ function Failure({
   );
 }
 
-function Closed({ job }: { job: Job }) {
+/**
+ * Asks ComfyUI about a lost run again. When the answer moves the run on, the
+ * stage redraws as whatever it now is; this only has to speak when it did not.
+ */
+function CheckAgain({
+  job,
+  onCheck,
+}: {
+  job: Job;
+  onCheck: () => Promise<Record<string, RecheckStatus> | null>;
+}) {
+  const [checking, setChecking] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const check = async () => {
+    setChecking(true);
+    setNote(null);
+    const statuses = await onCheck();
+    setChecking(false);
+    if (statuses === null) {
+      setNote("Could not reach ComfyUI. Check the connection and try again.");
+    } else if (!statuses[job.promptId] || statuses[job.promptId].state === "unknown") {
+      setNote(
+        "ComfyUI has no record of this run — it was probably restarted since.",
+      );
+    }
+  };
+  return (
+    <>
+      <Button size="sm" variant="primary" onClick={() => void check()} disabled={checking}>
+        {checking ? "Checking…" : "Check again"}
+      </Button>
+      {note ? (
+        <p className="w-full text-[12px] leading-relaxed text-fg-subtle">{note}</p>
+      ) : null}
+    </>
+  );
+}
+
+function Closed({
+  job,
+  onCheckAgain,
+}: {
+  job: Job;
+  onCheckAgain?: () => Promise<Record<string, RecheckStatus> | null>;
+}) {
   // `done` reaching here means the run finished and left nothing behind — the
   // branch above takes every done job that has an output. Worth its own words:
   // "no longer tracked" would be wrong about a job ComfyUI finished, and
@@ -322,6 +384,11 @@ function Closed({ job }: { job: Job }) {
           ComfyUI no longer has a record of this job. It was probably restarted
           since.
         </p>
+      ) : null}
+      {onCheckAgain ? (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <CheckAgain job={job} onCheck={onCheckAgain} />
+        </div>
       ) : null}
       {empty ? (
         <p className="mx-auto max-w-xs text-[13px] leading-relaxed text-fg-subtle">

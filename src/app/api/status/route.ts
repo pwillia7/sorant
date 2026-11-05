@@ -39,6 +39,12 @@ export interface StatusPayload {
    * refusal is a run that rendered something nobody asked for.
    */
   briefs?: Record<string, string>;
+  /**
+   * When ComfyUI finished the run, by its own clock, in ms. What a run this
+   * device lost track of is stamped with when a later check catches up with it
+   * — the moment of asking would count the whole outage as render time.
+   */
+  finishedAt?: number;
 }
 
 /** Guards against an oversized fan-out of history lookups. */
@@ -87,6 +93,19 @@ function wasInterrupted(entry: ComfyHistoryEntry): boolean {
       (message) => Array.isArray(message) && message[0] === "execution_interrupted",
     )
   );
+}
+
+/** The timestamp ComfyUI put on the message that ended the run, if any. */
+function finishedAtOf(entry: ComfyHistoryEntry): number | undefined {
+  const messages = entry.status?.messages;
+  if (!Array.isArray(messages)) return undefined;
+  for (const message of messages) {
+    if (!Array.isArray(message)) continue;
+    if (!/^execution_(success|error|interrupted)$/.test(String(message[0]))) continue;
+    const stamp = (message[1] as { timestamp?: unknown } | undefined)?.timestamp;
+    if (typeof stamp === "number" && Number.isFinite(stamp)) return stamp;
+  }
+  return undefined;
 }
 
 /** Queue entries are positional arrays; the prompt id sits at index 1. */
@@ -142,6 +161,7 @@ async function statusFor(
     const failure = extractError(entry);
     const outputs = collectOutputs(entry);
     const briefs = briefsFrom(entry);
+    const finishedAt = finishedAtOf(entry);
 
     if (failure) {
       return {
@@ -150,6 +170,7 @@ async function statusFor(
         outputs: [],
         error: failure,
         briefs,
+        finishedAt,
       };
     }
 
@@ -163,7 +184,7 @@ async function statusFor(
       Object.keys(briefs).length > 0 &&
       !savesAFile(entry)
     ) {
-      return { state: "done", queuePosition: null, outputs: [], briefs };
+      return { state: "done", queuePosition: null, outputs: [], briefs, finishedAt };
     }
 
     // A completed prompt with nothing to show means the graph has no save
@@ -185,6 +206,7 @@ async function statusFor(
         queuePosition: null,
         outputs: outputs.map((ref) => ({ ...ref, url: mediaUrl(ref) })),
         briefs,
+        finishedAt,
       };
     }
   }

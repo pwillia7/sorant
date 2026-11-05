@@ -269,9 +269,9 @@ drift. What holds them together is the plan.
    `project.ts`). The shot writer does not see a scene's own pictures, so a new
    one is named in the shot by number.
    Redo keeps every take, and the take used is picked under the scene. Scenes
-   whose runs were lost track of — a ComfyUI restart, a dropped connection —
-   can be found again on the machine by their file order and length
-   (`recover.ts`).
+   whose runs were lost track of are caught up with by prompt id once ComfyUI
+   answers again, like any other run. Ones a ComfyUI restart made it forget can
+   be found on the machine by their file order and length (`recover.ts`).
 5. **The join.** `music-video-stitch` trims each scene to its window, joins the
    encoded clips without decoding them (`ConcatenateVideo`), and lays one read
    of the song over the whole thing, so the audio has no seams.
