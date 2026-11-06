@@ -2,7 +2,7 @@ import { isSilentClip } from "@/lib/audio-track";
 import type { ComfyGraph } from "@/lib/comfy";
 import { latentTailNodes } from "./latent-tail";
 import type { ParamDef, ParamValue, WorkflowDef } from "./types";
-import { h3Patches, samplingParams } from "./minimax-common";
+import { h3Patches, h3Turbo, samplingParams } from "./minimax-common";
 
 /**
  * MiniMax H3 character swap: one person in a clip you have becomes the
@@ -39,10 +39,17 @@ import { h3Patches, samplingParams } from "./minimax-common";
  * filled from two short fields, rather than something a model rewrites into
  * whatever it thinks reads better.
  *
- * **No turbo.** The author's v1 recipe runs it off, at 20 steps of
- * `res_multistep`/`simple`. The v1.5 Relay recipe pairs the LoRA with a
- * different distilled LoRA (`minimax_h3_fl2v_turbo_8step`) than the one this
- * app's Turbo switch loads, and nothing has run this LoRA stacked on ours.
+ * **Turbo, at eight steps.** The author's core-nodes recipe runs turbo off at
+ * 20 steps of `res_multistep`/`simple`, and their Turbo8 recipe pairs the LoRA
+ * with a different distilled LoRA (`minimax_h3_fl2v_turbo_8step`), both at
+ * 1.0, on `er_sde`/`normal`. Ours stacked under it works. Tested on a 3090
+ * (2026-11-05), one person in shot, 640×1120: `turbo_v4` at 1.0, then Sage,
+ * then the swap LoRA at 1.0, 8 steps of `res_multistep`/`simple`. The swap
+ * held as well as the 20-step run, in 515 s against 1900. The same graph on
+ * `er_sde`/`normal` took 969 s and grew a fourth leg late in the clip, so the
+ * graph's own sampler stays. There is no four-step form here (no
+ * `stepSampler`): the bf16 pair it loads is the wrong base for this LoRA, and
+ * four steps is untested.
  */
 
 const VIDEO_NODE = "154";
@@ -336,7 +343,7 @@ const params: ParamDef[] = [
     advanced: true,
     targets: [{ node: "147", input: "strength_model" }],
   },
-  // 20, the author's recipe with turbo off.
+  // 20, the author's recipe with turbo off. Turbo retunes it to 8.
   ...samplingParams({ noise: "129", scheduler: "124" }, { steps: 20 }),
 ];
 
@@ -345,7 +352,7 @@ export const minimaxH3Swap: WorkflowDef = {
   name: "Character swap",
   description: "Puts the character from a picture in place of one person in a clip.",
   /**
-   * Measured on a 3090: a 5.3 s clip at 736×1280 took 32 minutes at 20 steps,
+   * With turbo off. Measured on a 3090: a 5.3 s clip at 736×1280 took 32 minutes at 20 steps,
    * about 89 s a step — slower per step than Remix, since the picture's tokens
    * ride through every step and the LoRA is applied at run time. The first
    * finished runs replace this with the machine's own median.
@@ -355,6 +362,11 @@ export const minimaxH3Swap: WorkflowDef = {
   graph,
   params,
   patches: h3Patches(),
+  /**
+   * On by default at eight steps; see the top of this file for the test. 515 s
+   * was measured at 0.7 MP (55 s a step), so 720 allows for a full-size clip.
+   */
+  turbo: h3Turbo(720, 8),
   /**
    * Swap on a finished video loads it as the clip. Nothing is carried: the
    * prompt that made the source describes a scene, and this one's prompt names
@@ -386,6 +398,11 @@ export const minimaxH3Swap: WorkflowDef = {
         character: "a knight",
         [KEEP_SOUND_PARAM]: false,
       },
+    },
+    {
+      name: "a clip with sound, turbo",
+      values: { [VIDEO_PARAM]: "clip.mp4", [IMAGE_PARAM]: "c.png", character: "a knight" },
+      mode: { turbo: true },
     },
     {
       name: "a silent clip",

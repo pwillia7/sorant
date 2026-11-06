@@ -179,9 +179,13 @@ Some choices that differ from the rest of the app:
   template, filled in from *Who to replace* and *Describe the character*
   (`swapPrompt`). The author notes that extra wording does not improve
   adherence.
-- **There is no Turbo.** The author's core-nodes recipe is 20 steps of
-  `res_multistep`/`simple` with turbo off. Their v1.5 recipe pairs the LoRA
-  with a different distilled LoRA than the one this app loads.
+- **Turbo is on, at 8 steps, with no four-step form.** The author's
+  core-nodes recipe runs turbo off, at 20 steps. Their Turbo8 recipe uses a
+  different distilled LoRA on `er_sde`/`normal`, with both LoRAs at 1.0. This
+  app's `turbo_v4` stacked under the swap LoRA, both at 1.0, works on the
+  graph's own `res_multistep`/`simple`. `er_sde` was slower and grew limbs.
+  Four steps would load the bf16 pair, which is the wrong base for this LoRA,
+  so the graph declares no `stepSampler`, and four steps is untested.
 - **The output keeps the clip's soundtrack** (`CreateVideo.audio` wired to
   the loader's audio) unless *Keep the clip's sound* is turned off. The clip's
   audio still conditions the run either way. A silent clip drops both wires,
@@ -200,6 +204,10 @@ Tested on the 3090 (2026-11-05), 20 steps, about 89 s a step:
 - Two people in shot: the costume went to the wrong person, or onto both. That
   happened whether they were named by position, by clothes, or both. Without a
   mask the prompt cannot pick out one person, and the help says so.
+- With Turbo, 8 steps, at 640×1120: a swap as good as the 20-step run, in 515 s
+  (55 s a step) against 1900.
+- The same, on `er_sde`/`normal`: 969 s, and the figure grew a fourth leg late
+  in the clip.
 
 **Swap** on a finished video hands the clip over through the same
 `/api/remix` copy as Remix and Extend. Nothing else is carried across.

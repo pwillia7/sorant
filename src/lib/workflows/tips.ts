@@ -268,7 +268,7 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
         heading: "Sound and settings",
         items: [
           "By default the result carries the clip's own soundtrack, untouched. Turn Keep the clip's sound off to hear the audio H3 generates instead.",
-          "20 steps is the LoRA author's recipe, and there is no Turbo: the turbo LoRA this app uses has not been tested with this one. On a 24 GB card that is about half an hour for a 5-second clip.",
+          "Turbo is on, at 8 steps: about 10 minutes for a 5-second clip on a 24 GB card. 8 is the tested count, and lower has not been tried. With Turbo off, it runs the LoRA author's 20 steps, which takes about half an hour.",
           "Swap strength 0 runs the plain model on the same inputs, which is the quickest way to see what the LoRA is doing.",
         ],
       },
