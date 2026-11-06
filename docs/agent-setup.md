@@ -806,7 +806,9 @@ On the ComfyUI machine:
 2. Node packs: `git pull` in each pack the diff points at — in
    `custom_nodes/` — and reinstall its requirements with ComfyUI's own Python,
    as in Phase 2. A pack not yet installed: install it as in Phase 2. When the
-   diff does not make it clear which pack, update all six from Phase 2.
+   diff does not make it clear which pack, update all of them from Phase 2.
+   H3 Relay is the exception to `git pull`: check out the commit Phase 2
+   names, since its main branch moves ahead of what was tested.
 3. Models: `pnpm models:download` for the workflows the person uses — it fetches
    only what is missing, and says how much before it starts. Ask before a large
    download.

@@ -79,7 +79,7 @@ larger than the card, and are untested with this app.
 
 ### Custom node packs
 
-Six packs. All but the first install from ComfyUI Manager by name.
+Seven packs. All but the first and last install from ComfyUI Manager by name.
 
 | Pack | Needed by |
 | --- | --- |
@@ -89,6 +89,7 @@ Six packs. All but the first install from ComfyUI Manager by name.
 | [ComfyUI_Nvidia_VFX_Nodes](https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes) — Manager: "ComfyUI Nvidia VFX Nodes" | Upscale |
 | [ComfyUI-MiniMax-H3-Turbo](https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo) — Manager: "MiniMax-H3 Turbo" | the Turbo switch, and any run at 4 steps |
 | [ComfyUI-Spectrum-MiniMax-H3](https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3) | the Spectrum switch |
+| [h3-relay](https://github.com/akatz-ai/h3-relay) — clone it, then `git checkout e2a7665b6eb8ea37a88c0de2c9c6b69a8f7c9220` (v2.0.1, the tested commit) | Character swap: its SAM mask and continuing windows |
 
 Restart ComfyUI after installing. Three things in that table are easy to miss:
 
