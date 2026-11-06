@@ -221,6 +221,8 @@ export interface TextParam extends ParamBase {
   default: string;
   placeholder?: string;
   maxLength?: number;
+  /** Refuse the run while this is blank. */
+  required?: boolean;
   /** Rows for a textarea. Ignored for single-line text. */
   rows?: number;
 }
@@ -473,6 +475,7 @@ export type ParamValue = string | number | boolean;
  */
 export const CLIP_ACTIONS = [
   "remix",
+  "swap",
   "extend",
   "upscale",
   "illustrate",

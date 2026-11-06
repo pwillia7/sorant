@@ -245,6 +245,40 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
     ],
   },
 
+  "minimax-h3-swap": {
+    sections: [
+      {
+        heading: "What goes in",
+        items: [
+          "A clip and a picture. The clip supplies the performance, camera, scene and sound; the picture supplies who the person becomes — face, hair, outfit and art style.",
+          "Press Swap on a finished video to load it as the clip, or drop in a video of your own. One continuous shot of about 5 seconds works best: hard cuts and long clips are where the swap drifts.",
+          "A full-body picture of the character on a plain background holds best. Busy backgrounds can leak into the shot.",
+        ],
+      },
+      {
+        heading: "The prompt is a template",
+        items: [
+          "There is no prompt rewrite here. The LoRA was trained on one shape of instruction — replace this person in <Video 1> with the character in <Picture 1>, keep everything else — and the two fields fill it in.",
+          "Describe the character every time: headwear, clothes, colours, a dozen words. Without it, the test run came back as the source clip, unchanged.",
+          "One person in shot is what works. With two, there is no mask to say which is which: in testing, the costume landed on the wrong person, or on both. Naming them by position or clothes did not fix it.",
+          "Longer instructions do not make the swap hold better.",
+        ],
+      },
+      {
+        heading: "Sound and settings",
+        items: [
+          "By default the result carries the clip's own soundtrack, untouched. Turn Keep the clip's sound off to hear the audio H3 generates instead.",
+          "20 steps is the LoRA author's recipe, and there is no Turbo: the turbo LoRA this app uses has not been tested with this one. On a 24 GB card that is about half an hour for a 5-second clip.",
+          "Swap strength 0 runs the plain model on the same inputs, which is the quickest way to see what the LoRA is doing.",
+        ],
+      },
+    ],
+    source: {
+      href: "https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA",
+      label: "akatz-ai's Character Swap LoRA",
+    },
+  },
+
   "minimax-h3-extend": {
     sections: [
       {

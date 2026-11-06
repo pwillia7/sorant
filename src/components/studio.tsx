@@ -117,6 +117,11 @@ const CLIP_NOTICE: Record<ClipAction, { verb: string; detail: string }> = {
     detail:
       "The clip is loaded as the reference below — change anything you like, then generate.",
   },
+  swap: {
+    verb: "Swapping a character into",
+    detail:
+      "The clip is loaded below. Add a picture of the character, say who in the clip they replace, then generate.",
+  },
   upscale: {
     verb: "Upscaling",
     detail:

@@ -36,6 +36,7 @@ export const MODEL_SOURCES: Record<string, ModelSource> = {
   "minimax_h3_video_vae_fp16.safetensors": { repo: H3, path: "vae/minimax_h3_video_vae_fp16.safetensors", folder: "vae", bytes: 5207808496 },
   "minimax_h3_audio_vae_fp32.safetensors": { repo: H3, path: "vae/minimax_h3_audio_vae_fp32.safetensors", folder: "vae", bytes: 605254808 },
   "minimax_h3_turbo_v4_step600_ema.safetensors": { repo: "larryvrh/MiniMax-H3-Turbo-Lora", path: "minimax_h3_turbo_v4_step600_ema.safetensors", folder: "loras", bytes: 779849816 },
+  "h3_character_swap_v1.5.safetensors": { repo: "akatz-ai/MiniMax-H3-Character-Swap-LoRA", path: "h3_character_swap_v1.5.safetensors", folder: "loras", bytes: 155110792 },
   "vh5tape-comfyui.safetensors": { repo: "KennethFal/vh5tape-vhs-lora-minimax-h3", path: "vh5tape-comfyui.safetensors", folder: "loras", bytes: 131242912 },
 
   // MiniMax Music 3

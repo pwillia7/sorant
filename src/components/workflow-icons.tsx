@@ -1,6 +1,7 @@
 import {
   Clapperboard,
   Disc3,
+  Drama,
   FastForward,
   Image,
   ImagePlay,
@@ -25,6 +26,7 @@ const ICONS: Record<string, LucideIcon> = {
   "minimax-h3-i2v": ImagePlay,
   "minimax-h3-ref": UserRound,
   "minimax-h3-ref2v": Shuffle,
+  "minimax-h3-swap": Drama,
   "minimax-h3-extend": FastForward,
   upscale: Scaling,
   "music-video": Disc3,
@@ -44,7 +46,7 @@ export const WORKFLOW_GROUPS: Array<{ title: string; ids: string[] }> = [
     title: "Make something new",
     ids: ["minimax-h3", "minimax-h3-image", "minimax-h3-i2v", "minimax-h3-ref"],
   },
-  { title: "Work on a clip you made", ids: ["minimax-h3-ref2v", "minimax-h3-extend", "upscale"] },
+  { title: "Work on a clip you made", ids: ["minimax-h3-ref2v", "minimax-h3-swap", "minimax-h3-extend", "upscale"] },
   { title: "Long videos, scene by scene", ids: ["music-video", "multi-scene"] },
   { title: "Sound", ids: ["minimax-music3"] },
 ];

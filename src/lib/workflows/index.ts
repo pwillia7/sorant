@@ -5,6 +5,7 @@ import { minimaxH3Image } from "./minimax-h3-image";
 import { minimaxH3ImageToVideo } from "./minimax-h3-i2v";
 import { minimaxH3Reference } from "./minimax-h3-ref";
 import { minimaxH3ReferenceVideo } from "./minimax-h3-ref2v";
+import { minimaxH3Swap } from "./minimax-h3-swap";
 import { minimaxMusic3 } from "./minimax-music3";
 import { multiScene } from "./multi-scene";
 import { musicVideo } from "./music-video";
@@ -27,6 +28,8 @@ export const WORKFLOWS: WorkflowDef[] = [
   minimaxH3ImageToVideo,
   minimaxH3Reference,
   minimaxH3ReferenceVideo,
+  // Remix's graph with a picture beside the clip and a LoRA under the model.
+  minimaxH3Swap,
   minimaxH3Extend,
   // Plan a whole video and run Reference to Video once per scene. After the
   // graphs they run, which they name by id.

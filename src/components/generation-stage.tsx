@@ -1,6 +1,6 @@
 "use client";
 
-import { Disc3, Download, FastForward, Film, ImagePlay, RotateCcw, Scaling, Shuffle, SlidersHorizontal, Sprout } from "lucide-react";
+import { Disc3, Download, Drama, FastForward, Film, ImagePlay, RotateCcw, Scaling, Shuffle, SlidersHorizontal, Sprout } from "lucide-react";
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { Badge, Dot } from "@/components/ui/panel";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -424,6 +424,7 @@ const CLIP_BUTTONS: Record<
   { label: string; title: string; icon: React.ReactNode }
 > = {
   remix: { label: "Remix", title: "Rebuild this clip into a new take", icon: <Shuffle {...ICON} /> },
+  swap: { label: "Swap", title: "Put a character from a picture in place of someone in this clip", icon: <Drama {...ICON} /> },
   extend: { label: "Extend", title: "Carry on from where this clip ends", icon: <FastForward {...ICON} /> },
   upscale: { label: "Upscale", title: "Make this clip larger and sharper", icon: <Scaling {...ICON} /> },
   musicvideo: {

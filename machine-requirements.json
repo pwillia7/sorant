@@ -1,5 +1,5 @@
 {
-  "fingerprint": "b553801bc6e6acb1",
+  "fingerprint": "c76a31133ccda9f7",
   "classes": {
     "AudioConcatenate": {
       "inputs": [
@@ -64,7 +64,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "BasicScheduler": {
@@ -115,7 +118,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "BatchImagesNode": {
@@ -193,6 +199,9 @@
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)",
         "minimax-music3"
       ]
     },
@@ -326,7 +335,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "DualCLIPLoader": {
@@ -447,7 +459,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "GetVideoComponents": {
@@ -585,7 +600,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "LTXVAudioVideoMask": {
@@ -694,7 +712,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "LatentCut": {
@@ -739,7 +760,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "LoadAudio": {
@@ -779,6 +803,9 @@
         "minimax-h3-ref (spectrum)",
         "minimax-h3-ref (style, vhs tape)",
         "minimax-h3-ref (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)",
         "multi-scene",
         "music-video"
       ]
@@ -804,7 +831,7 @@
         "model",
         "strength_model"
       ],
-      "optional": true,
+      "optional": false,
       "workflows": [
         "minimax-h3 (style, vhs tape)",
         "minimax-h3 (style, vhs tape, lighter base)",
@@ -815,7 +842,10 @@
         "minimax-h3-image (style, vhs tape)",
         "minimax-h3-image (style, vhs tape, lighter base)",
         "minimax-h3-ref (style, vhs tape)",
-        "minimax-h3-ref2v (style, vhs tape)"
+        "minimax-h3-ref2v (style, vhs tape)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "MiniMaxH3ImageToVideo": {
@@ -893,7 +923,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "MiniMaxH3TurboLoRA": {
@@ -952,7 +985,8 @@
         "minimax-h3-i2v (sage)",
         "minimax-h3-image (sage)",
         "minimax-h3-ref (sage)",
-        "minimax-h3-ref2v (sage)"
+        "minimax-h3-ref2v (sage)",
+        "minimax-h3-swap (sage)"
       ]
     },
     "PrimitiveFloat": {
@@ -1037,6 +1071,9 @@
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)",
         "minimax-music3",
         "multi-scene",
         "multi-scene-stitch",
@@ -1125,7 +1162,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "ReferenceLatent": {
@@ -1254,7 +1294,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "SaveAudioAdvanced": {
@@ -1325,7 +1368,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "SaveVideo": {
@@ -1372,6 +1418,9 @@
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)",
         "multi-scene-stitch",
         "music-video-stitch"
       ]
@@ -1469,7 +1518,8 @@
         "minimax-h3-i2v (spectrum)",
         "minimax-h3-image (spectrum)",
         "minimax-h3-ref (spectrum)",
-        "minimax-h3-ref2v (spectrum)"
+        "minimax-h3-ref2v (spectrum)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "StringConcatenate": {
@@ -1565,6 +1615,9 @@
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)",
         "minimax-music3",
         "upscale"
       ]
@@ -1616,7 +1669,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "VAEDecodeAudio": {
@@ -1660,6 +1716,9 @@
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)",
         "minimax-music3"
       ]
     },
@@ -1776,6 +1835,9 @@
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)",
         "minimax-music3",
         "upscale"
       ]
@@ -1822,6 +1884,9 @@
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)",
         "upscale"
       ]
     },
@@ -1978,6 +2043,16 @@
         "image-edit"
       ]
     },
+    "h3_character_swap_v1.5.safetensors": {
+      "loader": "LoraLoaderModelOnly",
+      "input": "lora_name",
+      "optional": false,
+      "workflows": [
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
+      ]
+    },
     "minimax_h3_audio_vae_fp32.safetensors": {
       "loader": "VAELoader",
       "input": "vae_name",
@@ -2016,7 +2091,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "minimax_h3_fl2va_bf16.safetensors": {
@@ -2091,7 +2169,10 @@
         "minimax-h3-ref2v",
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "minimax_h3_turbo_v4_step600_ema.safetensors": {
@@ -2151,7 +2232,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "minimax_music3_dav.safetensors": {
@@ -2229,7 +2313,10 @@
         "minimax-h3-ref2v (sage)",
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
-        "minimax-h3-ref2v (turbo)"
+        "minimax-h3-ref2v (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)"
       ]
     },
     "rife_v4.26.safetensors": {

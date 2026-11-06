@@ -103,6 +103,9 @@ function coerce(
   switch (param.type) {
     case "text":
     case "textarea": {
+      if (param.required && (typeof raw !== "string" || !raw.trim())) {
+        throw new ParamError(`${param.label} is required.`, param.id);
+      }
       if (raw == null) return param.default;
       if (typeof raw !== "string") {
         throw new ParamError(`${param.label} must be text.`, param.id);

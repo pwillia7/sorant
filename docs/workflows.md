@@ -10,6 +10,7 @@ with the overview table, then jump to the one you are using.
 - [Overview](#overview)
 - [Image to video](#image-to-video)
 - [Remix](#remix)
+- [Character swap](#character-swap)
 - [Extend](#extend)
 - [Text to Image](#text-to-image)
 - [Music video](#music-video)
@@ -152,6 +153,56 @@ the browser: a generated clip is comfortably past the 4.5 MB body cap, and the
 bytes would otherwise cross the user's connection twice for no reason. Extend
 uses the same route: the two differ in what they do with a clip, not in how it
 reaches ComfyUI's input directory.
+
+## Character swap
+
+`minimax-h3-swap` replaces one person in a clip with the character in a
+picture, using akatz-ai's
+[Character Swap LoRA](https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA)
+(v1.5). It is Remix's graph with two additions: a `LoadImage` (137) wired into
+`ref_images.ref_image_0`, which makes the picture `<Picture 1>` beside the
+clip's `<Video 1>`, and a `LoraLoaderModelOnly` (147) between the UNET and
+both the scheduler and the guider. Size and length come from the clip, as in
+Remix.
+
+It is a workflow rather than an entry in the content-LoRA list because it
+needs a source video, and only Remix has one. On every other graph it would
+have nothing to swap.
+
+Some choices that differ from the rest of the app:
+
+- **It stays on the int8 base.** Other LoRAs move a graph off
+  `_pruned_int8_convrot` because they were trained on the plain weights. This
+  one was trained *on* `minimax_h3_ref2va_pruned_int8_convrot` (see the
+  repo's `training/base-model-files.json`), so that is the right base for it.
+- **There is no prompt director.** The prompt is the LoRA's own instruction
+  template, filled in from *Who to replace* and *Describe the character*
+  (`swapPrompt`). The author notes that extra wording does not improve
+  adherence.
+- **There is no Turbo.** The author's core-nodes recipe is 20 steps of
+  `res_multistep`/`simple` with turbo off. Their v1.5 recipe pairs the LoRA
+  with a different distilled LoRA than the one this app loads.
+- **The output keeps the clip's soundtrack** (`CreateVideo.audio` wired to
+  the loader's audio) unless *Keep the clip's sound* is turned off. The clip's
+  audio still conditions the run either way. A silent clip drops both wires,
+  as Remix does.
+- **There is no mask.** The author's H3 Relay 2.0 workflow tracks the target
+  with SAM 3 and samples long clips in windows. That depends on the Relay node
+  pack, and the core reference node takes no mask, so this graph relies on the
+  prompt to say who to replace. Stick to short continuous shots.
+
+Tested on the 3090 (2026-11-05), 20 steps, about 89 s a step:
+
+- One person in shot, with *Describe the character* filled in: a clean swap.
+  Scene, framing and pose held, and the likeness was good.
+- The same, with no description: the output was the source clip, unchanged.
+  So the description is required.
+- Two people in shot: the costume went to the wrong person, or onto both. That
+  happened whether they were named by position, by clothes, or both. Without a
+  mask the prompt cannot pick out one person, and the help says so.
+
+**Swap** on a finished video hands the clip over through the same
+`/api/remix` copy as Remix and Extend. Nothing else is carried across.
 
 ## Extend
 
