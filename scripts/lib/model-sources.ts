@@ -37,6 +37,9 @@ export const MODEL_SOURCES: Record<string, ModelSource> = {
   "minimax_h3_audio_vae_fp32.safetensors": { repo: H3, path: "vae/minimax_h3_audio_vae_fp32.safetensors", folder: "vae", bytes: 605254808 },
   "minimax_h3_turbo_v4_step600_ema.safetensors": { repo: "larryvrh/MiniMax-H3-Turbo-Lora", path: "minimax_h3_turbo_v4_step600_ema.safetensors", folder: "loras", bytes: 779849816 },
   "h3_character_swap_v1.5.safetensors": { repo: "akatz-ai/MiniMax-H3-Character-Swap-LoRA", path: "h3_character_swap_v1.5.safetensors", folder: "loras", bytes: 155110792 },
+  // Character swap's recipe, after its LoRA's author: the FL2V Turbo LoRA it was tested with, and SAM 3.1 to find the person.
+  "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors": { repo: "lightx2v/Minimax-h3-Turbo", path: "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors", folder: "loras", bytes: 1956193000 },
+  "sam3.1_multiplex_fp16.safetensors": { repo: "Comfy-Org/sam3.1", path: "checkpoints/sam3.1_multiplex_fp16.safetensors", folder: "checkpoints", bytes: 1745546848 },
   "vh5tape-comfyui.safetensors": { repo: "KennethFal/vh5tape-vhs-lora-minimax-h3", path: "vh5tape-comfyui.safetensors", folder: "loras", bytes: 131242912 },
 
   // MiniMax Music 3

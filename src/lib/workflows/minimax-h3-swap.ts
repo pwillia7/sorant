@@ -1,110 +1,98 @@
-import { isSilentClip } from "@/lib/audio-track";
 import type { ComfyGraph } from "@/lib/comfy";
-import { latentTailNodes } from "./latent-tail";
 import type { ParamDef, ParamValue, WorkflowDef } from "./types";
-import { h3Patches, h3Turbo, samplingParams } from "./minimax-common";
-import { clipSlices, SLICE_FRAMES } from "./slices";
 
 /**
  * MiniMax H3 character swap: one person in a clip you have becomes the
  * character in a picture, and everything else about the clip stays.
  *
  * Built on akatz-ai's Character Swap LoRA,
- * <https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA>, and on the
- * core-nodes-only workflow it ships (`examples/H3 Character Swap v1 Ref2VA.json`)
- * rather than the H3 Relay 2.0 one. Relay adds a SAM mask, windowed sampling
- * for long clips and its own memory nodes; all of that is a custom node pack,
- * and the native reference node takes no mask at all, so the mask only means
- * something inside Relay. What is left is Remix's graph with a picture beside
- * the clip and the LoRA under the model:
+ * <https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA>, run the
+ * way its author runs it: through H3 Relay 2.0 (<https://github.com/akatz-ai/h3-relay>,
+ * pinned at e2a7665, v2.0.1), whose toolkit graph `H3-Character-Swap.api.json`
+ * this one follows node for node. The graph is ours; Relay is a node pack the
+ * ComfyUI machine installs, and nothing of its code is copied here.
  *
- * - 154 reads the clip at 24 fps, and 163 measures it, so the swap comes back
- *   the same size and length as the source — exactly as Remix does, for the
- *   same reasons; see minimax-h3-ref2v.ts.
- * - 137 is the character. It goes in as `ref_images.ref_image_0`, and since
- *   the node numbers each kind of reference separately that is <Picture 1>
- *   while the clip is <Video 1> — the two names the LoRA's prompt uses.
- * - 147 is the LoRA, between the UNET and both the scheduler and the guider.
+ * **Why Relay (2026-11-06).** The earlier graph was the LoRA's core-nodes
+ * example, with VHS's Meta Batch Manager cutting a long clip into five-second
+ * passes. Each pass was a fresh swap, so every join was a cold restart — the
+ * face and costume shifted there, and a pass could go flat for a moment. And
+ * with nothing telling the model *where* the person was, a shot without them
+ * got the character anyway, or the picture's own background. Relay fixes both
+ * the way the LoRA's author does:
  *
- * **On the int8 base, on purpose.** Everywhere else a LoRA moves the graph off
- * `_pruned_int8_convrot`, because a LoRA trained on the plain weights lands in
- * the wrong basis on a rotated checkpoint — see H3_FL2VA_LORA_BASES. This one
- * was *trained* on `minimax_h3_ref2va_pruned_int8_convrot` (its
- * `training/base-model-files.json`), so that is the base it is right on, and
- * the bf16 checkpoint would be the mismatch.
+ * - **A mask.** SAM 3.1 finds "who to replace" on the first frame, tracks
+ *   them through the clip and grows the mask by `expansion_px`; the edit is
+ *   confined to it (`H3RelayApplyEditMask`) and the rest of the frame comes
+ *   from the source latent.
+ * - **Windows that continue.** The clip is planned into windows on H3's 17k+5
+ *   grid (`H3RelayWindowPlan`, the "adaptive" schedule). From the second on,
+ *   each window carries the last `history_frames` of what was already made as
+ *   its history (`H3RelayApplyHistory`), so it picks up where the one before
+ *   left off rather than starting over. One native StartLoop/EndLoop runs them
+ *   all inside a single ComfyUI job.
  *
- * **No prompt director.** The LoRA was trained on one shape of instruction —
- * replace this person in <Video 1> with the character in <Picture 1>, keep the
- * picture's identity, keep everything else — and the author's note is that
- * more wording does not buy more adherence. So the prompt is that template,
- * filled from two short fields, rather than something a model rewrites into
- * whatever it thinks reads better.
+ * **Window length.** 124 frames, 5.2 s, with an 18-frame history: the
+ * author's tested window, and the only one offered. Relay takes any 17k+5
+ * window up to 362 frames (15 s), and 10 and 15 s were tried as a choice
+ * (2026-11-06), but the 5 s result was clean and the longer ones need far
+ * more memory than a 24 GB card has at 1 MP, so they were left out untested.
+ * `H3RelaySamplingMemory` is told the activation memory to reserve, scaled
+ * from the author's measured 17 GiB at 124 frames and 1 MP — see
+ * `activationGib`.
  *
- * **Turbo, at eight steps.** The author's core-nodes recipe runs turbo off at
- * 20 steps of `res_multistep`/`simple`, and their Turbo8 recipe pairs the LoRA
- * with a different distilled LoRA (`minimax_h3_fl2v_turbo_8step`), both at
- * 1.0, on `er_sde`/`normal`. Ours stacked under it works. Tested on a 3090
- * (2026-11-05), one person in shot, 640×1120: `turbo_v4` at 1.0, then Sage,
- * then the swap LoRA at 1.0, 8 steps of `res_multistep`/`simple`. The swap
- * held as well as the 20-step run, in 515 s against 1900. The same graph on
- * `er_sde`/`normal` took 969 s and grew a fourth leg late in the clip, so the
- * graph's own sampler stays. There is no four-step form here (no
- * `stepSampler`): the bf16 pair it loads is the wrong base for this LoRA, and
- * four steps is untested.
+ * **The recipe is the author's, not this app's Turbo switch.** The FL2V
+ * Turbo 8-step LoRA at 1.0 under the swap LoRA at 1.0, 8 steps of
+ * `er_sde`/`normal`, CFG 1, sigma shift 12/3 and Comfy Kitchen attention. The
+ * app's own Turbo (`turbo_v4` through MiniMaxH3TurboLoRA) and its patches are
+ * not offered on this graph: neither was tested with Relay's windows and
+ * masks, and the LoRA was trained against this pairing.
+ *
+ * **The int8 base, on purpose.** Everywhere else a LoRA moves the graph off
+ * `_pruned_int8_convrot` (see H3_FL2VA_LORA_BASES); this LoRA was *trained* on
+ * `minimax_h3_ref2va_pruned_int8_convrot`, so that is the base it is right on.
+ *
+ * **No prompt director.** The LoRA was trained on one shape of instruction, so
+ * the prompt is the author's template filled from short fields, not something
+ * a model rewrites.
  */
 
-const VIDEO_NODE = "154";
-const REFERENCE_NODE = "136";
-const CLIP_AUDIO_INPUT = "ref_video_audios.ref_video_audio_0";
 const VIDEO_PARAM = "source_video";
 const IMAGE_PARAM = "character_image";
+const CLIP_SECONDS_PARAM = "clip_seconds";
 const KEEP_SOUND_PARAM = "keep_sound";
+const RESOLUTION_PARAM = "resolution";
 
 /** The author's: no trigger word, and 1.0 is what it was trained at. */
 const SWAP_LORA = "h3_character_swap_v1.5.safetensors";
-
-/** The rate the clip is read at and the result is written at. See Remix. */
-const SOURCE_FPS = 24;
+/** The distilled LoRA the author's recipe pairs with it, also at 1.0. */
+const TURBO_LORA = "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors";
+const SAM_MODEL = "sam3.1_multiplex_fp16.safetensors";
 
 /**
- * Long clips, in slices.
- *
- * The LoRA holds best on about five seconds, and a run's cost grows faster
- * than its length, so a longer clip is swapped a slice at a time by VHS's Meta
- * Batch Manager, the way Upscale works through a clip. Each pass loads the
- * next slice, runs the whole graph on it, and appends its frames to one file
- * that `VHS_VideoCombine` holds open. VHS queues the passes itself, under one
- * run this app follows by the combine's prefix (meta-batch.ts).
- *
- * Every slice is a fresh swap from the same picture, description and seed,
- * not a continuation of the slice before it. The source supplies the motion,
- * so the joins hold up. Small details of the costume can still shift at a
- * join.
- *
- * In batched mode the loader gives every pass the whole clip's soundtrack
- * (VHS's `lazy_get_audio` reads from the start with no cap), which is right
- * for the combine's audio but wrong as a slice's reference. So the slices get
- * no audio reference, and the result always carries the clip's own sound. H3's
- * audio for a slice is never used.
- *
- * H3 makes a run's length on a 17k+5 frame grid, so a slice comes back up to a
- * second longer than it went in. Each pass keeps only as many frames as it
- * loaded (`trim`), so the slices tile the source exactly and the sound lines
- * up.
+ * Clips longer than this are refused. Relay holds the whole prepared clip, its
+ * masks and every finished window in memory until the end, and SAM tracks the
+ * whole clip in one go; a minute at 1 MP is already ~1,440 frames of each.
  */
-const BATCH_NODE = "batch";
-const TRIM_NODE = "trim";
-const COMBINE_NODE = "combine";
-const CLIP_SECONDS_PARAM = "clip_seconds";
-/** How long a clip may be: at about ten minutes a slice, a minute is two hours. */
 const MAX_CLIP_SECONDS = 60;
-const COMBINE_PREFIX = "video/MiniMax_H3_swap";
 
-/** How this submission's clip is cut, or null for one pass. See slices.ts. */
-const swapSlices = (values: Record<string, ParamValue>) => clipSlices(values[CLIP_SECONDS_PARAM]);
+/** The author's tested window: 124 frames, 5.2 s. */
+const WINDOW_FRAMES = 124;
 
-const clipHasAudio = (values: Record<string, ParamValue>): boolean =>
-  !isSilentClip(values[VIDEO_PARAM]);
+/**
+ * Activation memory to reserve for one window, in GiB.
+ *
+ * The author measured 17 GiB at 124 frames and 1 MP ("768"); the stock
+ * estimate there loaded 19.3 GiB of weights and failed on its first step. H3's
+ * tokens grow with frames times pixels, so the estimate is scaled by both
+ * (the frames are fixed today; the scaling stays for a longer window).
+ * Capped below the card's 24 GB, past which reserving more only forces every
+ * weight off the GPU without making room for anything.
+ */
+export function activationGib(values: Record<string, ParamValue>): number {
+  const pixels = String(values[RESOLUTION_PARAM] ?? "768") === "480" ? 0.5 : 1;
+  const gib = 17 * (WINDOW_FRAMES / 124) * pixels;
+  return Math.min(22, Math.round(gib * 2) / 2);
+}
 
 const text = (value: ParamValue | undefined): string =>
   String(value ?? "")
@@ -112,99 +100,40 @@ const text = (value: ParamValue | undefined): string =>
     .replace(/[.\s]+$/, "");
 
 /**
- * The instruction, in the shape the LoRA's own example uses — sentence for
- * sentence, with the person to replace and the character filled in.
+ * The instruction, in the shape of the LoRA card's own example, with the
+ * person to replace and the character filled in.
  *
  * Every control that shapes it writes the whole of it, because a target write
  * is an assignment and the last one wins. See `ParamTarget.transform`.
  */
 export function swapPrompt(values: Record<string, ParamValue>): string {
-  const who = text(values.prompt) || "the main person";
+  const who = text(values.prompt) || "the selected person";
   const character = text(values.character);
   const extra = String(values.extra ?? "").trim();
   return [
-    `Replace only ${who} in <Video 1> with the character in <Picture 1>${character ? `, ${character}` : ""}.`,
-    "Keep the replacement character's identity, outfit, and art style from <Picture 1>.",
-    "Preserve the source video's camera, framing, background, lighting, objects, and all other people.",
-    `Match ${who}'s position, scale, pose, and movement throughout the clip.`,
-    "Do not show the reference sheet or its background.",
+    `Replace ${who} in <Video 1> with the character in <Picture 1>${character ? `, ${character}` : ""}.`,
+    "Keep the reference character's face, hair and clothing.",
+    "Follow the source performance's pose, gaze, expression and movement.",
+    "Preserve the scene and the other people.",
     extra,
   ]
     .filter(Boolean)
     .join(" ");
 }
 
+/** What SAM looks for: a short noun phrase. */
+export function samSubject(values: Record<string, ParamValue>): string {
+  return text(values.prompt).replace(/^(the|a|an)\s+/i, "") || "person";
+}
+
 const promptTarget = {
-  node: "138",
-  input: "value",
-  transform: (_value: ParamValue, values: Record<string, ParamValue>) =>
-    swapPrompt(values),
+  node: "reference_conditioning",
+  input: "prompt",
+  transform: (_value: ParamValue, values: Record<string, ParamValue>) => swapPrompt(values),
 };
 
 const graph: ComfyGraph = {
-  "92": {
-    class_type: "SaveVideo",
-    inputs: {
-      filename_prefix: "video/MiniMax_H3",
-      format: "auto",
-      codec: "auto",
-      "video-preview": "",
-      video: ["130", 0],
-    },
-    _meta: { title: "Save Video" },
-  },
-  "119": {
-    class_type: "VAELoader",
-    inputs: { vae_name: "minimax_h3_video_vae_fp16.safetensors" },
-    _meta: { title: "Load VAE" },
-  },
-  "120": {
-    class_type: "VAELoader",
-    inputs: { vae_name: "minimax_h3_audio_vae_fp32.safetensors" },
-    _meta: { title: "Load VAE" },
-  },
-  "121": {
-    class_type: "VAEDecodeAudio",
-    inputs: { samples: ["125", 0], vae: ["120", 0] },
-    _meta: { title: "VAE Decode Audio" },
-  },
-  "122": {
-    class_type: "VAEDecode",
-    inputs: { samples: ["125", 0], vae: ["119", 0] },
-    _meta: { title: "VAE Decode" },
-  },
-  "123": {
-    class_type: "KSamplerSelect",
-    inputs: { sampler_name: "res_multistep" },
-    _meta: { title: "KSamplerSelect" },
-  },
-  "124": {
-    class_type: "BasicScheduler",
-    inputs: {
-      scheduler: "simple",
-      steps: 20,
-      denoise: 1,
-      model: ["147", 0],
-    },
-    _meta: { title: "BasicScheduler" },
-  },
-  "125": {
-    class_type: "SamplerCustomAdvanced",
-    inputs: {
-      noise: ["129", 0],
-      guider: ["126", 0],
-      sampler: ["123", 0],
-      sigmas: ["124", 0],
-      latent_image: ["136", 1],
-    },
-    _meta: { title: "SamplerCustomAdvanced" },
-  },
-  "126": {
-    class_type: "BasicGuider",
-    inputs: { model: ["147", 0], conditioning: ["136", 0] },
-    _meta: { title: "Basic Guider" },
-  },
-  "127": {
+  model: {
     class_type: "UNETLoader",
     inputs: {
       unet_name: "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
@@ -212,7 +141,27 @@ const graph: ComfyGraph = {
     },
     _meta: { title: "Load Diffusion Model" },
   },
-  "128": {
+  shift: {
+    class_type: "MiniMaxH3SigmaShift",
+    inputs: { model: ["model", 0], shift_video: 12, shift_audio: 3 },
+    _meta: { title: "MiniMax H3 Sigma Shift" },
+  },
+  attention: {
+    class_type: "ModelAttentionBackend",
+    inputs: { model: ["shift", 0], attention: "comfy kitchen attention" },
+    _meta: { title: "Attention Backend" },
+  },
+  turbo: {
+    class_type: "LoraLoaderModelOnly",
+    inputs: { model: ["attention", 0], lora_name: TURBO_LORA, strength_model: 1 },
+    _meta: { title: "FL2V Turbo 8-step LoRA" },
+  },
+  adapter: {
+    class_type: "LoraLoaderModelOnly",
+    inputs: { model: ["turbo", 0], lora_name: SWAP_LORA, strength_model: 1 },
+    _meta: { title: "Character Swap LoRA" },
+  },
+  text: {
     class_type: "CLIPLoader",
     inputs: {
       clip_name: "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
@@ -221,113 +170,304 @@ const graph: ComfyGraph = {
     },
     _meta: { title: "Load CLIP" },
   },
-  "129": {
-    class_type: "RandomNoise",
-    inputs: { noise_seed: 904234 },
-    _meta: { title: "RandomNoise" },
+  text_device: {
+    class_type: "SelectCLIPDevice",
+    inputs: { clip: ["text", 0], device: "gpu:0" },
+    _meta: { title: "Select CLIP Device" },
   },
-  "130": {
-    class_type: "CreateVideo",
+  // Releases the VAEs before Qwen's peak and Qwen before sampling; the
+  // author's 24 GB test ran out of memory without it.
+  text_memory: {
+    class_type: "H3RelayTextMemory",
+    inputs: { clip: ["text_device", 0] },
+    _meta: { title: "Text Stage Memory" },
+  },
+  video_vae: {
+    class_type: "VAELoader",
+    inputs: { vae_name: "minimax_h3_video_vae_fp16.safetensors" },
+    _meta: { title: "Load VAE" },
+  },
+  audio_vae: {
+    class_type: "VAELoader",
+    inputs: { vae_name: "minimax_h3_audio_vae_fp32.safetensors" },
+    _meta: { title: "Load VAE" },
+  },
+  source: {
+    class_type: "LoadVideo",
+    inputs: { file: "" },
+    _meta: { title: "Load Video" },
+  },
+  // 24 fps, a 32-pixel canvas within the pixel budget, and silence for a clip
+  // with no sound. Outputs: 0 frames, 1 audio, 5 the source frame count.
+  prepare: {
+    class_type: "H3RelayPrepareSource",
     inputs: {
-      fps: SOURCE_FPS,
-      bit_depth: 8,
-      images: ["122", 0],
-      // The clip's own soundtrack unless told otherwise — see `keep_sound`.
-      audio: ["154", 2],
+      video: ["source", 0],
+      resolution: "768",
+      duration_seconds: 0,
+      missing_audio: "silence",
     },
-    _meta: { title: "Create Video" },
+    _meta: { title: "Prepare Source" },
   },
-  "136": {
-    class_type: "MiniMaxH3ReferenceToVideo",
-    inputs: {
-      prompt: ["138", 0],
-      width: ["163", 1],
-      height: ["163", 2],
-      length: ["163", 3],
-      ref_image_size: "match",
-      clip: ["128", 0],
-      vae: ["119", 0],
-      audio_vae: ["120", 0],
-      "ref_images.ref_image_0": ["137", 0],
-      "ref_videos.ref_video_0": ["154", 0],
-      // Paired with the clip by index, as in Remix, so the performance comes
-      // with its timing. Taken out for a silent clip — see finalize.
-      "ref_video_audios.ref_video_audio_0": ["154", 2],
-    },
-    _meta: { title: "MiniMax H3 Reference to Video" },
+  dimensions: {
+    class_type: "GetImageSize",
+    inputs: { image: ["prepare", 0] },
+    _meta: { title: "Get Image Size" },
   },
-  "137": {
+  reference: {
     class_type: "LoadImage",
     inputs: { image: "" },
     _meta: { title: "Load Image (character)" },
   },
-  "138": {
-    class_type: "PrimitiveStringMultiline",
-    inputs: { value: "" },
-    _meta: { title: "Input Text (Prompt)" },
+  sam: {
+    class_type: "CheckpointLoaderSimple",
+    inputs: { ckpt_name: SAM_MODEL },
+    _meta: { title: "Load SAM 3.1" },
   },
-  "147": {
-    class_type: "LoraLoaderModelOnly",
-    inputs: {
-      lora_name: SWAP_LORA,
-      strength_model: 1,
-      model: ["127", 0],
-    },
-    _meta: { title: "Character Swap LoRA" },
+  subject: {
+    class_type: "CLIPTextEncode",
+    inputs: { clip: ["sam", 1], text: "person" },
+    _meta: { title: "Who to replace (SAM)" },
   },
-  // Outputs: 0 is the frames, 1 is how many there are, 2 is the soundtrack.
-  "154": {
-    class_type: "VHS_LoadVideo",
-    inputs: {
-      video: "",
-      force_rate: SOURCE_FPS,
-      custom_width: 0,
-      custom_height: 0,
-      frame_load_cap: 0,
-      skip_first_frames: 0,
-      select_every_nth: 1,
-    },
-    _meta: { title: "Load Video" },
-  },
-  "163": {
-    class_type: "GetImageSizeAndCount",
-    inputs: { image: ["154", 0] },
-    _meta: { title: "Get Image Size & Count" },
-  },
-  // The run's last 0.9 s of latents, for Extend to carry on from.
-  ...latentTailNodes("125"),
-
-  // Batched mode only; `finalize` takes these out of a one-pass run, and
-  // wires them in for a long clip. See "Long clips, in slices" above.
-  [BATCH_NODE]: {
-    class_type: "VHS_BatchManager",
-    inputs: { frames_per_batch: SLICE_FRAMES },
-    _meta: { title: "Meta Batch Manager" },
-  },
-  // The pass's frames, cut back to as many as the slice it loaded.
-  [TRIM_NODE]: {
+  first_frame: {
     class_type: "ImageFromBatch",
-    inputs: { image: ["122", 0], batch_index: 0, length: ["163", 3] },
-    _meta: { title: "Image From Batch (the slice's own length)" },
+    inputs: { image: ["prepare", 0], batch_index: 0, length: 1 },
+    _meta: { title: "First Frame" },
   },
-  [COMBINE_NODE]: {
-    class_type: "VHS_VideoCombine",
+  detect: {
+    class_type: "SAM3_Detect",
     inputs: {
-      images: [TRIM_NODE, 0],
-      audio: ["154", 2],
-      frame_rate: SOURCE_FPS,
-      loop_count: 0,
-      filename_prefix: COMBINE_PREFIX,
-      format: "video/h264-mp4",
-      pix_fmt: "yuv420p",
-      crf: 17,
-      save_metadata: false,
-      trim_to_audio: false,
-      pingpong: false,
-      save_output: true,
-      meta_batch: [BATCH_NODE, 0],
+      model: ["sam", 0],
+      image: ["first_frame", 0],
+      conditioning: ["subject", 0],
+      threshold: 0.35,
+      refine_iterations: 2,
+      individual_masks: true,
     },
-    _meta: { title: "Video Combine" },
+    _meta: { title: "SAM3 Detect" },
+  },
+  select: {
+    class_type: "H3RelaySelectMask",
+    inputs: { masks: ["detect", 0], selection: "largest", index: 0 },
+    _meta: { title: "Select Person" },
+  },
+  track: {
+    class_type: "SAM3_VideoTrack",
+    inputs: {
+      model: ["sam", 0],
+      images: ["prepare", 0],
+      initial_mask: ["select", 0],
+      conditioning: ["subject", 0],
+      detection_threshold: 0.5,
+      max_objects: 1,
+      detect_interval: 1,
+    },
+    _meta: { title: "SAM3 Video Track" },
+  },
+  mask: {
+    class_type: "SAM3_TrackToMask",
+    inputs: { track_data: ["track", 0], object_indices: "" },
+    _meta: { title: "Track To Mask" },
+  },
+  recover: {
+    class_type: "H3RelayRecoverMasks",
+    inputs: {
+      masks: ["mask", 0],
+      images: ["prepare", 0],
+      source_frames: ["prepare", 5],
+      model: ["sam", 0],
+      conditioning: ["subject", 0],
+      selection: ["select", 1],
+      recover_empty_frames: true,
+    },
+    _meta: { title: "Recover Masks" },
+  },
+  expand_mask: {
+    class_type: "H3RelayExpandMask",
+    inputs: {
+      masks: ["recover", 0],
+      images: ["prepare", 0],
+      source_frames: ["prepare", 5],
+      expansion_px: 64,
+    },
+    _meta: { title: "Expand Mask" },
+  },
+  plan: {
+    class_type: "H3RelayWindowPlan",
+    inputs: {
+      source_frames: ["prepare", 5],
+      window_frames: String(WINDOW_FRAMES),
+      history_frames: "18",
+      seed: 904239,
+      schedule: "adaptive",
+      seed_mode: "fixed",
+      seed_overrides: "{}",
+    },
+    _meta: { title: "Window Plan" },
+  },
+  start: {
+    class_type: "StartLoop",
+    inputs: { mode: "simple", "mode.num_iterations": ["plan", 2], cache_iterations: false },
+    _meta: { title: "Start Loop" },
+  },
+  window: {
+    class_type: "H3RelayWindowInputs",
+    inputs: {
+      source: ["prepare", 0],
+      window: ["plan", 3],
+      iteration_index: ["start", 0],
+      previous: ["start", 4],
+      reference_history: true,
+      fps: 24,
+      resize_anchor: true,
+      history_audio_mode: "source",
+      source_audio: ["prepare", 1],
+      mask: ["expand_mask", 0],
+    },
+    _meta: { title: "Window Inputs" },
+  },
+  reference_conditioning: {
+    class_type: "MiniMaxH3ReferenceToVideo",
+    inputs: {
+      clip: ["text_memory", 0],
+      prompt: "",
+      width: ["dimensions", 0],
+      height: ["dimensions", 1],
+      length: ["window", 8],
+      ref_image_size: "match",
+      "ref_videos.ref_video_0": ["window", 5],
+      "ref_images.ref_image_0": ["reference", 0],
+      vae: ["video_vae", 0],
+      audio_vae: ["audio_vae", 0],
+      "ref_audios.ref_audio_0": ["window", 6],
+    },
+    _meta: { title: "MiniMax H3 Reference to Video" },
+  },
+  history: {
+    class_type: "H3RelayApplyHistory",
+    inputs: {
+      positive: ["reference_conditioning", 0],
+      latent: ["reference_conditioning", 1],
+      vae: ["video_vae", 0],
+      audio_vae: ["audio_vae", 0],
+      frames: ["window", 3],
+      history_frames: ["window", 7],
+      first_frame_guide: false,
+      target_audio_guide: true,
+      audio: ["window", 4],
+    },
+    _meta: { title: "Apply History" },
+  },
+  encode_source: {
+    class_type: "VAEEncode",
+    inputs: { pixels: ["window", 0], vae: ["video_vae", 0] },
+    _meta: { title: "VAE Encode (source window)" },
+  },
+  edit_mask: {
+    class_type: "H3RelayApplyEditMask",
+    inputs: { latent: ["history", 1], source_latent: ["encode_source", 0], mask: ["window", 1] },
+    _meta: { title: "Apply Edit Mask" },
+  },
+  guide: {
+    class_type: "MiniMaxH3AddGuide",
+    inputs: {
+      positive: ["history", 0],
+      latent: ["edit_mask", 0],
+      frame_idx: 0,
+      audio_vae: ["audio_vae", 0],
+      audio: ["window", 2],
+    },
+    _meta: { title: "MiniMax H3 Add Guide" },
+  },
+  sampling_memory: {
+    class_type: "H3RelaySamplingMemory",
+    inputs: {
+      model: ["adapter", 0],
+      latent: ["edit_mask", 0],
+      conditioning: ["guide", 0],
+      activation_memory_gib: 17,
+    },
+    _meta: { title: "Sampling Workspace" },
+  },
+  noise: {
+    class_type: "RandomNoise",
+    inputs: { noise_seed: ["window", 10] },
+    _meta: { title: "RandomNoise" },
+  },
+  guider: {
+    class_type: "CFGGuider",
+    inputs: { model: ["sampling_memory", 0], positive: ["guide", 0], negative: ["guide", 0], cfg: 1 },
+    _meta: { title: "CFG Guider" },
+  },
+  sampler: {
+    class_type: "KSamplerSelect",
+    inputs: { sampler_name: "er_sde" },
+    _meta: { title: "KSamplerSelect" },
+  },
+  schedule: {
+    class_type: "BasicScheduler",
+    inputs: { model: ["adapter", 0], scheduler: "normal", steps: 8, denoise: 1 },
+    _meta: { title: "BasicScheduler" },
+  },
+  sample: {
+    class_type: "SamplerCustomAdvanced",
+    inputs: {
+      noise: ["noise", 0],
+      guider: ["guider", 0],
+      sampler: ["sampler", 0],
+      sigmas: ["schedule", 0],
+      latent_image: ["edit_mask", 0],
+    },
+    _meta: { title: "SamplerCustomAdvanced" },
+  },
+  separate: {
+    class_type: "LTXVSeparateAVLatent",
+    inputs: { av_latent: ["sample", 0] },
+    _meta: { title: "Separate AV Latent" },
+  },
+  decode: {
+    class_type: "VAEDecode",
+    inputs: { samples: ["separate", 0], vae: ["video_vae", 0] },
+    _meta: { title: "VAE Decode" },
+  },
+  // H3's own sound for the window, kept only when the clip's is not — see
+  // `keep_sound` and finalize.
+  decode_audio: {
+    class_type: "VAEDecodeAudio",
+    inputs: { samples: ["separate", 1], vae: ["audio_vae", 0] },
+    _meta: { title: "VAE Decode Audio" },
+  },
+  append: {
+    class_type: "H3RelayAppendWindow",
+    inputs: { frames: ["decode", 0], window: ["window", 12], previous: ["start", 4], audio: ["decode_audio", 0] },
+    _meta: { title: "Append Window" },
+  },
+  end: {
+    class_type: "EndLoop",
+    inputs: { output_value: ["append", 0], next_iteration_value: ["append", 0], accumulate: false },
+    _meta: { title: "End Loop" },
+  },
+  finish: {
+    class_type: "H3RelayFinishWindows",
+    inputs: { state: ["end", 0], audio_mode: "source", source_audio: ["prepare", 1] },
+    _meta: { title: "Finish Windows" },
+  },
+  video: {
+    class_type: "CreateVideo",
+    inputs: { images: ["finish", 0], fps: ["finish", 2], audio: ["finish", 1] },
+    _meta: { title: "Create Video" },
+  },
+  save: {
+    class_type: "SaveVideo",
+    inputs: {
+      video: ["video", 0],
+      filename_prefix: "video/MiniMax_H3_swap",
+      format: "mp4",
+      "format.codec": "h264",
+      "format.codec.encoding": "re-encode",
+      "format.codec.encoding.crf": 16,
+    },
+    _meta: { title: "Save Video" },
   },
 };
 
@@ -338,26 +478,22 @@ const params: ParamDef[] = [
     type: "video",
     default: "",
     required: true,
-    help: "The performance to keep. Its size and length become the result's. Up to 768×1344 and a minute long. A clip longer than about 6 seconds is swapped in 5-second slices, each about 10 minutes with Turbo.",
+    help: "One continuous shot, up to a minute, with the person in it from the first frame. A cut to a shot without them confuses the tracking — trim those out first.",
     group: "Source",
     maxSeconds: MAX_CLIP_SECONDS,
     measures: CLIP_SECONDS_PARAM,
-    targets: [{ node: VIDEO_NODE, input: "video" }],
+    targets: [{ node: "source", input: "file" }],
   },
   {
     id: CLIP_SECONDS_PARAM,
     label: "Clip length",
     type: "measured",
-    // Nothing measured yet: one pass, as every clip had before slices.
     default: 0,
     group: "Source",
-    targets: [
-      {
-        node: BATCH_NODE,
-        input: "frames_per_batch",
-        transform: (_value, values) => swapSlices(values)?.framesPerBatch ?? SLICE_FRAMES,
-      },
-    ],
+    // Read for the estimate (`slicedBy`). In the graph, zero is "the whole
+    // clip": Prepare Source measures it exactly itself, and a length rounded
+    // in the browser could drop the last frame.
+    targets: [{ node: "prepare", input: "duration_seconds", transform: () => 0 }],
   },
   {
     id: IMAGE_PARAM,
@@ -365,19 +501,33 @@ const params: ParamDef[] = [
     type: "image",
     default: "",
     required: true,
-    help: "Who they become — face, hair, outfit and art style all come from here. A full-body picture on a plain background works best.",
+    help: "Who they become — face, hair and outfit come from here. Crop to the person on a plain background: what is behind them can leak in.",
     group: "Source",
-    targets: [{ node: "137", input: "image" }],
+    targets: [{ node: "reference", input: "image" }],
   },
   {
     id: "prompt",
     label: "Who to replace",
     type: "text",
     default: "",
-    placeholder: "the woman in the foreground",
-    help: "Name the one person in the clip to swap, by where they are or what they wear. Works reliably with one person in shot; with two, the costume can land on the wrong one or on both.",
+    placeholder: "man in a cowboy hat",
+    help: "A short description SAM can find them by on the first frame — what they are and what they wear. Only they are changed; everyone else is kept.",
     group: "Prompt",
-    targets: [promptTarget],
+    targets: [promptTarget, { node: "subject", input: "text", transform: (_v, values) => samSubject(values) }],
+  },
+  {
+    id: "pick",
+    label: "If several match",
+    type: "select",
+    default: "largest",
+    options: [
+      { value: "largest", label: "The biggest in frame" },
+      { value: "leftmost", label: "The one furthest left" },
+      { value: "rightmost", label: "The one furthest right" },
+    ],
+    help: "Which match on the first frame to follow, when the description fits more than one person.",
+    group: "Prompt",
+    targets: [{ node: "select", input: "selection" }],
   },
   {
     id: "character",
@@ -385,8 +535,8 @@ const params: ParamDef[] = [
     type: "text",
     default: "",
     required: true,
-    placeholder: "a knight in silver armour with a red cloak",
-    help: "A few words on who is in the picture: headwear, clothes, colours. In testing, leaving this out returned the clip unchanged.",
+    placeholder: "a man with a beard in a backwards black cap and a camo shirt",
+    help: "Who is in the picture: hair, headwear, clothes, colours, and the clip's look if it differs (\"in grainy black and white\"). Describe what the picture shows — when the two disagree, the description wins.",
     group: "Prompt",
     targets: [promptTarget],
   },
@@ -402,21 +552,59 @@ const params: ParamDef[] = [
     targets: [promptTarget],
   },
   {
+    id: RESOLUTION_PARAM,
+    label: "Resolution",
+    type: "select",
+    default: "768",
+    options: [
+      { value: "768", label: "1 MP (about 1024×1024, or 1344×768)" },
+      { value: "480", label: "0.5 MP (faster)" },
+    ],
+    help: "The clip is fitted to this pixel budget, keeping its shape. 0.5 MP is about twice as fast.",
+    group: "Quality",
+    targets: [
+      { node: "prepare", input: "resolution" },
+      { node: "sampling_memory", input: "activation_memory_gib", transform: (_v, values) => activationGib(values) },
+    ],
+  },
+  {
     id: KEEP_SOUND_PARAM,
     label: "Keep the clip's sound",
     type: "toggle",
     default: true,
-    help: "On, the result carries the clip's own soundtrack untouched. Off, it gets the audio H3 generates alongside the picture. A clip swapped in slices always keeps its own sound.",
+    help: "On, the result carries the clip's own soundtrack. Off, it gets the audio H3 makes alongside the picture.",
     group: "Source",
-    // Which wire the output's audio comes from. A silent clip has no sound to
-    // keep, and finalize moves it to H3's whatever this says.
     targets: [
-      {
-        node: "130",
-        input: "audio",
-        transform: (value) => (value === false ? ["121", 0] : ["154", 2]),
-      },
+      { node: "finish", input: "audio_mode", transform: (value) => (value === false ? "generated" : "source") },
     ],
+  },
+  {
+    id: "history_frames",
+    label: "Carry-over between windows",
+    type: "select",
+    default: "18",
+    options: [
+      { value: "18", label: "18 frames (the author's)" },
+      { value: "35", label: "35 frames" },
+      { value: "52", label: "52 frames" },
+    ],
+    help: "How much of the last window each new one starts from. More keeps the joins steadier and costs a little time per window.",
+    group: "Quality",
+    advanced: true,
+    targets: [{ node: "plan", input: "history_frames" }],
+  },
+  {
+    id: "mask_grow",
+    label: "Mask margin",
+    type: "slider",
+    default: 64,
+    min: 0,
+    max: 256,
+    step: 8,
+    help: "How far past the tracked person the edit may reach, in pixels. More gives a costume room to be bigger than the original's outline (a hat, a cape); less keeps the background closer to the source.",
+    group: "Quality",
+    advanced: true,
+    targets: [{ node: "expand_mask", input: "expansion_px" }],
   },
   {
     id: "lora_strength",
@@ -426,13 +614,33 @@ const params: ParamDef[] = [
     min: 0,
     max: 1.5,
     step: 0.05,
-    help: "1 is what the LoRA was trained at. 0 runs the plain model, for comparison.",
+    help: "1 is what the LoRA was trained at.",
     group: "Sampling",
     advanced: true,
-    targets: [{ node: "147", input: "strength_model" }],
+    targets: [{ node: "adapter", input: "strength_model" }],
   },
-  // 20, the author's recipe with turbo off. Turbo retunes it to 8.
-  ...samplingParams({ noise: "129", scheduler: "124" }, { steps: 20 }),
+  {
+    id: "seed",
+    label: "Seed",
+    type: "seed",
+    default: -1,
+    help: "Reuse one to get the same take again. Every window uses it.",
+    group: "Sampling",
+    targets: [{ node: "plan", input: "seed" }],
+  },
+  {
+    id: "steps",
+    label: "Steps",
+    type: "slider",
+    default: 8,
+    min: 4,
+    max: 20,
+    step: 1,
+    help: "8 is what the Turbo LoRA in this recipe is distilled for.",
+    group: "Sampling",
+    advanced: true,
+    targets: [{ node: "schedule", input: "steps" }],
+  },
 ];
 
 export const minimaxH3Swap: WorkflowDef = {
@@ -440,21 +648,14 @@ export const minimaxH3Swap: WorkflowDef = {
   name: "Character swap",
   description: "Puts the character from a picture in place of one person in a clip.",
   /**
-   * With turbo off. Measured on a 3090: a 5.3 s clip at 736×1280 took 32 minutes at 20 steps,
-   * about 89 s a step — slower per step than Remix, since the picture's tokens
-   * ride through every step and the LoRA is applied at run time. The first
-   * finished runs replace this with the machine's own median.
+   * One five-second window at 1 MP on a 3090, with SAM and the model loads.
+   * A longer clip is scaled by its windows (`slicedBy`). The first finished
+   * runs replace this with the machine's own median.
    */
-  estimatedSeconds: 1900,
+  estimatedSeconds: 600,
   hasAudio: true,
   graph,
   params,
-  patches: h3Patches(),
-  /**
-   * On by default at eight steps; see the top of this file for the test. 515 s
-   * was measured at 0.7 MP (55 s a step), so 720 allows for a full-size clip.
-   */
-  turbo: h3Turbo(720, 8),
   /**
    * Swap on a finished video loads it as the clip. Nothing is carried: the
    * prompt that made the source describes a scene, and this one's prompt names
@@ -465,79 +666,26 @@ export const minimaxH3Swap: WorkflowDef = {
     accepts: "video",
     sourceParam: VIDEO_PARAM,
   },
-  /** A long clip's estimate is one slice's, times the slices. */
+  /** The estimate is one window's, times the windows. */
   slicedBy: CLIP_SECONDS_PARAM,
   finalize(graph, values) {
-    const sliced = swapSlices(values);
-    if (!sliced) {
-      for (const node of [BATCH_NODE, TRIM_NODE, COMBINE_NODE]) delete graph[node];
-      if (!clipHasAudio(values)) {
-        // VHS raises decoding audio from a file that has none, so a silent clip
-        // neither conditions on its sound nor hands it to the output.
-        delete graph[REFERENCE_NODE].inputs[CLIP_AUDIO_INPUT];
-        graph["130"].inputs.audio = ["121", 0];
-      }
-      return;
+    // H3's sound is only decoded when it is the one kept.
+    if (values[KEEP_SOUND_PARAM] !== false) {
+      delete graph.decode_audio;
+      delete graph.append.inputs.audio;
     }
-
-    // In slices: the loader driven by the batch manager, and the combine in
-    // place of CreateVideo and SaveVideo. See "Long clips, in slices" above.
-    graph[VIDEO_NODE].inputs.meta_batch = [BATCH_NODE, 0];
-    // Unique per submission: VHS re-queues this graph under new prompt ids,
-    // and the prefix is how the status and cancel routes find the passes.
-    graph[COMBINE_NODE].inputs.filename_prefix =
-      `${COMBINE_PREFIX}_${crypto.randomUUID().slice(0, 8)}`;
-    // Every pass would be handed the whole clip's sound, not its slice's.
-    delete graph[REFERENCE_NODE].inputs[CLIP_AUDIO_INPUT];
-    if (!clipHasAudio(values)) delete graph[COMBINE_NODE].inputs.audio;
-    // A pass's latent tail is of padded frames past its slice, so there is
-    // nothing true for Extend to carry on from. It picks up from the last
-    // frame instead, as it does for any clip without one.
-    for (const node of Object.keys(graph)) {
-      if (node.startsWith("tail:")) delete graph[node];
-    }
-    for (const node of ["92", "130", "121"]) delete graph[node];
   },
   finalizeCases: [
     {
-      name: "a clip with sound",
+      name: "the clip's own sound",
       values: { [VIDEO_PARAM]: "clip.mp4", [IMAGE_PARAM]: "c.png", character: "a knight" },
     },
     {
-      name: "a clip with sound, H3's own audio",
+      name: "H3's own sound",
       values: {
         [VIDEO_PARAM]: "clip.mp4",
         [IMAGE_PARAM]: "c.png",
         character: "a knight",
-        [KEEP_SOUND_PARAM]: false,
-      },
-    },
-    {
-      name: "a clip with sound, turbo",
-      values: { [VIDEO_PARAM]: "clip.mp4", [IMAGE_PARAM]: "c.png", character: "a knight" },
-      mode: { turbo: true },
-    },
-    {
-      name: "a silent clip",
-      values: { [VIDEO_PARAM]: "noaudio--clip.mp4", [IMAGE_PARAM]: "c.png", character: "a knight" },
-    },
-    {
-      name: "a 30-second clip, in slices, turbo",
-      values: {
-        [VIDEO_PARAM]: "clip.mp4",
-        [IMAGE_PARAM]: "c.png",
-        character: "a knight",
-        [CLIP_SECONDS_PARAM]: 30,
-      },
-      mode: { turbo: true },
-    },
-    {
-      name: "a silent 12-second clip, in slices",
-      values: {
-        [VIDEO_PARAM]: "noaudio--clip.mp4",
-        [IMAGE_PARAM]: "c.png",
-        character: "a knight",
-        [CLIP_SECONDS_PARAM]: 12,
         [KEEP_SOUND_PARAM]: false,
       },
     },

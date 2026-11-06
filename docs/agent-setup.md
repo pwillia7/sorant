@@ -193,6 +193,7 @@ present; `git pull` updates one. Some packs have no `requirements.txt`.
 | Nvidia VFX Nodes | `https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes` | Upscale — **see below for its pip install** |
 | MiniMax-H3 Turbo | `https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo` | the Turbo switch, and any run at 4 steps |
 | Spectrum | `https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3` | the Spectrum switch |
+| H3 Relay | `https://github.com/akatz-ai/h3-relay` — check out the tested commit: `git -C custom_nodes/h3-relay checkout e2a7665b6eb8ea37a88c0de2c9c6b69a8f7c9220` (v2.0.1). No `requirements.txt` | Character swap (its SAM mask and continuing windows) |
 | ComfyUI-Login | `https://github.com/liusida/ComfyUI-Login` | locking ComfyUI — **clone it, but read Phase 5 before restarting** |
 
 All but Nvidia VFX are required: Turbo and SageAttention start switched on, so

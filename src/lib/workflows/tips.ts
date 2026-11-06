@@ -250,27 +250,32 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
       {
         heading: "What goes in",
         items: [
-          "A clip and a picture. The clip supplies the performance, camera, scene and sound; the picture supplies who the person becomes — face, hair, outfit and art style.",
-          "Press Swap on a finished video to load it as the clip, or drop in a video of your own, up to a minute long. Hard cuts in the clip are where the swap is most likely to drift.",
-          "A clip longer than about 6 seconds is swapped in slices of about 5 seconds, one after another, in a single run, and joined into one video with the clip's own sound. Each slice takes about 10 minutes with Turbo, so a 30-second clip takes about an hour.",
-          "Each slice is a fresh swap from the same picture, description and seed. The motion comes from the clip, so the joins hold up, but small costume details can shift at a join.",
-          "A full-body picture of the character on a plain background holds best. Busy backgrounds can leak into the shot.",
+          "A clip and a picture. The clip supplies the performance, camera, scene and sound; the picture supplies who the person becomes — face, hair and outfit.",
+          "Press Swap on a finished video to load it as the clip, or drop in one of your own, up to a minute long. Use one continuous shot with the person in it from the first frame: they are found on that frame and tracked from there, and a cut to a shot without them loses the track.",
+          "Crop the picture to the person, on a plain background if you can. What is behind them can leak into the shot.",
         ],
       },
       {
-        heading: "The prompt is a template",
+        heading: "Who to replace",
         items: [
-          "There is no prompt rewrite here. The LoRA was trained on one shape of instruction — replace this person in <Video 1> with the character in <Picture 1>, keep everything else — and the two fields fill it in.",
-          "Describe the character every time: headwear, clothes, colours, a dozen words. Without it, the test run came back as the source clip, unchanged.",
-          "One person in shot is what works. With two, there is no mask to say which is which: in testing, the costume landed on the wrong person, or on both. Naming them by position or clothes did not fix it.",
-          "Longer instructions do not make the swap hold better.",
+          "Who to replace is what SAM 3.1 looks for on the first frame: a short description like \"man in a cowboy hat\". The swap only touches the area it tracks, plus a margin, so other people and the rest of the shot stay as they were.",
+          "If several people match, If several match picks the biggest, the leftmost or the rightmost.",
+          "Describe the character every time: hair, headwear, clothes, colours, and the clip's look if it is unusual (\"in grainy black and white\"). Describe what the picture shows — when the two disagree, the description wins.",
+          "There is no prompt rewrite here. The LoRA was trained on one shape of instruction, and longer instructions do not make the swap hold better.",
+        ],
+      },
+      {
+        heading: "Windows",
+        items: [
+          "The clip is made a window at a time. Each window after the first starts from the last 18 frames of the one before, so it carries on instead of starting over, and the joins hold.",
+          "Windows are 5 seconds, the length the LoRA's author tested. A 12-second clip at 1 MP took about 39 minutes on a 3090; 0.5 MP is about twice as fast.",
         ],
       },
       {
         heading: "Sound and settings",
         items: [
-          "By default the result carries the clip's own soundtrack, untouched. Turn Keep the clip's sound off to hear the audio H3 generates instead.",
-          "Turbo is on, at 8 steps: about 10 minutes for a 5-second clip on a 24 GB card. 8 is the tested count, and lower has not been tried. With Turbo off, it runs the LoRA author's 20 steps, which takes about half an hour.",
+          "By default the result carries the clip's own soundtrack, untouched. Turn Keep the clip's sound off to hear the audio H3 makes instead.",
+          "The recipe is the LoRA author's: their Turbo LoRA at 8 steps on er_sde, the swap LoRA at 1, and SAM to find the person. The app's own Turbo switch is not used here.",
           "Swap strength 0 runs the plain model on the same inputs, which is the quickest way to see what the LoRA is doing.",
         ],
       },

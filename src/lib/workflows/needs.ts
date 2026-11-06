@@ -29,6 +29,8 @@ const MODEL_INPUTS: Record<string, string | string[]> = {
   FrameInterpolationModelLoader: "model_name",
   // Neither of these is in any stored graph — both are spliced in by a switch.
   // See below.
+  // Character swap's SAM 3.1.
+  CheckpointLoaderSimple: "ckpt_name",
   MiniMaxH3TurboLoRA: "lora_name",
   LoraLoaderModelOnly: "lora_name",
 };

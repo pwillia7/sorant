@@ -159,94 +159,75 @@ reaches ComfyUI's input directory.
 `minimax-h3-swap` replaces one person in a clip with the character in a
 picture, using akatz-ai's
 [Character Swap LoRA](https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA)
-(v1.5). It is Remix's graph with two additions: a `LoadImage` (137) wired into
-`ref_images.ref_image_0`, which makes the picture `<Picture 1>` beside the
-clip's `<Video 1>`, and a `LoraLoaderModelOnly` (147) between the UNET and
-both the scheduler and the guider. Size and length come from the clip, as in
-Remix.
+(v1.5), run the way its author runs it: through the
+[H3 Relay 2.0](https://github.com/akatz-ai/h3-relay) node pack, pinned at
+`e2a7665` (v2.0.1). The graph follows Relay's toolkit
+`H3-Character-Swap.api.json` node for node; it is this app's own file, and
+none of Relay's code is copied into it.
 
 It is a workflow rather than an entry in the content-LoRA list because it
-needs a source video, and only Remix has one. On every other graph it would
-have nothing to swap.
+needs a source video and a mask. On any other graph it would have nothing to
+swap.
 
-Some choices that differ from the rest of the app:
+### How it works
 
-- **It stays on the int8 base.** Other LoRAs move a graph off
-  `_pruned_int8_convrot` because they were trained on the plain weights. This
-  one was trained *on* `minimax_h3_ref2va_pruned_int8_convrot` (see the
-  repo's `training/base-model-files.json`), so that is the right base for it.
-- **There is no prompt director.** The prompt is the LoRA's own instruction
-  template, filled in from *Who to replace* and *Describe the character*
-  (`swapPrompt`). The author notes that extra wording does not improve
-  adherence.
-- **Turbo is on, at 8 steps, with no four-step form.** The author's
-  core-nodes recipe runs turbo off, at 20 steps. Their Turbo8 recipe uses a
-  different distilled LoRA on `er_sde`/`normal`, with both LoRAs at 1.0. This
-  app's `turbo_v4` stacked under the swap LoRA, both at 1.0, works on the
-  graph's own `res_multistep`/`simple`. `er_sde` was slower and grew limbs.
-  Four steps would load the bf16 pair, which is the wrong base for this LoRA,
-  so the graph declares no `stepSampler`, and four steps is untested.
-- **The output keeps the clip's soundtrack** (`CreateVideo.audio` wired to
-  the loader's audio) unless *Keep the clip's sound* is turned off. The clip's
-  audio still conditions the run either way. A silent clip drops both wires,
-  as Remix does.
-- **There is no mask.** The author's H3 Relay 2.0 workflow tracks the target
-  with SAM 3 and samples long clips in windows. That depends on the Relay node
-  pack, and the core reference node takes no mask, so this graph relies on the
-  prompt to say who to replace.
+- **SAM finds the person.** *Who to replace* is turned into a short noun
+  phrase (`samSubject`) and given to SAM 3.1 on the first frame. *If several
+  match* picks the largest, leftmost or rightmost detection
+  (`H3RelaySelectMask`). SAM then tracks that one person through the clip,
+  Relay refills any frame where the track drops (`H3RelayRecoverMasks`), and
+  grows the mask by *Mask margin* (64 px by default). The edit is confined to
+  the mask: the rest of each frame comes from the source latent
+  (`H3RelayApplyEditMask`).
+- **The clip is made in windows that continue.** `H3RelayWindowPlan` plans
+  windows on H3's 17k+5 grid. From the second window on, each carries the last
+  18 frames of what was already made as its history (`H3RelayApplyHistory`),
+  so it carries on rather than starting over. One native StartLoop/EndLoop
+  runs every window inside a single ComfyUI job, and `H3RelayFinishWindows`
+  checks the windows cover the source exactly before the video is saved.
+- **Windows are 124 frames (5.2 s)**, the author's tested length. Relay takes
+  any 17k+5 window up to 362 frames (15 s); 10 and 15 s windows were built as
+  a choice and left out untested, because the 5 s result was clean and the
+  longer windows need far more memory than 24 GB at 1 MP. The sampler's
+  activation reserve (`H3RelaySamplingMemory`) is scaled from the author's
+  measured 17 GiB at 124 frames and 1 MP by pixels (`activationGib`).
+- **Resolution** is Relay's pixel budget, 1 MP (`768`) or 0.5 MP (`480`); the
+  clip keeps its shape on a 32-pixel grid.
+- **The recipe is the author's, not the app's Turbo switch.** The FL2V Turbo
+  8-step LoRA at 1.0 under the swap LoRA at 1.0, 8 steps of `er_sde`/`normal`,
+  CFG 1, sigma shift 12/3, Comfy Kitchen attention. The workflow declares no
+  `turbo` and no patches.
+- **It stays on the int8 base**, `minimax_h3_ref2va_pruned_int8_convrot`, which
+  is what the LoRA was trained on.
+- **There is no prompt director.** The prompt is the LoRA card's example
+  instruction, filled from *Who to replace* and *Describe the character*
+  (`swapPrompt`).
+- **Sound.** The result carries the clip's own soundtrack, trimmed to the
+  delivered frames. With *Keep the clip's sound* off, each window's H3 audio
+  is decoded and appended instead. A clip with no sound is given silence as
+  its audio reference.
+- **The estimate** is one window's times the windows (`slicedBy` on the
+  measured clip length; slices.ts plans the same 124-frame windows).
 
-### Long clips, in slices
+It needs, on the ComfyUI machine: the H3 Relay pack, SAM 3.1
+(`checkpoints/sam3.1_multiplex_fp16.safetensors`) and the FL2V Turbo LoRA
+(`loras/minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors`).
 
-A clip of up to 5.875 s (141 frames, the grid length of a 5-second H3 run)
-goes through in one pass, as described above. A longer one, up to a minute, is
-swapped in slices by VHS's Meta Batch Manager, the same machinery Upscale uses:
+### Tests
 
-- The clip's length comes from the form (`clip_seconds`, a `measured` param
-  filled by the clip control). `swapSlices` cuts the clip into about 124-frame
-  slices, made equal and padded by 4 frames, so that a clip measured a little
-  short still ends without a pass of one or two frames, which the reference
-  node refuses. A clip not measured yet runs as one pass.
-- `finalize` drives the loader (154) from the manager and replaces
-  `CreateVideo`/`SaveVideo` with a `VHS_VideoCombine` that holds one file open
-  across the passes. VHS queues the passes itself, and the app follows them as
-  one run by the combine's per-submission prefix (`meta-batch.ts`), as it does
-  for Upscale.
-- Each pass is a fresh swap of its slice from the same picture, prompt and
-  seed. Nothing carries from one slice to the next; the source supplies the
-  motion.
-- H3 rounds a run's length up to its 17k+5 grid, so each pass keeps only as
-  many frames as it loaded (`ImageFromBatch` with the loader's count). The
-  slices tile the source exactly.
-- In batched mode, VHS hands every pass the whole clip's audio rather than the
-  slice's. So the slices get no audio reference, and the combine lays the
-  clip's own soundtrack over the finished file once. *Keep the clip's sound*
-  has no effect here, and a silent clip comes out silent.
-- The latent-tail saves are left out, because a pass's tail covers padded
-  frames past its slice. Extend picks a long swap up from its last frame.
-- The estimate is one pass's times the passes (`slicedBy`, `estimateScale` in
-  slices.ts), in the run bar and from the server. This machine's learned
-  estimate is kept per pass count (`variant` "x2", "x3" and so on).
+On the 3090 at its 300 W cap (2026-11-06), the first 12 s of a one-person
+selfie video (854×478, black and white), the character a colour photo, seed
+4242:
 
-Tested on the 3090 (2026-11-06), 10 s one-person clip at 640×1120, Turbo, 8
-steps, two passes of 128 and 112 frames, in 913 s. The result was 240 frames,
-exactly 10.0 s, with the swap held through both slices. Its soundtrack was the
-source's (loudness correlation 0.9994). The app followed both passes as one
-run. At the join, the cape's folds and the figure's position shift slightly
-from one frame to the next.
+- **5 s windows, 1 MP:** 3 windows, 2314 s. 288 frames at 1344×736, exactly
+  12.0 s, with the source's sound. The face, cap and camo held the whole way,
+  the performance (head turns, expressions, speech) followed the source, and
+  no join was visible.
 
-Tested on the 3090 (2026-11-05), 20 steps, about 89 s a step:
-
-- One person in shot, with *Describe the character* filled in: a clean swap.
-  Scene, framing and pose held, and the likeness was good.
-- The same, with no description: the output was the source clip, unchanged.
-  So the description is required.
-- Two people in shot: the costume went to the wrong person, or onto both. That
-  happened whether they were named by position, by clothes, or both. Without a
-  mask the prompt cannot pick out one person, and the help says so.
-- With Turbo, 8 steps, at 640×1120: a swap as good as the 20-step run, in 515 s
-  (55 s a step) against 1900.
-- The same, on `er_sde`/`normal`: 969 s, and the figure grew a fourth leg late
-  in the clip.
+The previous version (v0.10.0–0.10.1) had no mask and cut long clips into
+fresh five-second passes. Its joins were cold restarts, and on a clip with
+cuts it put the character into shots without the person, or the picture's own
+background.
 
 **Swap** on a finished video hands the clip over through the same
 `/api/remix` copy as Remix and Extend. Nothing else is carried across.
