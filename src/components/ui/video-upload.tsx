@@ -200,6 +200,8 @@ export function VideoUpload({
   maxShortEdge = MAX_SHORT_EDGE,
   maxLongEdge = MAX_LONG_EDGE,
   budgetSeconds,
+  longClipWarning,
+  warnOverSeconds,
   compact = false,
   disabled,
   describedBy,
@@ -223,6 +225,9 @@ export function VideoUpload({
   maxLongEdge?: number;
   /** See `VideoParam`. Without one, all of an accepted clip is used. */
   budgetSeconds?: number;
+  /** See `VideoParam`: shown under a clip longer than `warnOverSeconds`. */
+  longClipWarning?: string;
+  warnOverSeconds?: number;
   /** See `VideoParam`. Collapsed to a row until asked for, or until filled. */
   compact?: boolean;
   disabled?: boolean;
@@ -542,6 +547,18 @@ export function VideoUpload({
 
       {error ? (
         <p className="text-[12px] leading-snug text-danger">{error}</p>
+      ) : null}
+      {!error &&
+      longClipWarning &&
+      warnOverSeconds !== undefined &&
+      spec &&
+      Number.isFinite(spec.seconds) &&
+      spec.seconds > warnOverSeconds ? (
+        <p className="text-[12px] leading-snug text-warning">
+          This clip runs {Math.floor(Math.round(spec.seconds) / 60)}:
+          {String(Math.round(spec.seconds) % 60).padStart(2, "0")}.{" "}
+          {longClipWarning}
+        </p>
       ) : null}
     </div>
   );

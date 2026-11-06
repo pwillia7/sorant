@@ -60,7 +60,7 @@ const VIDEO_PARAM = "source_video";
 const IMAGE_PARAM = "character_image";
 const CLIP_SECONDS_PARAM = "clip_seconds";
 const KEEP_SOUND_PARAM = "keep_sound";
-const RESOLUTION_PARAM = "resolution";
+const MEGAPIXELS_PARAM = "megapixels";
 
 /** The author's: no trigger word, and 1.0 is what it was trained at. */
 const SWAP_LORA = "h3_character_swap_v1.5.safetensors";
@@ -69,11 +69,20 @@ const TURBO_LORA = "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetenso
 const SAM_MODEL = "sam3.1_multiplex_fp16.safetensors";
 
 /**
- * Clips longer than this are refused. Relay holds the whole prepared clip, its
- * masks and every finished window in memory until the end, and SAM tracks the
- * whole clip in one go; a minute at 1 MP is already ~1,440 frames of each.
+ * The longest clip Relay takes: Prepare Source refuses more than 3,592 frames
+ * (its MAX_FRAMES, the largest 17n+5 under the H3 node's 3,600), 149.67 s at
+ * 24 fps. Nothing else in the graph caps the length — the windows run one
+ * after another.
  */
-const MAX_CLIP_SECONDS = 60;
+const MAX_CLIP_SECONDS = 149;
+/**
+ * Past this, the clip control warns about the wait rather than refusing.
+ * What grows is the run (about 13 minutes per 5 s window at 1 MP on a 3090)
+ * and the memory Relay holds — the whole prepared clip, its masks and every
+ * finished window stay in RAM until the end, and SAM tracks the whole clip in
+ * one go. The 100 MB upload limit still applies.
+ */
+const LONG_CLIP_SECONDS = 60;
 
 /** The author's tested window: 124 frames, 5.2 s. */
 const WINDOW_FRAMES = 124;
@@ -89,9 +98,15 @@ const WINDOW_FRAMES = 124;
  * weight off the GPU without making room for anything.
  */
 export function activationGib(values: Record<string, ParamValue>): number {
-  const pixels = String(values[RESOLUTION_PARAM] ?? "768") === "480" ? 0.5 : 1;
+  const pixels = frameMegapixels(values);
   const gib = 17 * (WINDOW_FRAMES / 124) * pixels;
   return Math.min(22, Math.round(gib * 2) / 2);
+}
+
+/** The frame size asked for, in MP, held to what H3 makes (0.1–1). */
+export function frameMegapixels(values: Record<string, ParamValue>): number {
+  const mp = Number(values[MEGAPIXELS_PARAM] ?? 1);
+  return Number.isFinite(mp) ? Math.min(1, Math.max(0.1, mp)) : 1;
 }
 
 const text = (value: ParamValue | undefined): string =>
@@ -209,9 +224,18 @@ const graph: ComfyGraph = {
     },
     _meta: { title: "Prepare Source" },
   },
+  // Prepare Source has two pixel budgets, 0.5 and 1 MP. Its frames are
+  // scaled from there to the Frame size asked for, on the 32-pixel grid Relay's
+  // masks need, and everything after reads these. Taken out by finalize at
+  // either budget exactly, where there is nothing to scale.
+  scale: {
+    class_type: "ImageScaleToTotalPixels",
+    inputs: { image: ["prepare", 0], upscale_method: "lanczos", megapixels: 1, resolution_steps: 32 },
+    _meta: { title: "Scale to Frame size" },
+  },
   dimensions: {
     class_type: "GetImageSize",
-    inputs: { image: ["prepare", 0] },
+    inputs: { image: ["scale", 0] },
     _meta: { title: "Get Image Size" },
   },
   reference: {
@@ -231,7 +255,7 @@ const graph: ComfyGraph = {
   },
   first_frame: {
     class_type: "ImageFromBatch",
-    inputs: { image: ["prepare", 0], batch_index: 0, length: 1 },
+    inputs: { image: ["scale", 0], batch_index: 0, length: 1 },
     _meta: { title: "First Frame" },
   },
   detect: {
@@ -255,7 +279,7 @@ const graph: ComfyGraph = {
     class_type: "SAM3_VideoTrack",
     inputs: {
       model: ["sam", 0],
-      images: ["prepare", 0],
+      images: ["scale", 0],
       initial_mask: ["select", 0],
       conditioning: ["subject", 0],
       detection_threshold: 0.5,
@@ -273,7 +297,7 @@ const graph: ComfyGraph = {
     class_type: "H3RelayRecoverMasks",
     inputs: {
       masks: ["mask", 0],
-      images: ["prepare", 0],
+      images: ["scale", 0],
       source_frames: ["prepare", 5],
       model: ["sam", 0],
       conditioning: ["subject", 0],
@@ -286,7 +310,7 @@ const graph: ComfyGraph = {
     class_type: "H3RelayExpandMask",
     inputs: {
       masks: ["recover", 0],
-      images: ["prepare", 0],
+      images: ["scale", 0],
       source_frames: ["prepare", 5],
       expansion_px: 64,
     },
@@ -313,7 +337,7 @@ const graph: ComfyGraph = {
   window: {
     class_type: "H3RelayWindowInputs",
     inputs: {
-      source: ["prepare", 0],
+      source: ["scale", 0],
       window: ["plan", 3],
       iteration_index: ["start", 0],
       previous: ["start", 4],
@@ -478,9 +502,16 @@ const params: ParamDef[] = [
     type: "video",
     default: "",
     required: true,
-    help: "One continuous shot, up to a minute, with the person in it from the first frame. A cut to a shot without them confuses the tracking — trim those out first.",
+    help: "One continuous shot, up to about two and a half minutes, with the person in it from the first frame. A cut to a shot without them confuses the tracking — trim those out first.",
     group: "Source",
+    // Not H3's 768×1344: Prepare Source fits the clip to the pixel budget
+    // itself, so a phone's 1080p clip is fine.
+    maxShortEdge: 1080,
+    maxLongEdge: 1920,
     maxSeconds: MAX_CLIP_SECONDS,
+    warnOverSeconds: LONG_CLIP_SECONDS,
+    longClipWarning:
+      "That works, but it is a long run: about 13 minutes per 5 seconds of clip at 1 MP on a 24 GB card (about a third of that at 0.5 MP), so a minute at 1 MP is over 2 hours. Queued runs wait behind it.",
     measures: CLIP_SECONDS_PARAM,
     targets: [{ node: "source", input: "file" }],
   },
@@ -552,18 +583,24 @@ const params: ParamDef[] = [
     targets: [promptTarget],
   },
   {
-    id: RESOLUTION_PARAM,
-    label: "Resolution",
-    type: "select",
-    default: "768",
-    options: [
-      { value: "768", label: "1 MP (about 1024×1024, or 1344×768)" },
-      { value: "480", label: "0.5 MP (faster)" },
-    ],
-    help: "The clip is fitted to this pixel budget, keeping its shape. 0.5 MP is about twice as fast.",
+    id: MEGAPIXELS_PARAM,
+    label: "Frame size",
+    type: "slider",
+    // 1, as tested: the 12 s test at 1 MP was clean, and H3 is native at about
+    // 1 MP, so there is no more detail past it.
+    default: 1,
+    min: 0.1,
+    max: 1,
+    step: 0.05,
+    unit: "MP",
+    hint: "Higher is sharper and slower. H3 uses about 1 MP at most.",
+    help: "The clip is fitted to this many pixels, keeping its shape. 1 MP takes about three times as long as 0.5 MP.",
     group: "Quality",
     targets: [
-      { node: "prepare", input: "resolution" },
+      // The smaller budget wherever it is enough, so a long clip is not held
+      // in memory at 1 MP only to be scaled down.
+      { node: "prepare", input: "resolution", transform: (_v, values) => (frameMegapixels(values) <= 0.5 ? "480" : "768") },
+      { node: "scale", input: "megapixels", transform: (_v, values) => frameMegapixels(values) },
       { node: "sampling_memory", input: "activation_memory_gib", transform: (_v, values) => activationGib(values) },
     ],
   },
@@ -669,6 +706,18 @@ export const minimaxH3Swap: WorkflowDef = {
   /** The estimate is one window's, times the windows. */
   slicedBy: CLIP_SECONDS_PARAM,
   finalize(graph, values) {
+    // At either of Prepare Source's own budgets the frames are already that
+    // size, and scaling them again would only nudge the shape off by a few
+    // pixels. The scale node's readers read Prepare Source instead.
+    const mp = frameMegapixels(values);
+    if (mp === 1 || mp === 0.5) {
+      delete graph.scale;
+      for (const node of Object.values(graph)) {
+        for (const [input, link] of Object.entries(node.inputs)) {
+          if (Array.isArray(link) && link[0] === "scale") node.inputs[input] = ["prepare", 0];
+        }
+      }
+    }
     // H3's sound is only decoded when it is the one kept.
     if (values[KEEP_SOUND_PARAM] !== false) {
       delete graph.decode_audio;
@@ -679,6 +728,10 @@ export const minimaxH3Swap: WorkflowDef = {
     {
       name: "the clip's own sound",
       values: { [VIDEO_PARAM]: "clip.mp4", [IMAGE_PARAM]: "c.png", character: "a knight" },
+    },
+    {
+      name: "0.75 MP, scaled from the 1 MP budget",
+      values: { [VIDEO_PARAM]: "clip.mp4", [IMAGE_PARAM]: "c.png", character: "a knight", [MEGAPIXELS_PARAM]: 0.75 },
     },
     {
       name: "H3's own sound",

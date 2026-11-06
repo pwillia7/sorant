@@ -331,6 +331,13 @@ export interface VideoParam extends ParamBase {
   minSeconds?: number;
   maxSeconds?: number;
   /**
+   * A clip longer than this, but within `maxSeconds`, is accepted with
+   * `longClipWarning` shown under it. For a graph where a long clip only
+   * means a long run — Character swap, which works through a clip in windows.
+   */
+  warnOverSeconds?: number;
+  longClipWarning?: string;
+  /**
    * How much of the clip actually reaches the model, where that is less than
    * what may be uploaded. Anything past it is truncated rather than refused.
    *

@@ -715,7 +715,8 @@
         "minimax-h3-ref (sage)",
         "minimax-h3-ref (spectrum)",
         "minimax-h3-ref (style, vhs tape)",
-        "minimax-h3-ref (turbo)"
+        "minimax-h3-ref (turbo)",
+        "minimax-h3-swap"
       ]
     },
     "KSampler": {

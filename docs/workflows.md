@@ -190,9 +190,13 @@ swap.
   a choice and left out untested, because the 5 s result was clean and the
   longer windows need far more memory than 24 GB at 1 MP. The sampler's
   activation reserve (`H3RelaySamplingMemory`) is scaled from the author's
-  measured 17 GiB at 124 frames and 1 MP by pixels (`activationGib`).
-- **Resolution** is Relay's pixel budget, 1 MP (`768`) or 0.5 MP (`480`); the
-  clip keeps its shape on a 32-pixel grid.
+  measured 17 GiB at 124 frames and 1 MP by the frame size (`activationGib`).
+- **Frame size** is the usual 0.1–1 MP slider (default 1 MP, as tested).
+  Prepare Source only has two pixel budgets, 0.5 MP (`480`) and 1 MP (`768`),
+  so it prepares at the smallest budget that covers the slider, and
+  `ImageScaleToTotalPixels` (32-pixel steps, which Relay's masks need) scales
+  its frames to the slider before SAM and H3 see them. At exactly 0.5 or 1 MP,
+  finalize removes the scale.
 - **The recipe is the author's, not the app's Turbo switch.** The FL2V Turbo
   8-step LoRA at 1.0 under the swap LoRA at 1.0, 8 steps of `er_sde`/`normal`,
   CFG 1, sigma shift 12/3, Comfy Kitchen attention. The workflow declares no
@@ -206,6 +210,14 @@ swap.
   delivered frames. With *Keep the clip's sound* off, each window's H3 audio
   is decoded and appended instead. A clip with no sound is given silence as
   its audio reference.
+- **Clips up to 149 s, with a warning past a minute.** 3,592 frames is
+  Prepare Source's own ceiling (the largest 17k+5 under the H3 node's 3,600).
+  Past 60 s the clip control warns about the wait (`warnOverSeconds`,
+  `longClipWarning`) instead of refusing: windows run one after another, so a
+  long clip is only a long run, about 13 minutes per 5-second window at 1 MP
+  on a 3090. Relay keeps the whole prepared clip, its masks and the finished
+  frames in RAM until the end, and the 100 MB upload limit still applies.
+  Clips up to 1080×1920 are taken, since Prepare Source scales them down.
 - **The estimate** is one window's times the windows (`slicedBy` on the
   measured clip length; slices.ts plans the same 124-frame windows).
 
@@ -223,6 +235,9 @@ selfie video (854×478, black and white), the character a colour photo, seed
   12.0 s, with the source's sound. The face, cap and camo held the whole way,
   the performance (head turns, expressions, speech) followed the source, and
   no join was visible.
+- **0.75 MP Frame size, 5 s of the same clip:** one window, 637 s, 1184×672
+  (ImageScaleToTotalPixels lands a little over 0.75 MP on its 32-pixel grid).
+  Clean, with the likeness held.
 
 The previous version (v0.10.0–0.10.1) had no mask and cut long clips into
 fresh five-second passes. Its joins were cold restarts, and on a clip with

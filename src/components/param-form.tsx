@@ -449,6 +449,8 @@ export function Control({
             }
             minSeconds={param.minSeconds}
             maxSeconds={param.maxSeconds}
+            longClipWarning={param.longClipWarning}
+            warnOverSeconds={param.warnOverSeconds}
             maxShortEdge={param.maxShortEdge}
             maxLongEdge={param.maxLongEdge}
             budgetSeconds={param.budgetSeconds}
