@@ -193,7 +193,46 @@ Some choices that differ from the rest of the app:
 - **There is no mask.** The author's H3 Relay 2.0 workflow tracks the target
   with SAM 3 and samples long clips in windows. That depends on the Relay node
   pack, and the core reference node takes no mask, so this graph relies on the
-  prompt to say who to replace. Stick to short continuous shots.
+  prompt to say who to replace.
+
+### Long clips, in slices
+
+A clip of up to 5.875 s (141 frames, the grid length of a 5-second H3 run)
+goes through in one pass, as described above. A longer one, up to a minute, is
+swapped in slices by VHS's Meta Batch Manager, the same machinery Upscale uses:
+
+- The clip's length comes from the form (`clip_seconds`, a `measured` param
+  filled by the clip control). `swapSlices` cuts the clip into about 124-frame
+  slices, made equal and padded by 4 frames, so that a clip measured a little
+  short still ends without a pass of one or two frames, which the reference
+  node refuses. A clip not measured yet runs as one pass.
+- `finalize` drives the loader (154) from the manager and replaces
+  `CreateVideo`/`SaveVideo` with a `VHS_VideoCombine` that holds one file open
+  across the passes. VHS queues the passes itself, and the app follows them as
+  one run by the combine's per-submission prefix (`meta-batch.ts`), as it does
+  for Upscale.
+- Each pass is a fresh swap of its slice from the same picture, prompt and
+  seed. Nothing carries from one slice to the next; the source supplies the
+  motion.
+- H3 rounds a run's length up to its 17k+5 grid, so each pass keeps only as
+  many frames as it loaded (`ImageFromBatch` with the loader's count). The
+  slices tile the source exactly.
+- In batched mode, VHS hands every pass the whole clip's audio rather than the
+  slice's. So the slices get no audio reference, and the combine lays the
+  clip's own soundtrack over the finished file once. *Keep the clip's sound*
+  has no effect here, and a silent clip comes out silent.
+- The latent-tail saves are left out, because a pass's tail covers padded
+  frames past its slice. Extend picks a long swap up from its last frame.
+- The estimate is one pass's times the passes (`slicedBy`, `estimateScale` in
+  slices.ts), in the run bar and from the server. This machine's learned
+  estimate is kept per pass count (`variant` "x2", "x3" and so on).
+
+Tested on the 3090 (2026-11-06), 10 s one-person clip at 640×1120, Turbo, 8
+steps, two passes of 128 and 112 frames, in 913 s. The result was 240 frames,
+exactly 10.0 s, with the swap held through both slices. Its soundtrack was the
+source's (loudness correlation 0.9994). The app followed both passes as one
+run. At the join, the cape's folds and the figure's position shift slightly
+from one frame to the next.
 
 Tested on the 3090 (2026-11-05), 20 steps, about 89 s a step:
 

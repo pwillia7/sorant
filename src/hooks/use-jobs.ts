@@ -73,6 +73,8 @@ interface GenerateResponse {
   localModel?: string;
   /** The file name a batched run writes under. See `Job.runKey`. */
   runKey?: string;
+  /** The estimate bucket the server chose, such as "x6" for six slices. See `slicedBy`. */
+  variant?: string;
   estimatedSeconds: number | null;
 }
 
@@ -487,9 +489,11 @@ export function useJobs(): JobsController {
           localDirector: response.localDirector === true,
           localModel: response.localModel,
           runKey: response.runKey,
-          variant: workflow.estimateBy
-            ? String(response.resolved?.[workflow.estimateBy.param] ?? "")
-            : undefined,
+          variant:
+            response.variant ??
+            (workflow.estimateBy
+              ? String(response.resolved?.[workflow.estimateBy.param] ?? "")
+              : undefined),
           derivedFrom: options?.derivedFrom,
           musicVideo: options?.musicVideo,
           hasAudio: Boolean(workflow.hasAudio),

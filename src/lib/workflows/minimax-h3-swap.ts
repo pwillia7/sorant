@@ -3,6 +3,7 @@ import type { ComfyGraph } from "@/lib/comfy";
 import { latentTailNodes } from "./latent-tail";
 import type { ParamDef, ParamValue, WorkflowDef } from "./types";
 import { h3Patches, h3Turbo, samplingParams } from "./minimax-common";
+import { clipSlices, SLICE_FRAMES } from "./slices";
 
 /**
  * MiniMax H3 character swap: one person in a clip you have becomes the
@@ -64,6 +65,43 @@ const SWAP_LORA = "h3_character_swap_v1.5.safetensors";
 
 /** The rate the clip is read at and the result is written at. See Remix. */
 const SOURCE_FPS = 24;
+
+/**
+ * Long clips, in slices.
+ *
+ * The LoRA holds best on about five seconds, and a run's cost grows faster
+ * than its length, so a longer clip is swapped a slice at a time by VHS's Meta
+ * Batch Manager, the way Upscale works through a clip. Each pass loads the
+ * next slice, runs the whole graph on it, and appends its frames to one file
+ * that `VHS_VideoCombine` holds open. VHS queues the passes itself, under one
+ * run this app follows by the combine's prefix (meta-batch.ts).
+ *
+ * Every slice is a fresh swap from the same picture, description and seed,
+ * not a continuation of the slice before it. The source supplies the motion,
+ * so the joins hold up. Small details of the costume can still shift at a
+ * join.
+ *
+ * In batched mode the loader gives every pass the whole clip's soundtrack
+ * (VHS's `lazy_get_audio` reads from the start with no cap), which is right
+ * for the combine's audio but wrong as a slice's reference. So the slices get
+ * no audio reference, and the result always carries the clip's own sound. H3's
+ * audio for a slice is never used.
+ *
+ * H3 makes a run's length on a 17k+5 frame grid, so a slice comes back up to a
+ * second longer than it went in. Each pass keeps only as many frames as it
+ * loaded (`trim`), so the slices tile the source exactly and the sound lines
+ * up.
+ */
+const BATCH_NODE = "batch";
+const TRIM_NODE = "trim";
+const COMBINE_NODE = "combine";
+const CLIP_SECONDS_PARAM = "clip_seconds";
+/** How long a clip may be: at about ten minutes a slice, a minute is two hours. */
+const MAX_CLIP_SECONDS = 60;
+const COMBINE_PREFIX = "video/MiniMax_H3_swap";
+
+/** How this submission's clip is cut, or null for one pass. See slices.ts. */
+const swapSlices = (values: Record<string, ParamValue>) => clipSlices(values[CLIP_SECONDS_PARAM]);
 
 const clipHasAudio = (values: Record<string, ParamValue>): boolean =>
   !isSilentClip(values[VIDEO_PARAM]);
@@ -258,6 +296,39 @@ const graph: ComfyGraph = {
   },
   // The run's last 0.9 s of latents, for Extend to carry on from.
   ...latentTailNodes("125"),
+
+  // Batched mode only; `finalize` takes these out of a one-pass run, and
+  // wires them in for a long clip. See "Long clips, in slices" above.
+  [BATCH_NODE]: {
+    class_type: "VHS_BatchManager",
+    inputs: { frames_per_batch: SLICE_FRAMES },
+    _meta: { title: "Meta Batch Manager" },
+  },
+  // The pass's frames, cut back to as many as the slice it loaded.
+  [TRIM_NODE]: {
+    class_type: "ImageFromBatch",
+    inputs: { image: ["122", 0], batch_index: 0, length: ["163", 3] },
+    _meta: { title: "Image From Batch (the slice's own length)" },
+  },
+  [COMBINE_NODE]: {
+    class_type: "VHS_VideoCombine",
+    inputs: {
+      images: [TRIM_NODE, 0],
+      audio: ["154", 2],
+      frame_rate: SOURCE_FPS,
+      loop_count: 0,
+      filename_prefix: COMBINE_PREFIX,
+      format: "video/h264-mp4",
+      pix_fmt: "yuv420p",
+      crf: 17,
+      save_metadata: false,
+      trim_to_audio: false,
+      pingpong: false,
+      save_output: true,
+      meta_batch: [BATCH_NODE, 0],
+    },
+    _meta: { title: "Video Combine" },
+  },
 };
 
 const params: ParamDef[] = [
@@ -267,9 +338,26 @@ const params: ParamDef[] = [
     type: "video",
     default: "",
     required: true,
-    help: "The performance to keep. Its size and length become the result's. Best as one continuous shot of about 5 seconds; up to 768×1344.",
+    help: "The performance to keep. Its size and length become the result's. Up to 768×1344 and a minute long. A clip longer than about 6 seconds is swapped in 5-second slices, each about 10 minutes with Turbo.",
     group: "Source",
+    maxSeconds: MAX_CLIP_SECONDS,
+    measures: CLIP_SECONDS_PARAM,
     targets: [{ node: VIDEO_NODE, input: "video" }],
+  },
+  {
+    id: CLIP_SECONDS_PARAM,
+    label: "Clip length",
+    type: "measured",
+    // Nothing measured yet: one pass, as every clip had before slices.
+    default: 0,
+    group: "Source",
+    targets: [
+      {
+        node: BATCH_NODE,
+        input: "frames_per_batch",
+        transform: (_value, values) => swapSlices(values)?.framesPerBatch ?? SLICE_FRAMES,
+      },
+    ],
   },
   {
     id: IMAGE_PARAM,
@@ -318,7 +406,7 @@ const params: ParamDef[] = [
     label: "Keep the clip's sound",
     type: "toggle",
     default: true,
-    help: "On, the result carries the clip's own soundtrack untouched. Off, it gets the audio H3 generates alongside the picture.",
+    help: "On, the result carries the clip's own soundtrack untouched. Off, it gets the audio H3 generates alongside the picture. A clip swapped in slices always keeps its own sound.",
     group: "Source",
     // Which wire the output's audio comes from. A silent clip has no sound to
     // keep, and finalize moves it to H3's whatever this says.
@@ -377,13 +465,38 @@ export const minimaxH3Swap: WorkflowDef = {
     accepts: "video",
     sourceParam: VIDEO_PARAM,
   },
+  /** A long clip's estimate is one slice's, times the slices. */
+  slicedBy: CLIP_SECONDS_PARAM,
   finalize(graph, values) {
-    if (!clipHasAudio(values)) {
-      // VHS raises decoding audio from a file that has none, so a silent clip
-      // neither conditions on its sound nor hands it to the output.
-      delete graph[REFERENCE_NODE].inputs[CLIP_AUDIO_INPUT];
-      graph["130"].inputs.audio = ["121", 0];
+    const sliced = swapSlices(values);
+    if (!sliced) {
+      for (const node of [BATCH_NODE, TRIM_NODE, COMBINE_NODE]) delete graph[node];
+      if (!clipHasAudio(values)) {
+        // VHS raises decoding audio from a file that has none, so a silent clip
+        // neither conditions on its sound nor hands it to the output.
+        delete graph[REFERENCE_NODE].inputs[CLIP_AUDIO_INPUT];
+        graph["130"].inputs.audio = ["121", 0];
+      }
+      return;
     }
+
+    // In slices: the loader driven by the batch manager, and the combine in
+    // place of CreateVideo and SaveVideo. See "Long clips, in slices" above.
+    graph[VIDEO_NODE].inputs.meta_batch = [BATCH_NODE, 0];
+    // Unique per submission: VHS re-queues this graph under new prompt ids,
+    // and the prefix is how the status and cancel routes find the passes.
+    graph[COMBINE_NODE].inputs.filename_prefix =
+      `${COMBINE_PREFIX}_${crypto.randomUUID().slice(0, 8)}`;
+    // Every pass would be handed the whole clip's sound, not its slice's.
+    delete graph[REFERENCE_NODE].inputs[CLIP_AUDIO_INPUT];
+    if (!clipHasAudio(values)) delete graph[COMBINE_NODE].inputs.audio;
+    // A pass's latent tail is of padded frames past its slice, so there is
+    // nothing true for Extend to carry on from. It picks up from the last
+    // frame instead, as it does for any clip without one.
+    for (const node of Object.keys(graph)) {
+      if (node.startsWith("tail:")) delete graph[node];
+    }
+    for (const node of ["92", "130", "121"]) delete graph[node];
   },
   finalizeCases: [
     {
@@ -407,6 +520,26 @@ export const minimaxH3Swap: WorkflowDef = {
     {
       name: "a silent clip",
       values: { [VIDEO_PARAM]: "noaudio--clip.mp4", [IMAGE_PARAM]: "c.png", character: "a knight" },
+    },
+    {
+      name: "a 30-second clip, in slices, turbo",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [CLIP_SECONDS_PARAM]: 30,
+      },
+      mode: { turbo: true },
+    },
+    {
+      name: "a silent 12-second clip, in slices",
+      values: {
+        [VIDEO_PARAM]: "noaudio--clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [CLIP_SECONDS_PARAM]: 12,
+        [KEEP_SOUND_PARAM]: false,
+      },
     },
   ],
 };

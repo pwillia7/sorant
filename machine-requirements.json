@@ -516,6 +516,10 @@
         "minimax-h3-image (style, vhs tape)",
         "minimax-h3-image (style, vhs tape, lighter base)",
         "minimax-h3-image (turbo)",
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)",
+        "minimax-h3-swap (turbo)",
         "upscale"
       ]
     },
@@ -1869,6 +1873,10 @@
       ],
       "optional": false,
       "workflows": [
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)",
+        "minimax-h3-swap (turbo)",
         "upscale"
       ]
     },
@@ -1953,6 +1961,10 @@
       ],
       "optional": false,
       "workflows": [
+        "minimax-h3-swap",
+        "minimax-h3-swap (sage)",
+        "minimax-h3-swap (spectrum)",
+        "minimax-h3-swap (turbo)",
         "upscale"
       ]
     },

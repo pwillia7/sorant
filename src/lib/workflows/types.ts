@@ -670,6 +670,14 @@ export interface WorkflowDef {
    */
   estimateBy?: { param: string; seconds: Record<string, number> };
   /**
+   * The measured clip-length param a run is cut into slices by: Character
+   * swap's long clips (slices.ts). The estimate is one run's times the slices,
+   * in the run bar and from the server, and the estimate learned from this
+   * machine's history is kept apart per slice count, as it is per
+   * `estimateBy` value.
+   */
+  slicedBy?: string;
+  /**
    * Nodes in the graph that only a choice other than the default keeps —
    * `finalize` deletes them otherwise. The classes and model files they name
    * are reported optional, so a machine without them still counts as able to

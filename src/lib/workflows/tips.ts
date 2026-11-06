@@ -251,7 +251,9 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
         heading: "What goes in",
         items: [
           "A clip and a picture. The clip supplies the performance, camera, scene and sound; the picture supplies who the person becomes — face, hair, outfit and art style.",
-          "Press Swap on a finished video to load it as the clip, or drop in a video of your own. One continuous shot of about 5 seconds works best: hard cuts and long clips are where the swap drifts.",
+          "Press Swap on a finished video to load it as the clip, or drop in a video of your own, up to a minute long. Hard cuts in the clip are where the swap is most likely to drift.",
+          "A clip longer than about 6 seconds is swapped in slices of about 5 seconds, one after another, in a single run, and joined into one video with the clip's own sound. Each slice takes about 10 minutes with Turbo, so a 30-second clip takes about an hour.",
+          "Each slice is a fresh swap from the same picture, description and seed. The motion comes from the clip, so the joins hold up, but small costume details can shift at a join.",
           "A full-body picture of the character on a plain background holds best. Busy backgrounds can leak into the shot.",
         ],
       },

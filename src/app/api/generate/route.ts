@@ -1,4 +1,5 @@
 import { unauthorized } from "@/lib/auth";
+import { estimateScale } from "@/lib/workflows/slices";
 import {
   enumValuesFor,
   freeMemory,
@@ -189,6 +190,11 @@ export async function POST(request: Request) {
         .catch(() => undefined);
     }
 
+    // A run that is several runs' worth of work, such as a long clip swapped
+    // in slices. See `slicedBy`.
+    const scale = estimateScale(workflow.slicedBy, resolved);
+    const scaled = scale > 1 ? scale : undefined;
+
     const clientId = crypto.randomUUID();
     const result = await queuePrompt(graph, clientId, {
       front: workflow.tool === true || workflow.jumpsQueue?.(resolved) === true,
@@ -216,7 +222,10 @@ export async function POST(request: Request) {
       // own median for this workflow and these modes as soon as it has one, so
       // the fact that neither number describes both switches at once costs a
       // rough progress bar on the first run in a combination and nothing after.
-      estimatedSeconds: withLocalDirector(
+      // Which bucket this machine's learned estimate is kept in, beside the
+      // modes: a six-slice swap is not a slow one-slice swap.
+      variant: scaled !== undefined ? `x${scaled}` : undefined,
+      estimatedSeconds: withScale(withLocalDirector(
         enabledPatches(workflow.patches, applied)
           .map((patch) => patch.estimatedSeconds)
           .findLast((seconds) => seconds !== undefined) ??
@@ -227,11 +236,16 @@ export async function POST(request: Request) {
           workflow.estimatedSeconds ??
           null,
         localDirector,
-      ),
+      ), scaled),
     });
   } catch (error) {
     return errorResponse(error);
   }
+}
+
+/** An estimate times the runs' worth of work a submission is. */
+function withScale(seconds: number | null, scale: number | undefined): number | null {
+  return seconds === null || scale === undefined ? seconds : Math.round(seconds * scale);
 }
 
 /** The gateway-run estimate, plus what writing the brief on the box costs. */

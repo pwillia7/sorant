@@ -68,6 +68,7 @@ import {
 import { workflowLabel } from "@/lib/workflows/modes";
 import { QualityFold, runSummary } from "./run-bar";
 import { runEstimate } from "@/lib/workflows/estimate";
+import { estimateScale } from "@/lib/workflows/slices";
 import type { DirectorEngine } from "@/lib/workflows/local-director";
 import { REWRITE_MODEL } from "@/lib/workflows/rewrite-model";
 import {
@@ -1218,7 +1219,10 @@ function Workbench({
         // until it is planned.
         estimate: selected.scenes
           ? undefined
-          : runEstimate(modesFor ?? selected, turboOn, patchesOn),
+          : scaledEstimate(
+              runEstimate(modesFor ?? selected, turboOn, patchesOn),
+              estimateScale(selected.slicedBy, values),
+            ),
       })
     : "";
 
@@ -1755,4 +1759,9 @@ function StudioSkeleton() {
       </div>
     </div>
   );
+}
+
+/** A run's estimate times the slices a long clip is cut into. See slices.ts. */
+function scaledEstimate(seconds: number | undefined, scale: number): number | undefined {
+  return seconds === undefined ? undefined : Math.round(seconds * scale);
 }

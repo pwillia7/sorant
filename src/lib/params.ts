@@ -522,6 +522,14 @@ export function validateWorkflow(workflow: WorkflowDef): string[] {
   const problems: string[] = [];
   const seenIds = new Set<string>();
 
+  // A stale name would leave every estimate unscaled with no error anywhere.
+  if (
+    workflow.slicedBy !== undefined &&
+    !workflow.params.some((param) => param.id === workflow.slicedBy && param.type === "measured")
+  ) {
+    problems.push(`slicedBy names "${workflow.slicedBy}", which is not a measured param.`);
+  }
+
   for (const param of workflow.params) {
     if (seenIds.has(param.id)) {
       problems.push(`Duplicate param id "${param.id}".`);
