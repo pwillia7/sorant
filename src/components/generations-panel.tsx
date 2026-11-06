@@ -755,12 +755,12 @@ function downloadAll(jobs: Job[]): void {
 const MUSIC_VIDEO_SECTIONS: Array<{
   part: keyof MusicVideoGroup["parts"];
   heading: string;
-  caption: (scene: number | undefined) => string;
+  caption: (scene: number | undefined, noun: string) => string;
 }> = [
   { part: "upscaled-join", heading: "Video", caption: () => "Upscaled video" },
   { part: "join", heading: "Video", caption: () => "Joined video" },
-  { part: "scene", heading: "Scenes", caption: (scene) => `Scene ${(scene ?? 0) + 1}` },
-  { part: "upscale", heading: "Upscales", caption: (scene) => `Scene ${(scene ?? 0) + 1}` },
+  { part: "scene", heading: "Scenes", caption: (scene, noun) => `${noun} ${(scene ?? 0) + 1}` },
+  { part: "upscale", heading: "Upscales", caption: (scene, noun) => `${noun} ${(scene ?? 0) + 1}` },
   { part: "plan", heading: "Plan", caption: () => "Scene plan" },
 ];
 
@@ -815,7 +815,7 @@ function MusicVideoEntry({
   const containsSelected = group.jobs.some((job) => job.promptId === selectedId);
 
   const summary = [
-    total > 0 ? `${count(scenes, "done")} of ${total} scenes` : "planning",
+    total > 0 ? `${count(scenes, "done")} of ${total} ${group.noun}s` : "planning",
     running ? "1 generating" : null,
     count(active, "queued") > 0 ? `${count(active, "queued")} queued` : null,
     failed > 0 ? `${failed} failed` : null,
@@ -836,6 +836,7 @@ function MusicVideoEntry({
   // Both joins sit under one "Video" heading, the upscaled one first.
   const sections = MUSIC_VIDEO_SECTIONS.map((section) => ({
     ...section,
+    heading: section.part === "scene" && group.noun === "segment" ? "Segments" : section.heading,
     slots: group.parts[section.part],
   })).filter((section) => section.slots.length > 0);
 
@@ -903,7 +904,7 @@ function MusicVideoEntry({
                   const takes = slot.filter((take) => take.phase === "done").length;
                   // One row a slot. The other takes are counted, not listed:
                   // choosing between them is the music video panel's job.
-                  const caption = `${section.caption(job.musicVideo?.scene)}${
+                  const caption = `${section.caption(job.musicVideo?.scene, group.noun === "segment" ? "Segment" : "Scene")}${
                     takes > 1 && (section.part === "scene" || section.part === "upscale")
                       ? ` · ${takes} takes`
                       : ""

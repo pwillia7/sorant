@@ -17,6 +17,7 @@ import {
 import { NotifyToggle } from "@/components/notify-toggle";
 import { RewriteKeyButton } from "@/components/rewrite-key";
 import { MusicVideoPanel } from "@/components/music-video-panel";
+import { LongSwapPanel } from "@/components/long-swap-panel";
 import { GenerationStage } from "@/components/generation-stage";
 import { ParamForm } from "@/components/param-form";
 import { SettingsModal } from "@/components/settings-modal";
@@ -36,6 +37,7 @@ import { GenerationsPanel } from "@/components/generations-panel";
 import { SorantMark } from "@/components/sorant-logo";
 import { useJobs } from "@/hooks/use-jobs";
 import { useMusicVideo } from "@/hooks/use-music-video";
+import { useLongSwap } from "@/hooks/use-long-swap";
 import { useCompat } from "@/hooks/use-compat";
 import { isActive, isRerunnable, isRetryable, lostTrackOf, type Job } from "@/lib/jobs";
 import { restoreFrom } from "@/lib/restore";
@@ -68,7 +70,7 @@ import {
 import { workflowLabel } from "@/lib/workflows/modes";
 import { QualityFold, runSummary } from "./run-bar";
 import { runEstimate } from "@/lib/workflows/estimate";
-import { estimateScale } from "@/lib/workflows/slices";
+import { CHAIN_OVER_SECONDS, estimateScale } from "@/lib/workflows/slices";
 import type { DirectorEngine } from "@/lib/workflows/local-director";
 import { REWRITE_MODEL } from "@/lib/workflows/rewrite-model";
 import {
@@ -1002,6 +1004,15 @@ function Workbench({
   };
   const musicVideoKind = useMusicVideo(plannedOptions("music"));
   const multiScene = useMusicVideo(plannedOptions("story"));
+  // A Character swap of a clip past CHAIN_OVER_SECONDS, sent as a chain of
+  // run and joined here. Always mounted, so a swap in progress keeps going
+  // while another workflow is on screen. See use-long-swap.ts.
+  const swapWorkflow = workflows.find((workflow) => workflow.slicedBy !== undefined);
+  const longSwap = useLongSwap({
+    workflow: swapWorkflow,
+    stitchWorkflow: workflows.find((workflow) => workflow.id === "multi-scene-stitch"),
+    jobs,
+  });
   /** The planned video on screen, or the music video's when neither is. */
   const musicVideo = picked?.scenes?.kind === "story" ? multiScene : musicVideoKind;
   // The takes and upscales the music video is using, so its entry in the
@@ -1028,6 +1039,13 @@ function Workbench({
       return;
     }
     setSubmittedFor(selected.id);
+    // Too long for one run: a chain of segment runs, joined at the end.
+    if (selected.slicedBy && Number(values[selected.slicedBy]) > CHAIN_OVER_SECONDS) {
+      void longSwap.start(values, { ...modes, lowVram, localDirector: runDirector, rewriteModel });
+      setClipNotice(null);
+      showTab("result");
+      return;
+    }
     void jobs.submit(selected, values, {
       ...modes,
       lowVram,
@@ -1046,7 +1064,7 @@ function Workbench({
     // On a phone the run shows on the Result tab, and submitting from the
     // form would otherwise give no visible sign of anything happening.
     showTab("result");
-  }, [selected, values, jobs, clipSource, modes, lowVram, runDirector, rewriteModel, musicVideo]);
+  }, [selected, values, jobs, clipSource, modes, lowVram, runDirector, rewriteModel, musicVideo, longSwap]);
 
   /**
    * Run a failed generation again, exactly as it was.
@@ -1565,6 +1583,7 @@ function Workbench({
               ) : null}
 
               {selected?.scenes ? <MusicVideoPanel video={musicVideo} /> : null}
+              {selected?.slicedBy && longSwap.project ? <LongSwapPanel swap={longSwap} /> : null}
 
               <GenerationStage
                 job={viewedJob}

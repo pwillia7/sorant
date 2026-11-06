@@ -161,8 +161,12 @@ export interface MusicVideoTag {
   title?: string;
   /** How many scenes the video has, so the entry can say how far it has got. */
   scenes?: number;
-  /** Set on a multi-scene video's runs; a music video's have none. */
-  kind?: "story";
+  /**
+   * Set on a multi-scene video's runs, and on a long Character swap's, whose
+   * "scenes" are the segments of one clip (use-long-swap.ts). A music video's
+   * runs have none.
+   */
+  kind?: "story" | "swap";
 }
 
 export type MusicVideoPart = "plan" | "scene" | "join" | "upscale" | "upscaled-join";
@@ -783,6 +787,8 @@ export interface MusicVideoGroup {
   jobs: Job[];
   /** How many scenes the video has, where its runs say. */
   sceneCount?: number;
+  /** What its parts are called: a long Character swap's are segments. */
+  noun: "scene" | "segment";
   /**
    * Its runs by part, each a list of slots in scene order (one slot for the
    * parts that have no scene). A slot is the takes of that one thing, newest
@@ -880,8 +886,9 @@ function musicVideoGroup(projectId: string, members: Job[]): MusicVideoGroup {
   const sceneOf = (slot: Job[]) => slot[0].musicVideo?.scene ?? 0;
   parts.scene.sort((a, b) => sceneOf(a) - sceneOf(b));
   parts.upscale.sort((a, b) => sceneOf(a) - sceneOf(b));
-  const story = newestFirst.some((job) => job.musicVideo?.kind === "story");
-  const label = story ? "Multi-scene video" : "Music video";
+  const kind = newestFirst.find((job) => job.musicVideo?.kind)?.musicVideo?.kind;
+  const label =
+    kind === "swap" ? "Character swap" : kind === "story" ? "Multi-scene video" : "Music video";
   const title = newestFirst.find((job) => job.musicVideo?.title)?.musicVideo?.title?.trim() || label;
   const sceneCount = newestFirst.find((job) => job.musicVideo?.scenes)?.musicVideo?.scenes;
   return {
@@ -889,6 +896,7 @@ function musicVideoGroup(projectId: string, members: Job[]): MusicVideoGroup {
     label,
     title,
     sceneCount,
+    noun: kind === "swap" ? "segment" : "scene",
     jobs: newestFirst,
     parts,
     untagged,

@@ -251,7 +251,7 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
         heading: "What goes in",
         items: [
           "A clip and a picture. The clip supplies the performance, camera, scene and sound; the picture supplies who the person becomes — face, hair and outfit.",
-          "Press Swap on a finished video to load it as the clip, or drop in one of your own, up to about two and a half minutes and 1080p. Over a minute it warns you about the wait: about 13 minutes per 5 seconds of clip at 1 MP. Use one continuous shot with the person in it from the first frame: they are found on that frame and tracked from there, and a cut to a shot without them loses the track.",
+          "Press Swap on a finished video to load it as the clip, or drop in one of your own, up to 8 minutes and 1080p. Over a minute it warns you about the wait: about 13 minutes per 5 seconds of clip at 1 MP. Use one continuous shot with the person in it from the first frame: they are found on that frame and tracked from there, and a cut to a shot without them loses the track.",
           "Crop the picture to the person, on a plain background if you can. What is behind them can leak into the shot.",
         ],
       },
@@ -268,6 +268,7 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
         heading: "Windows",
         items: [
           "The clip is made a window at a time. Each window after the first starts from the last 18 frames of the one before, so it carries on instead of starting over, and the joins hold.",
+          "Over 20 seconds, the clip is swapped as a chain of runs, about 5 seconds each, each starting from the last frames of the one before, and joined at the end with the clip's sound. The next run is sent when this page sees the last one finish, so keep the tab open; closed, the chain waits, and Resume carries on.",
           "Windows are 5 seconds, the length the LoRA's author tested. A 12-second clip at 1 MP took about 39 minutes on a 3090. Frame size works as it does elsewhere: 0.5 MP is about a third of the time.",
         ],
       },

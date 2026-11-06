@@ -1,5 +1,5 @@
 {
-  "fingerprint": "37bc718284535e1b",
+  "fingerprint": "2e10519c8923eb66",
   "classes": {
     "AudioConcatenate": {
       "inputs": [
@@ -499,7 +499,8 @@
         "minimax-h3-extend (spectrum)",
         "minimax-h3-extend (style, vhs tape)",
         "minimax-h3-extend (style, vhs tape, lighter base)",
-        "minimax-h3-extend (turbo)"
+        "minimax-h3-extend (turbo)",
+        "minimax-h3-swap"
       ]
     },
     "H3RelayAppendWindow": {
@@ -2263,6 +2264,18 @@
         "minimax-h3-image (style, vhs tape, lighter base)",
         "minimax-h3-image (turbo)",
         "minimax-music3"
+      ]
+    },
+    "Video Slice": {
+      "inputs": [
+        "duration",
+        "start_time",
+        "strict_duration",
+        "video"
+      ],
+      "optional": false,
+      "workflows": [
+        "minimax-h3-swap"
       ]
     }
   },

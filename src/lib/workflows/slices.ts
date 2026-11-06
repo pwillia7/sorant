@@ -46,3 +46,69 @@ export function estimateScale(
   if (!slicedBy || !values) return 1;
   return clipSlices(values[slicedBy])?.passes ?? 1;
 }
+
+/**
+ * Clips longer than this are swapped as a chain of runs, one window each, and
+ * joined at the end (use-long-swap.ts). Up to it, the whole clip is one run
+ * whose windows continue inside it — but that run holds the whole prepared
+ * clip, its masks and every finished frame in the box's RAM at once, and a
+ * minute at 1 MP asked for 17 GB more than a 64 GB machine had left
+ * (2026-11-06). A 12 s clip at 1 MP ran fine as one.
+ */
+export const CHAIN_OVER_SECONDS = 20;
+
+/**
+ * As long as a clip may be, at all. The join is one `ConcatenateVideo`, which
+ * takes at most 100 clips (MAX_SCENES in music-video-stitch.ts), and 100
+ * segments of about 123 frames is 8.5 minutes.
+ */
+export const MAX_SWAP_SECONDS = 480;
+
+/** Frames of the previous segment's output each segment carries on from: Relay's 18. */
+export const CHAIN_HISTORY = 18;
+
+/**
+ * One run of a chained swap: the source frames it delivers, and the history it
+ * starts from. `frames` 0 means "to the end of the clip", so a clip measured a
+ * frame or two out still ends where the file does.
+ *
+ * The run's source is the clip from `start - history` — Relay's segment
+ * schedule takes a source that includes its history — and the history itself
+ * is the last `history` frames of the segment before's output.
+ */
+export interface ChainSegment {
+  start: number;
+  frames: number;
+  history: number;
+}
+
+/** A tail shorter than this is folded into the segment before it. */
+const MIN_LAST_SEGMENT = 24;
+
+/**
+ * A long clip as a chain of single-window runs. The first delivers 124 frames,
+ * Relay's tested window. Each one after delivers 123: its 124-frame window
+ * starts on the last frame of the history (regenerated, then dropped), so
+ * that it carries on from it exactly. See `plan_segment` in Relay's planning.py.
+ */
+export function chainSegments(seconds: number): ChainSegment[] {
+  const total = Math.round(seconds * SLICE_FPS);
+  const segments: ChainSegment[] = [];
+  let start = 0;
+  while (start < total) {
+    const history = start === 0 ? 0 : CHAIN_HISTORY;
+    const frames = start === 0 ? SLICE_FRAMES : SLICE_FRAMES - 1;
+    segments.push({ start, frames, history });
+    start += frames;
+  }
+  const last = segments.at(-1);
+  if (last && segments.length > 1 && total - last.start < MIN_LAST_SEGMENT) segments.pop();
+  const tail = segments.at(-1);
+  if (tail) tail.frames = 0;
+  return segments;
+}
+
+/** How many frames a segment delivers, the last one included. */
+export function segmentFrames(segment: ChainSegment, seconds: number): number {
+  return segment.frames || Math.max(1, Math.round(seconds * SLICE_FPS) - segment.start);
+}

@@ -210,14 +210,34 @@ swap.
   delivered frames. With *Keep the clip's sound* off, each window's H3 audio
   is decoded and appended instead. A clip with no sound is given silence as
   its audio reference.
-- **Clips up to 149 s, with a warning past a minute.** 3,592 frames is
-  Prepare Source's own ceiling (the largest 17k+5 under the H3 node's 3,600).
-  Past 60 s the clip control warns about the wait (`warnOverSeconds`,
-  `longClipWarning`) instead of refusing: windows run one after another, so a
-  long clip is only a long run, about 13 minutes per 5-second window at 1 MP
-  on a 3090. Relay keeps the whole prepared clip, its masks and the finished
-  frames in RAM until the end, and the 100 MB upload limit still applies.
-  Clips up to 1080×1920 are taken, since Prepare Source scales them down.
+- **Up to 20 s, one run.** Its windows continue inside a single ComfyUI job.
+  That job holds the whole prepared clip, its masks and every finished frame
+  in the box's RAM until the end, which is why it stops there: a minute at
+  1 MP failed in `H3RelayExpandMask` asking for 17 GB more than a 64 GB
+  machine had left (2026-11-06).
+- **Over 20 s, a chain of runs** (`CHAIN_OVER_SECONDS`, use-long-swap.ts),
+  like a music video's scenes. The clip is cut into segments
+  (`chainSegments`): the first delivers 124 frames, every later one 123. Each
+  is one run on Relay's `segment` schedule. Its source is its stretch of the
+  clip plus the 18 frames before it (`Video Slice` ahead of Prepare Source,
+  which is capped to exactly that many frames), and its history is the last
+  18 frames of the previous segment's saved video (`LoadVideo` of the
+  `[output]` file, `GetVideoComponents`, `ImageFromBatch` at −18) wired into
+  the plan, the window inputs and the append. So each segment carries on from
+  the one before exactly as the windows inside one run do, and Relay drops
+  the history again when it finishes. The page sends the next segment when it
+  sees the last one finish, so the chain moves while the tab is open and
+  waits while it is closed; Stop and Resume are on the panel. The finished
+  segments are joined by `multi-scene-stitch`, each with its own stretch of
+  the clip's sound. A chained swap always keeps the clip's sound: H3's own
+  audio would need the history's generated audio, which a saved segment
+  does not keep.
+- **Up to 8 minutes** (`MAX_SWAP_SECONDS`): the join is one
+  `ConcatenateVideo`, which takes at most 100 clips. Past a minute the clip
+  control warns about the wait (`warnOverSeconds`, `longClipWarning`) rather
+  than refusing: about 13 minutes per 5-second segment at 1 MP on a 3090. The
+  100 MB upload limit still applies. Clips up to 1080×1920 are taken, since
+  Prepare Source scales them down.
 - **The estimate** is one window's times the windows (`slicedBy` on the
   measured clip length; slices.ts plans the same 124-frame windows).
 

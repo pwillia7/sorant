@@ -1,4 +1,6 @@
 import type { ComfyGraph } from "@/lib/comfy";
+import { ParamError } from "@/lib/params";
+import { CHAIN_OVER_SECONDS, MAX_SWAP_SECONDS, SLICE_FPS } from "./slices";
 import type { ParamDef, ParamValue, WorkflowDef } from "./types";
 
 /**
@@ -61,6 +63,13 @@ const IMAGE_PARAM = "character_image";
 const CLIP_SECONDS_PARAM = "clip_seconds";
 const KEEP_SOUND_PARAM = "keep_sound";
 const MEGAPIXELS_PARAM = "megapixels";
+/**
+ * One run of a chained swap: "start:frames:history", written by the page
+ * (use-long-swap.ts), empty for an ordinary run. See `segmentOf`.
+ */
+export const SEGMENT_PARAM = "segment";
+/** The previous segment's saved video, "video/name.mp4 [output]", for its history. */
+export const HISTORY_CLIP_PARAM = "history_clip";
 
 /** The author's: no trigger word, and 1.0 is what it was trained at. */
 const SWAP_LORA = "h3_character_swap_v1.5.safetensors";
@@ -69,20 +78,37 @@ const TURBO_LORA = "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetenso
 const SAM_MODEL = "sam3.1_multiplex_fp16.safetensors";
 
 /**
- * The longest clip Relay takes: Prepare Source refuses more than 3,592 frames
- * (its MAX_FRAMES, the largest 17n+5 under the H3 node's 3,600), 149.67 s at
- * 24 fps. Nothing else in the graph caps the length — the windows run one
- * after another.
- */
-const MAX_CLIP_SECONDS = 149;
-/**
  * Past this, the clip control warns about the wait rather than refusing.
- * What grows is the run (about 13 minutes per 5 s window at 1 MP on a 3090)
- * and the memory Relay holds — the whole prepared clip, its masks and every
- * finished window stay in RAM until the end, and SAM tracks the whole clip in
- * one go. The 100 MB upload limit still applies.
+ * A clip over CHAIN_OVER_SECONDS is swapped as a chain of runs (see
+ * slices.ts), so length costs time, not the box's memory: about 13 minutes per
+ * 5 s at 1 MP on a 3090. The hard limit is MAX_SWAP_SECONDS, the join's 100
+ * clips; the 100 MB upload limit still applies.
  */
 const LONG_CLIP_SECONDS = 60;
+
+/**
+ * The run a chained swap's segment is, or null for an ordinary run.
+ *
+ * A segment is one Relay window on Relay's "segment" schedule: its source is
+ * the clip from `start - history` for `history + frames` frames (`frames` 0:
+ * to the end), and its history is the last `history` frames of the segment
+ * before's output, so it carries on from them. Relay drops the history again
+ * when it finishes, so the segment delivers exactly its own frames.
+ */
+export function segmentOf(
+  values: Record<string, ParamValue>,
+): { start: number; frames: number; history: number } | null {
+  const match = /^(\d+):(\d+):(\d+)$/.exec(String(values[SEGMENT_PARAM] ?? ""));
+  if (!match) return null;
+  const [start, frames, history] = match.slice(1).map(Number);
+  return history <= start ? { start, frames, history } : null;
+}
+
+/** Seconds of source a segment run loads, history included; 0 for "to the end". */
+const segmentSeconds = (segment: { frames: number; history: number }) =>
+  // Half a frame over, so Prepare Source's floor(seconds × 24) lands on the
+  // count rather than one under it.
+  segment.frames ? (segment.history + segment.frames + 0.5) / SLICE_FPS : 0;
 
 /** The author's tested window: 124 frames, 5.2 s. */
 const WINDOW_FRAMES = 124;
@@ -212,12 +238,36 @@ const graph: ComfyGraph = {
     inputs: { file: "" },
     _meta: { title: "Load Video" },
   },
+  // A chained segment's stretch of the clip, history included. Taken out of
+  // an ordinary run by finalize. See `segmentOf`.
+  segment_slice: {
+    class_type: "Video Slice",
+    inputs: { video: ["source", 0], start_time: 0, duration: 0, strict_duration: false },
+    _meta: { title: "Segment of the clip" },
+  },
+  // The segment before's output, and its last frames as this one's history.
+  // Chained segments after the first only.
+  history_clip: {
+    class_type: "LoadVideo",
+    inputs: { file: "" },
+    _meta: { title: "Load Video (the segment before)" },
+  },
+  history_parts: {
+    class_type: "GetVideoComponents",
+    inputs: { video: ["history_clip", 0] },
+    _meta: { title: "Get Video Components" },
+  },
+  history_frames: {
+    class_type: "ImageFromBatch",
+    inputs: { image: ["history_parts", 0], batch_index: -18, length: 18 },
+    _meta: { title: "History (its last frames)" },
+  },
   // 24 fps, a 32-pixel canvas within the pixel budget, and silence for a clip
   // with no sound. Outputs: 0 frames, 1 audio, 5 the source frame count.
   prepare: {
     class_type: "H3RelayPrepareSource",
     inputs: {
-      video: ["source", 0],
+      video: ["segment_slice", 0],
       resolution: "768",
       duration_seconds: 0,
       missing_audio: "silence",
@@ -502,13 +552,13 @@ const params: ParamDef[] = [
     type: "video",
     default: "",
     required: true,
-    help: "One continuous shot, up to about two and a half minutes, with the person in it from the first frame. A cut to a shot without them confuses the tracking — trim those out first.",
+    help: `One continuous shot, up to ${MAX_SWAP_SECONDS / 60} minutes, with the person in it from the first frame. Over ${CHAIN_OVER_SECONDS} seconds it is swapped as a chain of runs, about 5 seconds each, each carrying on from the one before, and joined at the end — keep this tab open while they run. A cut to a shot without them confuses the tracking — trim those out first.`,
     group: "Source",
     // Not H3's 768×1344: Prepare Source fits the clip to the pixel budget
     // itself, so a phone's 1080p clip is fine.
     maxShortEdge: 1080,
     maxLongEdge: 1920,
-    maxSeconds: MAX_CLIP_SECONDS,
+    maxSeconds: MAX_SWAP_SECONDS,
     warnOverSeconds: LONG_CLIP_SECONDS,
     longClipWarning:
       "That works, but it is a long run: about 13 minutes per 5 seconds of clip at 1 MP on a 24 GB card (about a third of that at 0.5 MP), so a minute at 1 MP is over 2 hours. Queued runs wait behind it.",
@@ -525,6 +575,41 @@ const params: ParamDef[] = [
     // clip": Prepare Source measures it exactly itself, and a length rounded
     // in the browser could drop the last frame.
     targets: [{ node: "prepare", input: "duration_seconds", transform: () => 0 }],
+  },
+  {
+    id: SEGMENT_PARAM,
+    label: "Segment",
+    type: "written",
+    default: "",
+    maxLength: 32,
+    group: "Source",
+    targets: [
+      {
+        node: "segment_slice",
+        input: "start_time",
+        transform: (_v, values) => {
+          const segment = segmentOf(values);
+          return segment ? (segment.start - segment.history) / SLICE_FPS : 0;
+        },
+      },
+      {
+        node: "segment_slice",
+        input: "duration",
+        transform: (_v, values) => {
+          const segment = segmentOf(values);
+          return segment ? segmentSeconds(segment) : 0;
+        },
+      },
+    ],
+  },
+  {
+    id: HISTORY_CLIP_PARAM,
+    label: "History clip",
+    type: "written",
+    default: "",
+    maxLength: 512,
+    group: "Source",
+    targets: [{ node: "history_clip", input: "file" }],
   },
   {
     id: IMAGE_PARAM,
@@ -706,6 +791,36 @@ export const minimaxH3Swap: WorkflowDef = {
   /** The estimate is one window's, times the windows. */
   slicedBy: CLIP_SECONDS_PARAM,
   finalize(graph, values) {
+    const segment = segmentOf(values);
+    if (!segment) {
+      // An ordinary run: the whole clip, no history.
+      graph.prepare.inputs.video = ["source", 0];
+      for (const node of ["segment_slice", "history_clip", "history_parts", "history_frames"]) delete graph[node];
+    } else {
+      // One run of a chain. Prepare Source keeps exactly the segment's frames,
+      // and the window plan is Relay's one-window "segment" schedule.
+      graph.prepare.inputs.duration_seconds = segmentSeconds(segment);
+      graph.plan.inputs.schedule = "segment";
+      // The joined video carries each segment's own stretch of the clip's
+      // sound. H3's would need the history's generated audio too, which a
+      // saved segment does not keep.
+      delete graph.decode_audio;
+      delete graph.append.inputs.audio;
+      graph.finish.inputs.audio_mode = "source";
+      if (segment.history === 0) {
+        for (const node of ["history_clip", "history_parts", "history_frames"]) delete graph[node];
+      } else {
+        const file = String(values[HISTORY_CLIP_PARAM] ?? "");
+        if (!/^[\w\-./ ]+\.(mp4|webm|mov|mkv) \[output\]$/i.test(file) || file.includes("..")) {
+          throw new ParamError("The segment before this one is not a clip this can carry on from.", HISTORY_CLIP_PARAM);
+        }
+        graph.history_frames.inputs.batch_index = -segment.history;
+        graph.history_frames.inputs.length = segment.history;
+        for (const node of ["plan", "window", "append"]) {
+          graph[node].inputs.initial_history = ["history_frames", 0];
+        }
+      }
+    }
     // At either of Prepare Source's own budgets the frames are already that
     // size, and scaling them again would only nudge the shape off by a few
     // pixels. The scale node's readers read Prepare Source instead.
@@ -732,6 +847,42 @@ export const minimaxH3Swap: WorkflowDef = {
     {
       name: "0.75 MP, scaled from the 1 MP budget",
       values: { [VIDEO_PARAM]: "clip.mp4", [IMAGE_PARAM]: "c.png", character: "a knight", [MEGAPIXELS_PARAM]: 0.75 },
+    },
+    {
+      name: "the first segment of a chain",
+      values: { [VIDEO_PARAM]: "clip.mp4", [IMAGE_PARAM]: "c.png", character: "a knight", [SEGMENT_PARAM]: "0:124:0" },
+    },
+    {
+      name: "a middle segment, carrying on from the one before",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [SEGMENT_PARAM]: "124:123:18",
+        [HISTORY_CLIP_PARAM]: "video/MiniMax_H3_swap_00001_.mp4 [output]",
+        [MEGAPIXELS_PARAM]: 0.75,
+      },
+    },
+    {
+      name: "the last segment, to the end of the clip",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [SEGMENT_PARAM]: "1354:0:18",
+        [HISTORY_CLIP_PARAM]: "video/MiniMax_H3_swap_00011_.mp4 [output]",
+      },
+    },
+    {
+      name: "a segment whose history climbs out of the output folder",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [SEGMENT_PARAM]: "124:123:18",
+        [HISTORY_CLIP_PARAM]: "../secrets.mp4 [output]",
+      },
+      rejects: "not a clip this can carry on from",
     },
     {
       name: "H3's own sound",
