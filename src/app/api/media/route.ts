@@ -1,6 +1,7 @@
 import { unauthorized } from "@/lib/auth";
 import { contentTypeFor, viewFile } from "@/lib/comfy";
 import { errorResponse } from "@/lib/errors";
+import { inlineDisposition } from "@/lib/disposition";
 import { isUnsafePath, ParamError } from "@/lib/params";
 
 export const dynamic = "force-dynamic";
@@ -49,10 +50,7 @@ export async function GET(request: Request) {
     );
     headers.set("Accept-Ranges", upstream.headers.get("accept-ranges") ?? "bytes");
     headers.set("Cache-Control", "private, max-age=31536000, immutable");
-    headers.set(
-      "Content-Disposition",
-      `inline; filename="${filename.replace(/"/g, "")}"`,
-    );
+    headers.set("Content-Disposition", inlineDisposition(filename));
 
     for (const header of ["content-length", "content-range", "etag"]) {
       const value = upstream.headers.get(header);
