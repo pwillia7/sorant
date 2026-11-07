@@ -1,8 +1,7 @@
 "use client";
 
-import { AlertTriangle, ChevronDown, type LucideIcon } from "lucide-react";
-import { useState } from "react";
-import { Modal } from "@/components/ui/modal";
+import { AlertTriangle, ChevronDown, X } from "lucide-react";
+import { useEffect, useRef } from "react";
 import type { CompatReport, WorkflowCompat } from "@/lib/compat";
 import { formatEstimate, runEstimate } from "@/lib/workflows/estimate";
 import type { WorkflowSummary } from "@/lib/workflows/types";
@@ -10,18 +9,10 @@ import { WORKFLOW_GROUPS, workflowIcon } from "./workflow-icons";
 
 interface ListProps {
   workflows: WorkflowSummary[];
-  /**
-   * Which workflows are in turbo, and which switches are on — for the estimate
-   * only. The switches live in the composer, but they change what a run costs,
-   * so the number beside each workflow has to follow them.
-   */
+  /** Which workflows are in turbo and which switches are on: the estimates follow them. */
   turbo: Record<string, boolean>;
   patches: Record<string, string[]>;
-  /**
-   * What the ComfyUI machine is missing, per workflow — null until it has been
-   * asked. Marked rather than disabled: the check can be wrong about a machine
-   * mid-restart, and a run says for certain.
-   */
+  /** What the ComfyUI machine is missing, per workflow — null until asked. */
   compat: CompatReport | null;
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -33,51 +24,37 @@ function sectionsOf(workflows: WorkflowSummary[]) {
   return [
     ...WORKFLOW_GROUPS.map((group) => ({
       title: group.title,
-      short: group.short,
       items: group.ids
         .map((id) => workflows.find((workflow) => workflow.id === id))
         .filter((workflow): workflow is WorkflowSummary => Boolean(workflow)),
     })),
-    {
-      title: "More",
-      short: "More",
-      items: workflows.filter((workflow) => !listed.has(workflow.id)),
-    },
+    { title: "More", items: workflows.filter((workflow) => !listed.has(workflow.id)) },
   ].filter((section) => section.items.length > 0);
 }
 
 /**
- * The rail down the left edge: every workflow, always on screen, so changing
- * what is being made is one click from anywhere rather than a list to open.
- *
- * Two densities. Below xl it is the icons alone, each named by its tooltip and
- * its accessible name, which leaves the monitor the width; from xl the names
- * and estimates are there too. Radio semantics, so it is announced as one
- * choice among a set.
+ * Every workflow as a card: its icon, its name, what it does, how long it
+ * takes here. The gallery's empty state and the dock's menu are both this —
+ * the first question on an empty page is the same one the menu asks.
  */
-export function WorkflowRail(props: ListProps) {
-  const { workflows, turbo, patches, compat, selectedId, onSelect } = props;
-  const sections = sectionsOf(workflows);
-
+export function WorkflowCards({
+  workflows,
+  turbo,
+  patches,
+  compat,
+  selectedId,
+  onSelect,
+  dense = false,
+}: ListProps & { dense?: boolean }) {
   return (
-    <nav aria-label="Workflows" className="no-scrollbar flex h-full flex-col overflow-y-auto py-3">
-      <div role="radiogroup" aria-label="Workflow" className="flex flex-col gap-4">
-        {sections.map((section) => (
-          <div key={section.title} className="flex flex-col">
-            <p
-              className="label-caps mb-1 px-3 text-center text-fg-subtle xl:px-4 xl:text-left"
-              title={section.title}
-            >
-              <span className="xl:hidden" aria-hidden="true">
-                {section.short === "From a clip" ? "Clip" : section.short === "Long form" ? "Long" : section.short}
-              </span>
-              <span className="hidden xl:inline">{section.short}</span>
-            </p>
+    <div role="radiogroup" aria-label="Workflow" className="flex flex-col gap-7">
+      {sectionsOf(workflows).map((section) => (
+        <section key={section.title}>
+          <h3 className="label-caps mb-2.5 text-fg-subtle">{section.title}</h3>
+          <div className={`grid gap-2 ${dense ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-4"}`}>
             {section.items.map((workflow) => {
               const selected = workflow.id === selectedId;
               const estimate = runEstimate(workflow, turbo[workflow.id], patches[workflow.id]);
-              const status = compat?.workflows[workflow.id];
-              const blocked = (status?.blocking.length ?? 0) > 0;
               const Icon = workflowIcon(workflow.id);
               return (
                 <button
@@ -85,157 +62,119 @@ export function WorkflowRail(props: ListProps) {
                   type="button"
                   role="radio"
                   aria-checked={selected}
-                  aria-label={`${workflow.name}${blocked ? " — missing parts on your ComfyUI" : ""}`}
-                  title={`${workflow.name} — ${workflow.description}`}
                   onClick={() => onSelect(workflow.id)}
-                  className={`group relative flex min-h-10 w-full items-center justify-center gap-2.5 px-3 py-1.5
-                    text-left transition-colors xl:justify-start xl:px-4
-                    ${selected ? "bg-surface-hover text-fg" : "text-fg-muted hover:bg-surface-hover hover:text-fg"}`}
-                >
-                  {/* The selection mark: a lit bar on the rail's edge. */}
-                  <span
-                    aria-hidden="true"
-                    className={`absolute inset-y-1 left-0 w-[3px] transition-colors ${
-                      selected ? "bg-accent" : "bg-transparent"
+                  className={`flex min-h-24 flex-col items-start gap-2 rounded-xl border p-3.5 text-left transition-colors
+                    ${
+                      selected
+                        ? "border-accent bg-accent-subtle"
+                        : "border-border-default bg-surface hover:border-border-strong hover:bg-surface-hover"
                     }`}
-                  />
-                  <Icon
-                    aria-hidden="true"
-                    className={`size-[18px] shrink-0 ${selected ? "text-accent" : ""}`}
-                  />
-                  <span className="hidden min-w-0 flex-1 truncate text-[13px] font-medium xl:block">
-                    {workflow.name}
+                >
+                  <span className="flex w-full items-center gap-2">
+                    <Icon aria-hidden="true" className={`size-5 shrink-0 ${selected ? "text-accent" : "text-fg-muted"}`} />
+                    {estimate ? (
+                      <span className="ml-auto font-mono text-[11px] tabular-nums text-fg-subtle">
+                        ~{formatEstimate(estimate)}
+                      </span>
+                    ) : null}
                   </span>
-                  {estimate ? (
-                    <span className="hidden shrink-0 font-mono text-[11px] tabular-nums text-fg-subtle xl:block">
-                      {formatEstimate(estimate)}
-                    </span>
-                  ) : null}
-                  {blocked ? (
-                    <span
-                      aria-hidden="true"
-                      className="absolute right-2 top-1.5 size-1.5 rounded-full bg-warning xl:static xl:size-1.5"
-                    />
-                  ) : null}
+                  <span className="text-[14px] font-semibold leading-tight text-fg">{workflow.name}</span>
+                  <span className="text-[12px] leading-snug text-fg-muted">{workflow.description}</span>
+                  <MachineNote status={compat?.workflows[workflow.id]} short />
                 </button>
               );
             })}
           </div>
-        ))}
-      </div>
-    </nav>
+        </section>
+      ))}
+    </div>
   );
 }
 
 /**
- * The phone's way in: the current workflow as the composer's title, which
- * opens the whole list in a sheet. The list there carries descriptions, since
- * a phone has no tooltips to carry them instead.
+ * The dock's workflow button and the menu it opens: the same cards, in a
+ * dialog over the gallery.
  */
-export function WorkflowSwitcher(props: ListProps) {
-  const { workflows, turbo, patches, compat, selectedId, onSelect } = props;
-  const [open, setOpen] = useState(false);
-  const current = workflows.find((workflow) => workflow.id === selectedId);
-  const sections = sectionsOf(workflows);
-  const Icon = current ? workflowIcon(current.id) : undefined;
+export function WorkflowMenu(props: ListProps & { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { open, onOpenChange, ...list } = props;
+  const ref = useRef<HTMLDialogElement>(null);
+  const current = list.workflows.find((workflow) => workflow.id === list.selectedId);
+  const Icon = current ? workflowIcon(current.id) : null;
+
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => onOpenChange(true)}
         aria-haspopup="dialog"
-        className="flex w-full items-center gap-3 rounded-md border border-border-strong bg-raised px-3 py-2.5 text-left"
+        title="Choose what to make"
+        className="flex h-9 min-w-0 items-center gap-2 rounded-lg border border-border-strong bg-surface pl-2.5 pr-2
+          text-[13px] font-semibold text-fg transition-colors hover:bg-surface-hover"
       >
-        {Icon ? <Icon aria-hidden="true" className="size-5 shrink-0 text-accent" /> : null}
-        <span className="min-w-0 flex-1">
-          <span className="label-caps block text-fg-subtle">Workflow</span>
-          <span className="block truncate text-[15px] font-semibold text-fg">
-            {current?.name ?? "Choose a workflow"}
-          </span>
-        </span>
-        <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-fg-muted" />
+        {Icon ? <Icon aria-hidden="true" className="size-4 shrink-0 text-accent" /> : null}
+        <span className="truncate">{current?.name ?? "Choose"}</span>
+        <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-fg-subtle" />
       </button>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Workflows">
-        <div role="radiogroup" aria-label="Workflow" className="-mx-2 flex flex-col gap-4">
-          {sections.map((section) => (
-            <div key={section.title} className="flex flex-col gap-0.5">
-              <p className="label-caps px-2 pb-1 text-fg-subtle">{section.title}</p>
-              {section.items.map((workflow) => {
-                const selected = workflow.id === selectedId;
-                const estimate = runEstimate(workflow, turbo[workflow.id], patches[workflow.id]);
-                const RowIcon = workflowIcon(workflow.id);
-                return (
-                  <button
-                    key={workflow.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    onClick={() => {
-                      onSelect(workflow.id);
-                      setOpen(false);
-                    }}
-                    className={`flex w-full items-start gap-3 rounded-md px-2 py-2.5 text-left transition-colors
-                      ${selected ? "bg-accent-subtle" : "hover:bg-surface-hover"}`}
-                  >
-                    <RowIcon
-                      aria-hidden="true"
-                      className={`mt-0.5 size-[18px] shrink-0 ${selected ? "text-accent" : "text-fg-muted"}`}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-baseline gap-2">
-                        <span className="min-w-0 truncate text-[14px] font-semibold text-fg">{workflow.name}</span>
-                        {estimate ? (
-                          <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-fg-subtle">
-                            ~{formatEstimate(estimate)}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="mt-0.5 block text-[12px] leading-snug text-fg-muted">
-                        {workflow.description}
-                      </span>
-                      <MachineNote status={compat?.workflows[workflow.id]} />
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+      <dialog
+        ref={ref}
+        onClose={() => onOpenChange(false)}
+        onClick={(event) => {
+          if (event.target === ref.current) onOpenChange(false);
+        }}
+        aria-label="What do you want to make?"
+        className="m-0 mt-auto max-h-[88dvh] w-full max-w-none rounded-t-2xl border border-border-strong bg-bg p-0 text-fg
+          shadow-md backdrop:bg-black/70 sm:m-auto sm:w-[min(64rem,calc(100vw-2rem))] sm:rounded-2xl"
+      >
+        <div className="flex items-center gap-3 border-b border-border-default px-5 py-4">
+          <h2 className="display-tight text-[20px] font-semibold">What do you want to make?</h2>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            aria-label="Close"
+            className="ml-auto grid size-8 place-items-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg"
+          >
+            <X className="size-4" aria-hidden="true" />
+          </button>
         </div>
-      </Modal>
+        <div className="max-h-[calc(88dvh-4rem)] overflow-y-auto p-5">
+          <WorkflowCards
+            {...list}
+            onSelect={(id) => {
+              list.onSelect(id);
+              onOpenChange(false);
+            }}
+          />
+        </div>
+      </dialog>
     </>
   );
 }
 
-/** A workflow's icon at title size, for the composer's heading. */
-export function WorkflowMark({ icon: Icon }: { icon: LucideIcon }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="grid size-10 shrink-0 place-items-center rounded-md border border-accent/40 bg-accent-subtle text-accent"
-    >
-      <Icon className="size-5" />
-    </span>
-  );
-}
-
 /**
- * What the ComfyUI machine lacks for this workflow, and the fix — said before
- * Generate rather than after a failed run. A problem with the graph every run
- * uses comes first in the warning colour; one that only stops a mode (Turbo, a
- * patch) is quieter, since the workflow still runs without it.
+ * What the ComfyUI machine lacks for a workflow, and the fix — said before
+ * Generate rather than after a failed run. `short` keeps a card to the
+ * headline; the settings panel gives the whole of it.
  */
 export function MachineNote({
   status,
+  short = false,
   className = "",
 }: {
   status: WorkflowCompat | undefined;
+  short?: boolean;
   className?: string;
 }) {
   if (!status) return null;
   const { blocking, modes } = status;
-  if (blocking.length === 0 && modes.length === 0) return null;
+  if (blocking.length === 0 && (short || modes.length === 0)) return null;
 
   const names = (list: { name: string }[]) =>
     list.length > 2
@@ -245,8 +184,17 @@ export function MachineNote({
           .join(", ")} and ${list.length - 2} more`
       : list.map((p) => p.name).join(", ");
 
+  if (short) {
+    return (
+      <span className="flex items-center gap-1.5 text-[12px] text-warning">
+        <AlertTriangle aria-hidden="true" className="size-3.5 shrink-0" />
+        Missing parts on your ComfyUI
+      </span>
+    );
+  }
+
   return (
-    <div className={`mt-2 flex flex-col gap-1 text-[12px] leading-relaxed ${className}`}>
+    <div className={`flex flex-col gap-1 text-[12px] leading-relaxed ${className}`}>
       {blocking.length > 0 ? (
         <p className="flex gap-1.5 text-warning">
           <AlertTriangle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />

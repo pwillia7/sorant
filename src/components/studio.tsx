@@ -1,6 +1,5 @@
 "use client";
 
-import { LayoutGrid, PenLine, SquarePlay } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -28,16 +27,13 @@ import { ModelOptions } from "@/components/model-options";
 import { TurboSwitch } from "@/components/turbo-switch";
 import { patchSuppressed } from "@/lib/workflows/patches";
 import { Button } from "@/components/ui/button";
-import {
-  MachineNote,
-  WorkflowMark,
-  WorkflowRail,
-  WorkflowSwitcher,
-} from "@/components/workflow-picker";
+import { MachineNote, WorkflowCards, WorkflowMenu } from "@/components/workflow-picker";
+import { Dock, SettingsPanel } from "@/components/dock";
+import { Feed } from "@/components/feed";
+import { Viewer } from "@/components/viewer";
 import { workflowIcon } from "@/components/workflow-icons";
 import { UpdateBadge, useUpdates } from "@/components/update-badge";
 import { StatusPanel } from "@/components/status-panel";
-import { GenerationsPanel } from "@/components/generations-panel";
 import { SorantMark } from "@/components/sorant-logo";
 import { useJobs } from "@/hooks/use-jobs";
 import { useMusicVideo } from "@/hooks/use-music-video";
@@ -85,6 +81,7 @@ import { effectiveWorkflow, TURBO_STRENGTH } from "@/lib/workflows/turbo";
 import {
   CLIP_ACTIONS,
   defaultValuesFor,
+  paramVisible,
   pinnedValues,
   type ClipAction,
   type ParamValue,
@@ -467,19 +464,27 @@ function Workbench({
   );
 
   /**
-   * Which of the three screens a phone shows: the form, the result, or the
-   * history. Below lg the studio used to be one column some 4,000 px tall,
-   * with the result under the whole form; now it is three tabs, and the
-   * actions that move between them — submitting, a hand-off, reusing a run's
-   * settings, picking one from the history — switch tab as they used to
-   * scroll. At lg every part is on screen and this changes nothing.
+   * The two surfaces over the gallery: the settings panel, and the viewer with
+   * one generation open in it. Neither is a place the page navigates to — the
+   * gallery stays where it is underneath.
+   *
+   * `showTab` is what the actions that move attention call. "create" means the
+   * form was just filled in (a hand-off, reused settings), so the settings
+   * open on it; "result" means a run was just sent, so whatever was over the
+   * gallery gets out of the way and its top, where the new tile is, comes
+   * into view.
    */
-  const [mobileTab, setMobileTab] = useState<MobileTab>("create");
-  const showTab = useCallback((tab: MobileTab) => {
-    setMobileTab(tab);
-    if (window.matchMedia("(max-width: 1023px)").matches) {
-      requestAnimationFrame(() => window.scrollTo({ top: 0 }));
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  const showTab = useCallback((tab: "create" | "result") => {
+    setViewerId(null);
+    if (tab === "create") {
+      setSettingsOpen(true);
+      return;
     }
+    // A phone's settings cover the page; a wide screen's sit beside it.
+    if (window.matchMedia("(max-width: 1279px)").matches) setSettingsOpen(false);
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   }, []);
 
   /**
@@ -920,16 +925,9 @@ function Workbench({
     return Object.keys(defaults).every((key) => values[key] === defaults[key]);
   }, [selected, values]);
 
-  // Which generation the stage is showing. Follows the newest submission so a
-  // fresh run takes over the canvas, but stays put if you pick an older one.
-  const [viewedId, setViewedId] = useState<string | null>(null);
-  const newestId = jobs.jobs[0]?.promptId ?? null;
-  useEffect(() => {
-    if (newestId) setViewedId(newestId);
-  }, [newestId]);
-
-  const viewedJob =
-    jobs.jobs.find((job) => job.promptId === viewedId) ?? jobs.jobs[0] ?? null;
+  // The generation open in the viewer, by id so a poll replacing the object
+  // keeps it current, and so removing it closes the viewer.
+  const viewedJob = jobs.jobs.find((job) => job.promptId === viewerId) ?? null;
 
   // Resolved fresh each render, so the modal follows the job it is showing —
   // and closes itself if that entry is cleared from history while open.
@@ -1255,6 +1253,36 @@ function Workbench({
     setSelectedId(id);
   };
 
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  /**
+   * Opens the settings, and where a field is named, brings it into view and
+   * gives it a moment's highlight — the dock's attachment chips land here.
+   */
+  const openSettings = useCallback((fieldId?: string) => {
+    if (!fieldId) {
+      setSettingsOpen((open) => !open);
+      return;
+    }
+    setSettingsOpen(true);
+    window.setTimeout(() => {
+      const element = document.getElementById(`param-${fieldId}`);
+      const field = element?.closest("fieldset > *") ?? element;
+      field?.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (field instanceof HTMLElement) {
+        field.animate(
+          [{ backgroundColor: "var(--accent-subtle)" }, { backgroundColor: "transparent" }],
+          { duration: 1400, easing: "ease-out" },
+        );
+      }
+    }, 320);
+  }, []);
+
+  // A refusal naming a control the dock does not show opens the panel on it.
+  useEffect(() => {
+    if (fieldError?.field && fieldError.field !== "prompt") openSettings(fieldError.field);
+  }, [fieldError, openSettings]);
+
   const SelectedIcon = selected ? workflowIcon(selected.id) : null;
   const runEstimateSeconds = selected && !selected.scenes
     ? scaledEstimate(
@@ -1263,55 +1291,78 @@ function Workbench({
       )
     : undefined;
 
-  const generateButton = (className: string) => (
-    <Button
-      variant="primary"
-      size="lg"
-      onClick={submit}
-      loading={jobs.submitting || (Boolean(selected?.scenes) && planning)}
-      disabled={!selected}
-      className={className}
-    >
-      {queueLabel}
-    </Button>
+  // The dock carries the prompt; the panel carries everything else.
+  const promptParam = whatParams.find(
+    (param) => param.id === "prompt" && (param.type === "textarea" || param.type === "text"),
   );
+  const panelParams = promptParam ? whatParams.filter((param) => param !== promptParam) : whatParams;
+  const attachments = whatParams
+    .filter(
+      (param) =>
+        (param.type === "image" || param.type === "video" || param.type === "audio") &&
+        !param.advanced &&
+        paramVisible(param, values),
+    )
+    .map((param) => ({
+      param,
+      set: typeof values[param.id] === "string" && values[param.id] !== "",
+      required: "required" in param && Boolean(param.required),
+    }))
+    // Every required slot, every filled one, and the first empty optional one
+    // as the way to add more — Reference to Video has seven slots, and seven
+    // empty chips would be the dock.
+    .filter((chip, index, all) =>
+      chip.required || chip.set || all.findIndex((other) => !other.required && !other.set) === index,
+    );
+
+  const workflowList = {
+    workflows,
+    turbo: turboByWorkflow,
+    patches: patchesByWorkflow,
+    compat,
+    selectedId,
+    onSelect: selectWorkflow,
+  };
+
+  // The viewer steps through the gallery in its own order, newest first.
+  const stepViewer = (direction: -1 | 1) => {
+    const index = jobs.jobs.findIndex((job) => job.promptId === viewerId);
+    const next = jobs.jobs[index + direction];
+    if (next) setViewerId(next.promptId);
+  };
+
+  const dockNotice =
+    jobs.submitError && (!jobs.submitErrorField || submittedFor !== selectedId) ? (
+      <Alert tone="danger" onDismiss={jobs.dismissSubmitError}>
+        {jobs.submitError}
+      </Alert>
+    ) : clipError ? (
+      <Alert tone="danger" onDismiss={() => setClipError(null)}>
+        {clipError}
+      </Alert>
+    ) : selected && clipNotice && selected.clipTarget?.action === clipNotice.action ? (
+      <Alert tone="accent" onDismiss={() => setClipNotice(null)}>
+        {CLIP_NOTICE[clipNotice.action].verb} <span className="text-fg">“{clipNotice.label}”</span>.{" "}
+        {CLIP_NOTICE[clipNotice.action].detail}
+      </Alert>
+    ) : null;
 
   return (
-    /*
-      Three columns in the order the work goes: what to make, how, and what
-      came of it. At lg the shell is exactly the viewport and each column
-      scrolls on its own, so the one under the pointer is the one that moves;
-      below lg it is one column the document scrolls, switched by the tabs
-      pinned to the foot of the screen.
-    */
-    <div className="relative flex min-h-dvh flex-col lg:h-dvh lg:overflow-hidden">
-      <header className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border-default bg-bg px-3 sm:gap-3 sm:px-4">
+    <div className="relative min-h-dvh">
+      <header className="sticky top-0 z-50 flex h-12 items-center gap-2 border-b border-border-default bg-bg/90 px-3 backdrop-blur-md sm:gap-3 sm:px-5">
         <SorantMark aria-hidden="true" className="size-6 shrink-0 text-fg" />
         <h1 className="display-tight text-[17px] font-bold text-fg">
           Soran<span className="text-accent">’</span>t
         </h1>
-        {/* What the machine is, at a glance, where there is room for it. */}
-        {health?.reachable && health.authorized !== false && health.device ? (
-          <span className="hidden min-w-0 items-center gap-3 border-l border-border-default pl-3 xl:flex">
-            <span className="truncate font-mono text-[11px] text-fg-subtle">
-              {/* "cuda:0 NVIDIA GeForce RTX 3090 : cudaMallocAsync" → the card. */}
-              {health.device.replace(/^\S+:\d+\s+/, "").replace(/\s*:\s*\S+$/, "")}
-            </span>
-            {health.vramFreeMb && health.vramTotalMb ? (
-              <span className="shrink-0 font-mono text-[11px] tabular-nums text-fg-subtle">
-                {(health.vramFreeMb / 1024).toFixed(1)}/{(health.vramTotalMb / 1024).toFixed(0)} GB free
-              </span>
-            ) : null}
+        {jobs.activeCount > 0 ? (
+          <span className="hidden items-center gap-1.5 rounded-md bg-accent-subtle px-2 py-1 sm:flex">
+            <span aria-hidden="true" className="size-1.5 rounded-full bg-accent breathe" />
+            <span className="font-mono text-[11px] tabular-nums text-fg">{jobs.activeCount} running</span>
           </span>
         ) : null}
-
         <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
           <UpdateBadge info={updates.info} onOpen={() => setStatusOpen(true)} />
-          <ConnectionPill
-            health={health}
-            onOpen={() => setStatusOpen(true)}
-            update={updates.info?.latest?.version}
-          />
+          <ConnectionPill health={health} onOpen={() => setStatusOpen(true)} update={updates.info?.latest?.version} />
           <RewriteKeyButton
             engine={directorEngine}
             onEngineChange={onDirectorEngineChange}
@@ -1329,7 +1380,7 @@ function Workbench({
 
       <ConnectionNotice health={health} />
       {problems?.length ? (
-        <div className="shrink-0 border-b border-warning/40 bg-warning/10 px-4 py-2.5 text-[12px] leading-relaxed text-warning">
+        <div className="border-b border-warning/40 bg-warning/10 px-5 py-2.5 text-[12px] leading-relaxed text-warning">
           <p className="font-semibold">A workflow definition looks out of sync with its graph:</p>
           <ul className="mt-1 list-inside list-disc font-mono">
             {problems.map((problem) => (
@@ -1339,297 +1390,196 @@ function Workbench({
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-16 shrink-0 border-r border-border-default bg-surface lg:block xl:w-56">
-          <WorkflowRail
-            workflows={workflows}
-            turbo={turboByWorkflow}
-            patches={patchesByWorkflow}
-            compat={compat}
-            selectedId={selectedId}
-            onSelect={selectWorkflow}
-          />
-        </aside>
+      {/* The gallery. Room at the foot for the dock, and beside it on a wide
+          screen for the settings while they are open. */}
+      <main
+        className={`mx-auto w-full max-w-[1800px] px-4 pb-64 pt-6 transition-[padding] duration-300 sm:px-8 sm:pt-8
+          ${settingsOpen ? "xl:pr-[476px]" : ""}`}
+      >
+        {selected?.scenes || (selected?.slicedBy && longSwap.project) ? (
+          <section aria-label={selected.name} className="mb-10">
+            {selected.scenes ? <MusicVideoPanel video={musicVideo} /> : null}
+            {selected.slicedBy && longSwap.project ? <LongSwapPanel swap={longSwap} /> : null}
+          </section>
+        ) : null}
 
-        {/* The composer. Deliberately never disabled: a running generation
-            should not stop you setting up the next one. */}
-        <section
-          aria-label="Settings"
-          className={`flex min-w-0 flex-1 flex-col bg-surface lg:w-[400px] lg:flex-none lg:border-r lg:border-border-default
-            2xl:w-[460px] ${mobileTab === "create" ? "" : "max-lg:hidden"}`}
-        >
-          <div
-            className={`scroll-pane flex min-h-0 flex-1 flex-col px-4 pt-4 sm:px-5 lg:overflow-y-auto lg:overscroll-contain lg:pt-5
-              ${mobileTab === "create" ? "pb-44 lg:pb-6" : "pb-6"}`}
-          >
-            <div className="lg:hidden">
-              <WorkflowSwitcher
-                workflows={workflows}
-                turbo={turboByWorkflow}
-                patches={patchesByWorkflow}
-                compat={compat}
-                selectedId={selectedId}
-                onSelect={selectWorkflow}
-              />
+        <Feed
+          jobs={jobs.jobs}
+          now={now}
+          estimateFor={jobs.estimateFor}
+          onOpen={setViewerId}
+          onCancel={(promptId) => void jobs.cancel(promptId)}
+          onRemove={jobs.remove}
+          onRemoveMany={jobs.removeMany}
+          onToggleFavorite={jobs.toggleFavorite}
+          onClearFinished={jobs.clearFinished}
+          onRetry={retry}
+          canRetry={retryable}
+          onRerun={rerun}
+          canRerun={rerunnable}
+          retrying={jobs.submitting}
+          inUse={takesInUse}
+          empty={
+            <div className="mx-auto max-w-6xl pt-4 sm:pt-10">
+              <h2 className="display-tight max-w-2xl text-[40px] font-semibold leading-[1.05] text-fg sm:text-[56px]">
+                What do you want to make?
+              </h2>
+              <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-fg-muted">
+                Pick one, describe it below, and press Generate. Everything you make lands here, and keeps
+                rendering on your machine if you close the tab.
+              </p>
+              <div className="mt-10">
+                <WorkflowCards {...workflowList} />
+              </div>
+            </div>
+          }
+        />
+      </main>
+
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        title={
+          selected && SelectedIcon ? (
+            <div className="flex items-start gap-3">
+              <SelectedIcon aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-accent" />
+              <div className="min-w-0">
+                <h2 className="display-tight text-[19px] font-semibold leading-tight text-fg">{selected.name}</h2>
+                <p className="mt-0.5 text-[12px] leading-snug text-fg-muted">{selected.description}</p>
+              </div>
+            </div>
+          ) : (
+            "Settings"
+          )
+        }
+      >
+        {selected ? (
+          <>
+            <MachineNote status={compat?.workflows[selected.id]} className="mb-4" />
+            <div className="mb-6 flex flex-wrap items-center gap-2">
+              {runEstimateSeconds ? (
+                <span className="mr-auto flex items-baseline gap-1.5">
+                  <span className="label-caps text-fg-subtle">Runs</span>
+                  <span className="font-mono text-[12px] tabular-nums text-fg">~{formatEstimate(runEstimateSeconds)}</span>
+                </span>
+              ) : (
+                <span className="mr-auto" />
+              )}
+              {tips ? (
+                <Button variant="quiet" size="xs" onClick={() => setTipsOpen(true)}>
+                  Tips
+                </Button>
+              ) : null}
+              <Button
+                variant="quiet"
+                size="xs"
+                onClick={resetToDefaults}
+                disabled={isDefaults}
+                title={isDefaults ? "Already at the defaults" : "Put every setting on this workflow back to its default"}
+              >
+                Restore defaults
+              </Button>
             </div>
 
-            {selected && SelectedIcon ? (
-              <div className="rise mt-4 lg:mt-0">
-                <div className="flex items-start gap-3">
-                  <span className="hidden lg:block">
-                    <WorkflowMark icon={SelectedIcon} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="display-tight hidden text-[22px] font-semibold leading-tight text-fg lg:block">
-                      {selected.name}
-                    </h2>
-                    <p className="text-[13px] leading-snug text-fg-muted lg:mt-1">{selected.description}</p>
-                  </div>
-                </div>
-                <MachineNote status={compat?.workflows[selected.id]} />
-                <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-border-default pb-4">
-                  {runEstimateSeconds ? (
-                    <span className="mr-auto flex items-baseline gap-1.5">
-                      <span className="label-caps text-fg-subtle">Runs</span>
-                      <span className="font-mono text-[12px] tabular-nums text-fg">
-                        ~{formatEstimate(runEstimateSeconds)}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="mr-auto" />
-                  )}
-                  {tips ? (
-                    <Button variant="quiet" size="xs" onClick={() => setTipsOpen(true)}>
-                      Tips
-                    </Button>
-                  ) : null}
-                  <Button
-                    variant="quiet"
-                    size="xs"
-                    onClick={resetToDefaults}
-                    disabled={isDefaults}
-                    title={
-                      isDefaults
-                        ? "Already at the defaults"
-                        : "Put every setting on this workflow back to its default"
-                    }
-                  >
-                    Restore defaults
-                  </Button>
-                </div>
-              </div>
-            ) : null}
+            {/* Deliberately never disabled: a running generation should not
+                stop you setting up the next one. Keyed per workflow, since two
+                graphs can share a param id and a control keeps local state. */}
+            <ParamForm
+              key={selected.id}
+              params={panelParams}
+              values={values}
+              onChange={onParamChange}
+              fieldError={fieldError}
+            />
 
-            {selected && clipNotice && selected.clipTarget?.action === clipNotice.action ? (
-              <div className="mt-4 flex items-start gap-3 border-l-2 border-accent bg-accent-subtle/60 py-2.5 pl-3 pr-2 text-[12px] leading-relaxed text-fg-muted">
-                <span className="min-w-0 flex-1">
-                  {CLIP_NOTICE[clipNotice.action].verb}{" "}
-                  <span className="text-fg">“{clipNotice.label}”</span>. {CLIP_NOTICE[clipNotice.action].detail}
-                </span>
-                <Button variant="quiet" size="xs" className="shrink-0" onClick={() => setClipNotice(null)}>
-                  Dismiss
-                </Button>
-              </div>
-            ) : null}
-
-            {selected ? (
-              <div className="mt-5">
+            {modesWorkflow?.turbo || (modesWorkflow?.patches.length ?? 0) > 0 || howParams.length > 0 ? (
+              <QualityFold summary={qualitySummary}>
+                {modesWorkflow?.turbo ? (
+                  <TurboSwitch
+                    turbo={modesWorkflow.turbo}
+                    on={turboOn}
+                    onChange={setTurbo}
+                    strength={strengths[TURBO_STRENGTH]}
+                    onStrengthChange={(value) => setStrength(TURBO_STRENGTH, value)}
+                  />
+                ) : null}
+                <ModelOptions
+                  patches={modesWorkflow?.patches ?? []}
+                  on={patchesOn}
+                  values={runValues}
+                  onPatchChange={setPatch}
+                  turbo={modesWorkflow?.turbo}
+                  turboOn={turboOn}
+                  lowVram={lowVram}
+                  onLowVramChange={setLowVram}
+                  strengths={strengths}
+                  onStrengthChange={setStrength}
+                  alternateBase={alternateBase}
+                  onAlternateBaseChange={setAlternateBaseFor}
+                  lora={lora}
+                  onLoraChange={setLoraFor}
+                  tier={tier}
+                  onTierChange={setTierFor}
+                />
                 <ParamForm
-                  // Per workflow: two graphs can share a param id, and a
-                  // control kept across the switch keeps its local state.
-                  key={selected.id}
-                  params={whatParams}
+                  key={`${selected.id}-how`}
+                  params={howParams}
                   values={values}
                   onChange={onParamChange}
                   fieldError={fieldError}
                 />
-
-                {modesWorkflow?.turbo || (modesWorkflow?.patches.length ?? 0) > 0 || howParams.length > 0 ? (
-                  <QualityFold summary={qualitySummary}>
-                    {modesWorkflow?.turbo ? (
-                      <TurboSwitch
-                        turbo={modesWorkflow.turbo}
-                        on={turboOn}
-                        onChange={setTurbo}
-                        strength={strengths[TURBO_STRENGTH]}
-                        onStrengthChange={(value) => setStrength(TURBO_STRENGTH, value)}
-                      />
-                    ) : null}
-
-                    <ModelOptions
-                      patches={modesWorkflow?.patches ?? []}
-                      on={patchesOn}
-                      values={runValues}
-                      onPatchChange={setPatch}
-                      turbo={modesWorkflow?.turbo}
-                      turboOn={turboOn}
-                      lowVram={lowVram}
-                      onLowVramChange={setLowVram}
-                      strengths={strengths}
-                      onStrengthChange={setStrength}
-                      alternateBase={alternateBase}
-                      onAlternateBaseChange={setAlternateBaseFor}
-                      lora={lora}
-                      onLoraChange={setLoraFor}
-                      tier={tier}
-                      onTierChange={setTierFor}
-                    />
-
-                    <ParamForm
-                      key={`${selected.id}-how`}
-                      params={howParams}
-                      values={values}
-                      onChange={onParamChange}
-                      fieldError={fieldError}
-                    />
-                  </QualityFold>
-                ) : null}
-              </div>
+              </QualityFold>
             ) : null}
-          </div>
-
-          {/* The run, at the foot of the column it is set up in: the button
-              and what it is about to make. lg only; a phone pins it to the
-              screen's foot instead. */}
-          {selected ? (
-            <div className="hidden shrink-0 border-t border-border-default bg-surface px-5 py-3 lg:block">
-              <div className="flex items-center gap-2">
-                {generateButton("flex-1")}
-                <kbd
-                  title="Press ⌘↵ (Ctrl+Enter) to run from anywhere"
-                  className="grid h-11 place-items-center rounded-md border border-border-default bg-bg-subtle px-2
-                    font-mono text-[11px] text-fg-subtle"
-                >
-                  ⌘↵
-                </kbd>
-              </div>
-              {summary ? <p className="mt-2 truncate font-mono text-[11px] text-fg-subtle">{summary}</p> : null}
-            </div>
-          ) : null}
-        </section>
-
-        {/* The monitor and, under it, the library. */}
-        <main
-          className={`scroll-pane min-w-0 flex-1 bg-bg lg:overflow-y-auto lg:overscroll-contain
-            ${mobileTab === "create" ? "max-lg:hidden" : ""}`}
-        >
-          <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-6 px-4 pb-28 pt-4 sm:px-6 lg:pb-10 lg:pt-6">
-            <div className={`flex min-w-0 flex-col gap-4 ${mobileTab === "history" ? "max-lg:hidden" : ""}`}>
-              {jobs.submitError && (!jobs.submitErrorField || submittedFor !== selectedId) ? (
-                <Alert onDismiss={jobs.dismissSubmitError}>{jobs.submitError}</Alert>
-              ) : null}
-              {clipError ? <Alert onDismiss={() => setClipError(null)}>{clipError}</Alert> : null}
-
-              {selected?.scenes ? <MusicVideoPanel video={musicVideo} /> : null}
-              {selected?.slicedBy && longSwap.project ? <LongSwapPanel swap={longSwap} /> : null}
-
-              <section aria-label="Monitor">
-                <GenerationStage
-                  job={viewedJob}
-                  now={now}
-                  estimateSeconds={viewedJob ? jobs.estimateFor(viewedJob) : null}
-                  onCancel={(promptId) => void jobs.cancel(promptId)}
-                  onReuseSeed={(seed) => setValue("seed", seed)}
-                  clipActions={offeredActions}
-                  onClipAction={offeredActions.length > 0 ? (job, action) => void sendClip(job, action) : undefined}
-                  onShowSettings={viewedJob ? () => setSettingsForId(viewedJob.promptId) : undefined}
-                  onToggleFavorite={jobs.toggleFavorite}
-                  onRetry={viewedJob && retryable(viewedJob) ? retry : undefined}
-                  onCheckAgain={
-                    viewedJob && lostTrackOf(viewedJob) ? () => jobs.recheckLost([viewedJob.promptId]) : undefined
-                  }
-                  onRerun={viewedJob && rerunnable(viewedJob) ? rerun : undefined}
-                  retrying={jobs.submitting}
-                  busyAction={sending}
-                />
-              </section>
-            </div>
-
-            <section
-              aria-labelledby="library-heading"
-              className={`border-t border-border-default pt-5 ${mobileTab === "result" ? "max-lg:hidden" : ""}`}
-            >
-              <header className="mb-3 flex items-baseline gap-3">
-                <h2 id="library-heading" className="display-tight text-[18px] font-semibold text-fg">
-                  Library
-                </h2>
-                {jobs.jobs.length > 0 ? (
-                  <span className="font-mono text-[11px] tabular-nums text-fg-subtle">
-                    {jobs.jobs.length} on this device
-                    {jobs.activeCount > 0 ? ` · ${jobs.activeCount} running` : ""}
-                  </span>
-                ) : null}
-              </header>
-              <GenerationsPanel
-                jobs={jobs.jobs}
-                selectedId={viewedJob?.promptId ?? null}
-                now={now}
-                onSelect={(promptId) => {
-                  setViewedId(promptId);
-                  showTab("result");
-                }}
-                onCancel={(promptId) => void jobs.cancel(promptId)}
-                onRemove={jobs.remove}
-                onRemoveMany={jobs.removeMany}
-                onToggleFavorite={jobs.toggleFavorite}
-                onClearFinished={jobs.clearFinished}
-                onRetry={retry}
-                canRetry={retryable}
-                onRerun={rerun}
-                canRerun={rerunnable}
-                retrying={jobs.submitting}
-                inUse={takesInUse}
-              />
-            </section>
-          </div>
-        </main>
-      </div>
-
-      {/* The phone's bar: Generate on Compose, above the three screens. */}
-      <div
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-border-default bg-bg/95 backdrop-blur-md lg:hidden"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        {mobileTab === "create" ? (
-          <div className="px-4 pt-3">
-            {generateButton("w-full")}
-            {summary ? (
-              <p className="mt-1.5 truncate text-center font-mono text-[11px] text-fg-subtle">{summary}</p>
-            ) : null}
-          </div>
+          </>
         ) : null}
-        <nav aria-label="Screens" className="grid grid-cols-3 px-2 pb-1.5 pt-1.5">
-          {(
-            [
-              { tab: "create", label: "Compose", Icon: PenLine },
-              { tab: "result", label: "Monitor", Icon: SquarePlay },
-              { tab: "history", label: "Library", Icon: LayoutGrid },
-            ] as const
-          ).map(({ tab, label, Icon }) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => showTab(tab)}
-              aria-current={mobileTab === tab ? "page" : undefined}
-              className={`relative flex flex-col items-center gap-0.5 py-1 text-[11px] font-semibold transition-colors
-                ${mobileTab === tab ? "text-accent" : "text-fg-muted hover:text-fg"}`}
-            >
-              <span
-                aria-hidden="true"
-                className={`absolute inset-x-6 -top-1.5 h-0.5 ${mobileTab === tab ? "bg-accent" : "bg-transparent"}`}
-              />
-              <Icon className="size-5" aria-hidden="true" />
-              {label}
-              {tab === "result" && jobs.activeCount > 0 ? (
-                <span
-                  aria-label={`${jobs.activeCount} running`}
-                  className="absolute right-[calc(50%-1.25rem)] top-0.5 size-2 rounded-full bg-accent breathe"
-                />
-              ) : null}
-            </button>
-          ))}
-        </nav>
+      </SettingsPanel>
+
+      <div className={`transition-[padding] duration-300 ${settingsOpen ? "xl:[&>div]:pr-[476px]" : ""}`}>
+        <Dock
+          menu={<WorkflowMenu {...workflowList} open={menuOpen} onOpenChange={setMenuOpen} />}
+          prompt={promptParam}
+          promptValue={promptParam ? values[promptParam.id] : undefined}
+          onPromptChange={(value) => promptParam && onParamChange(promptParam.id, value)}
+          promptError={fieldError?.field === "prompt" ? fieldError.message : undefined}
+          attachments={attachments}
+          summary={summary}
+          onOpenSettings={openSettings}
+          settingsOpen={settingsOpen}
+          notice={dockNotice}
+          onSubmit={submit}
+          submitLabel={queueLabel}
+          busy={jobs.submitting || (Boolean(selected?.scenes) && planning)}
+          disabled={!selected}
+          description={selected?.description}
+        />
       </div>
+
+      <Viewer
+        job={viewedJob}
+        now={now}
+        onClose={() => setViewerId(null)}
+        onStep={jobs.jobs.length > 1 ? stepViewer : undefined}
+      >
+        <GenerationStage
+          job={viewedJob}
+          now={now}
+          estimateSeconds={viewedJob ? jobs.estimateFor(viewedJob) : null}
+          onCancel={(promptId) => void jobs.cancel(promptId)}
+          onReuseSeed={(seed) => {
+            setValue("seed", seed);
+            showTab("create");
+          }}
+          clipActions={offeredActions}
+          onClipAction={offeredActions.length > 0 ? (job, action) => void sendClip(job, action) : undefined}
+          onShowSettings={viewedJob ? () => setSettingsForId(viewedJob.promptId) : undefined}
+          onToggleFavorite={jobs.toggleFavorite}
+          onRetry={viewedJob && retryable(viewedJob) ? retry : undefined}
+          onCheckAgain={viewedJob && lostTrackOf(viewedJob) ? () => jobs.recheckLost([viewedJob.promptId]) : undefined}
+          onRerun={viewedJob && rerunnable(viewedJob) ? rerun : undefined}
+          retrying={jobs.submitting}
+          busyAction={sending}
+        />
+      </Viewer>
 
       {tips && selected ? (
         <TipsModal
@@ -1655,10 +1605,15 @@ function Workbench({
           onClose={() => setSettingsForId(null)}
           job={settingsJob}
           workflow={workflows.find((workflow) => workflow.id === settingsJob.workflowId)}
-          // Withheld when the workflow that made this run is gone: there is
-          // nothing to load the settings into.
+          // Withheld when the workflow that made this run is gone.
           onReuse={
-            workflows.some((workflow) => workflow.id === settingsJob.workflowId) ? reuseSettings : undefined
+            workflows.some((workflow) => workflow.id === settingsJob.workflowId)
+              ? (job) => {
+                  const loaded = reuseSettings(job);
+                  setSettingsForId(null);
+                  return loaded;
+                }
+              : undefined
           }
         />
       ) : null}
@@ -1666,13 +1621,23 @@ function Workbench({
   );
 }
 
-/** A refusal or a failed hand-off, above the monitor until dismissed. */
-function Alert({ children, onDismiss }: { children: React.ReactNode; onDismiss: () => void }) {
+/** A note over the dock: a refusal, a failed hand-off, or how a hand-off filled it in. */
+function Alert({
+  children,
+  onDismiss,
+  tone,
+}: {
+  children: React.ReactNode;
+  onDismiss: () => void;
+  tone: "danger" | "accent";
+}) {
   return (
     <div
-      role="alert"
-      className="flex items-start gap-3 border-l-2 border-danger bg-danger/10 py-2.5 pl-3 pr-2 text-[13px] leading-relaxed text-fg"
+      role={tone === "danger" ? "alert" : "status"}
+      className={`flex items-start gap-3 rounded-xl border bg-raised/95 py-2.5 pl-3.5 pr-2 text-[12px] leading-relaxed text-fg-muted
+        shadow-md backdrop-blur-md ${tone === "danger" ? "border-danger/60" : "border-accent/60"}`}
     >
+      <span aria-hidden="true" className={`mt-1.5 size-1.5 shrink-0 rounded-full ${tone === "danger" ? "bg-danger" : "bg-accent"}`} />
       <span className="min-w-0 flex-1">{children}</span>
       <Button variant="quiet" size="xs" className="shrink-0" onClick={onDismiss}>
         Dismiss
@@ -1681,27 +1646,19 @@ function Alert({ children, onDismiss }: { children: React.ReactNode; onDismiss: 
   );
 }
 
-/**
- * The studio's shape while the workflows load: the bar, the rail, the
- * composer and the monitor, as blocks, so the eye knows where to start.
- */
-type MobileTab = "create" | "result" | "history";
-
+/** The page's shape while the workflows load: the bar, a gallery, the dock. */
 function StudioSkeleton() {
-  const block = "rounded-md bg-bg-subtle motion-safe:animate-pulse";
+  const block = "rounded-xl bg-bg-subtle motion-safe:animate-pulse";
   return (
-    <div className="flex min-h-dvh flex-col" aria-busy="true" aria-label="Loading">
+    <div className="min-h-dvh" aria-busy="true" aria-label="Loading">
       <div className="h-12 border-b border-border-default" />
-      <div className="flex flex-1">
-        <div className="hidden w-16 border-r border-border-default bg-surface lg:block xl:w-56" />
-        <div className="flex flex-1 flex-col gap-4 bg-surface p-5 lg:w-[400px] lg:flex-none lg:border-r lg:border-border-default">
-          <div className={`${block} h-12`} />
-          <div className={`${block} h-40`} />
-          <div className={`${block} h-24`} />
-        </div>
-        <div className="hidden flex-1 p-6 lg:block">
-          <div className={`${block} aspect-video max-h-[62vh] w-full`} />
-        </div>
+      <div className="mx-auto grid max-w-[1800px] gap-5 px-4 pt-8 sm:grid-cols-2 sm:px-8 xl:grid-cols-3 2xl:grid-cols-4">
+        {Array.from({ length: 6 }, (_, index) => (
+          <div key={index} className={`${block} aspect-video`} />
+        ))}
+      </div>
+      <div className="fixed inset-x-0 bottom-5 px-3">
+        <div className={`${block} mx-auto h-28 max-w-3xl`} />
       </div>
     </div>
   );

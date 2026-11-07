@@ -277,7 +277,7 @@ function InFlight({
             {copy.label}
           </Tally>
         }
-        clock={job.workflowName}
+       
         footer={
           <div className="relative h-1 w-full overflow-hidden bg-white/10">
             {fraction === null ? (
@@ -343,7 +343,7 @@ function Failure({
   const [note, setNote] = useState<string | null>(null);
   return (
     <div className="flex flex-col">
-      <Screen tally={<Tally tone="fault">Failed</Tally>} clock={job.workflowName}>
+      <Screen tally={<Tally tone="fault">Failed</Tally>}>
         <p className="text-[15px] font-medium text-screen-fg">This generation did not finish</p>
         <p className="mt-2 max-w-md whitespace-pre-line text-[13px] leading-relaxed text-screen-muted">
           {job.error}
@@ -422,7 +422,7 @@ function Closed({
             {job.phase === "cancelled" ? "Cancelled" : empty ? "No output" : "Lost"}
           </Tally>
         }
-        clock={job.workflowName}
+       
       >
         <p className="text-[15px] font-medium text-screen-fg">
           {job.phase === "cancelled"
@@ -589,7 +589,7 @@ function Result({
   return (
     <div className="flex flex-col">
       {audio ? (
-        <Screen tally={<Tally tone="idle">Track</Tally>} clock={job.workflowName}>
+        <Screen tally={<Tally tone="idle">Track</Tally>}>
           <Disc3 className="size-10 stroke-[1.25] text-screen-muted" aria-hidden="true" />
           {job.prompt.trim() ? (
             <p className="mt-4 line-clamp-3 max-w-md text-[13px] leading-relaxed text-screen-muted">
