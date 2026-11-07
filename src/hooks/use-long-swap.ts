@@ -6,8 +6,11 @@ import type { Job, JobOutput, MusicVideoTag } from "@/lib/jobs";
 import type { RunModes } from "@/lib/workflows/modes";
 import {
   chainSegments,
+  FRESH_EVERY_PARAM,
+  PASS_THROUGH_PARAM,
   segmentFrames,
   SLICE_FPS,
+  SLICE_FRAMES,
   type ChainSegment,
 } from "@/lib/workflows/slices";
 import type { ParamValue, WorkflowSummary } from "@/lib/workflows/types";
@@ -30,6 +33,15 @@ import type { ParamValue, WorkflowSummary } from "@/lib/workflows/types";
  *
  * A segment's runs are found by their history tag, not by an id kept here, so
  * a retry from the history counts as that segment's newest take.
+ *
+ * Two things break the carry-on on purpose:
+ * - **A fresh start** every `freshEvery` segments. Carried on for minutes, the
+ *   small errors in each segment compound — the face darkens and gets
+ *   grainier, segment on segment — so now and then a segment is swapped from
+ *   the clip and the picture alone, with no history, which resets it.
+ * - **A pass-through.** A segment where SAM finds no one to replace (the shot
+ *   has moved off them) cannot be swapped, so it is sent again as the clip's
+ *   own footage and the chain carries on. The segment after it starts fresh.
  */
 
 const STORAGE_KEY = "sorant-long-swap";
@@ -47,6 +59,10 @@ export interface LongSwapProject {
   createdAt: number;
   /** Set by Stop: no more segments are sent until Resume. */
   paused?: boolean;
+  /** Start a segment without history every this many segments; 0 or absent, never. */
+  freshEvery?: number;
+  /** Segments sent as the clip's own footage, because SAM found no one in them. */
+  passedThrough?: number[];
 }
 
 type SubmitModes = RunModes & { lowVram?: boolean; localDirector?: string; rewriteModel?: string };
@@ -91,6 +107,31 @@ function writeProject(project: LongSwapProject | null): void {
 
 const FAILED = new Set<Job["phase"]>(["error", "cancelled", "unknown"]);
 
+/** Relay's error when the first frame has no one matching "Who to replace". */
+const NO_SUBJECT = /SAM found no subject/i;
+
+/** Whether a segment's newest take failed because there was no one to swap. */
+export function foundNoOne(job: Job | undefined): boolean {
+  return job?.phase === "error" && NO_SUBJECT.test(job.error ?? "");
+}
+
+/** Segments per fresh start, from the form's seconds; 0 for never. */
+function freshEveryOf(values: Record<string, ParamValue>): number {
+  const seconds = Number(values[FRESH_EVERY_PARAM] ?? 0);
+  if (!(seconds > 0)) return 0;
+  return Math.max(2, Math.round((seconds * SLICE_FPS) / (SLICE_FRAMES - 1)));
+}
+
+/**
+ * Whether a segment starts without history: the first, one after a
+ * pass-through, and every `freshEvery`th.
+ */
+export function startsFresh(project: LongSwapProject, index: number): boolean {
+  if (index === 0) return true;
+  if (project.passedThrough?.includes(index - 1)) return true;
+  return Boolean(project.freshEvery && index % project.freshEvery === 0);
+}
+
 function stateOf(job: Job | undefined): SegmentState {
   if (!job) return "waiting";
   if (job.phase === "done") return "done";
@@ -112,7 +153,7 @@ export function clipRef(job: Job | undefined): string | null {
 }
 
 /** A segment as the swap workflow's `segment` param takes it. */
-const segmentValue = (segment: ChainSegment) => `${segment.start}:${segment.frames}:${segment.history}`;
+const segmentValue = (segment: ChainSegment, history: number) => `${segment.start}:${segment.frames}:${history}`;
 
 export function useLongSwap({
   workflow,
@@ -173,14 +214,18 @@ export function useLongSwap({
    * length is the segment's own, so the run's estimate is one window's.
    */
   const submitSegment = useCallback(
-    async (current: LongSwapProject, index: number, history: string | null) => {
+    async (current: LongSwapProject, index: number, history: string | null, passThrough = false) => {
       if (!workflow) return null;
       const segment = current.segments[index];
+      // A fresh start or a pass-through loads no history, so its source begins
+      // at its own first frame rather than `history` frames earlier.
+      const carried = history && !passThrough ? segment.history : 0;
       const values: Record<string, ParamValue> = {
         ...current.values,
-        segment: segmentValue(segment),
-        history_clip: history ?? "",
-        clip_seconds: (segment.history + segmentFrames(segment, current.seconds)) / SLICE_FPS,
+        segment: segmentValue(segment, carried),
+        history_clip: carried ? history! : "",
+        [PASS_THROUGH_PARAM]: passThrough ? "1" : "",
+        clip_seconds: (carried + segmentFrames(segment, current.seconds)) / SLICE_FPS,
       };
       return jobs.submit(workflow, values, {
         ...current.modes,
@@ -198,9 +243,30 @@ export function useLongSwap({
     if (!project || project.paused || !workflow || inFlight.current !== null) return;
     const next = states.findIndex((state) => state !== "done");
     if (next === -1) return;
+    // No one to swap in this stretch: send it as the clip's own footage, once.
+    if (foundNoOne(segmentJobs[next]) && !project.passedThrough?.includes(next)) {
+      const passed = { ...project, passedThrough: [...(project.passedThrough ?? []), next] };
+      inFlight.current = next;
+      setSending(true);
+      setError(null);
+      setProject(passed);
+      void submitSegment(passed, next, null, true)
+        .then((promptId) => {
+          if (!promptId) {
+            setError(`Segment ${next + 1} could not be sent as the original footage. Press Resume to try again.`);
+            setProject((current) => (current ? { ...current, paused: true } : current));
+          }
+        })
+        .finally(() => {
+          inFlight.current = null;
+          setSending(false);
+        });
+      return;
+    }
     if (states[next] !== "waiting") return; // queued, running, or failed (Resume)
-    const history = next === 0 ? null : clipRef(segmentJobs[next - 1]);
-    if (next > 0 && !history) {
+    const fresh = startsFresh(project, next);
+    const history = fresh ? null : clipRef(segmentJobs[next - 1]);
+    if (!fresh && !history) {
       setError(`Segment ${next} finished without a saved video to carry on from. Press Resume to swap it again.`);
       return;
     }
@@ -234,6 +300,7 @@ export function useLongSwap({
     setError(null);
     setProject({
       id: crypto.randomUUID(),
+      freshEvery: freshEveryOf(values),
       values: {
         ...values,
         seed: Number.isInteger(seed) && seed >= 0 ? seed : Math.floor(Math.random() * 2 ** 31),
@@ -256,11 +323,14 @@ export function useLongSwap({
     const failed = states.findIndex((state) => state === "failed");
     const firstUndone = states.findIndex((state) => state !== "done");
     setProject({ ...project, paused: false });
+    // No one to swap there: the chain sends it as the original footage itself.
+    if (failed !== -1 && foundNoOne(segmentJobs[failed]) && !project.passedThrough?.includes(failed)) return;
     if (failed !== -1 && failed === firstUndone) {
-      const history = failed === 0 ? null : clipRef(segmentJobs[failed - 1]);
+      const passThrough = project.passedThrough?.includes(failed) ?? false;
+      const history = passThrough || startsFresh(project, failed) ? null : clipRef(segmentJobs[failed - 1]);
       inFlight.current = failed;
       setSending(true);
-      void submitSegment(project, failed, history)
+      void submitSegment(project, failed, history, passThrough)
         .then((promptId) => {
           if (!promptId) setError(`Segment ${failed + 1} was refused. See the message above.`);
         })
