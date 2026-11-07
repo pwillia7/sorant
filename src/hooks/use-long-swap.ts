@@ -350,7 +350,11 @@ export function useLongSwap({
   }, [project, segmentJobs, jobs]);
 
   const join = useCallback(async () => {
-    if (!project || !stitchWorkflow) return;
+    if (!project) return;
+    if (!stitchWorkflow) {
+      setError("The join workflow is not available, so the segments cannot be joined here.");
+      return;
+    }
     const clips = segmentJobs.map((job, index) => {
       const file = clipRef(job);
       const frames = segmentFrames(project.segments[index], project.seconds);
@@ -361,12 +365,17 @@ export function useLongSwap({
       return;
     }
     setError(null);
-    const promptId = await jobs.submit(
-      stitchWorkflow,
-      { scenes: JSON.stringify(clips), prompt: `Character swap: ${project.title}` },
-      { derivedFrom: segmentJobs[0]?.promptId, musicVideo: tagFor(project, "join") },
-    );
-    if (!promptId) setError("The join was refused. See the message above.");
+    setSending(true);
+    try {
+      const promptId = await jobs.submit(
+        stitchWorkflow,
+        { scenes: JSON.stringify(clips), prompt: `Character swap: ${project.title}` },
+        { derivedFrom: segmentJobs[0]?.promptId, musicVideo: tagFor(project, "join") },
+      );
+      if (!promptId) setError("The join was refused. See the message above.");
+    } finally {
+      setSending(false);
+    }
   }, [project, stitchWorkflow, segmentJobs, jobs, tagFor]);
 
   // Join on its own once every segment is done, once per set of takes.

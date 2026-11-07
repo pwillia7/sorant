@@ -101,6 +101,21 @@ interface ConfigPayload {
  * arrives with a reference that is not the picture — so the note has to say
  * which of them happened.
  */
+/**
+ * What a long Character swap's segments are joined with. The stitch is a
+ * tool, so it is not in the list the browser is sent (see the workflows
+ * route); a run needs only its id.
+ */
+const SWAP_STITCH: WorkflowSummary = {
+  id: "multi-scene-stitch",
+  name: "Character swap",
+  description: "Joins a long Character swap's segments.",
+  hasAudio: true,
+  tool: true,
+  params: [],
+  patches: [],
+};
+
 const CLIP_NOTICE: Record<ClipAction, { verb: string; detail: string }> = {
   musicvideo: {
     verb: "Making a music video for",
@@ -1013,7 +1028,7 @@ function Workbench({
   const swapWorkflow = workflows.find((workflow) => workflow.slicedBy !== undefined);
   const longSwap = useLongSwap({
     workflow: swapWorkflow,
-    stitchWorkflow: workflows.find((workflow) => workflow.id === "multi-scene-stitch"),
+    stitchWorkflow: SWAP_STITCH,
     jobs,
   });
   /** The planned video on screen, or the music video's when neither is. */
