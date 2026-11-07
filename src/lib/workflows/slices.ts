@@ -64,6 +64,19 @@ export const CHAIN_OVER_SECONDS = 20;
  */
 export const MAX_SWAP_SECONDS = 480;
 
+/**
+ * "1" on a chained segment that is the clip's own footage rather than a swap:
+ * written by the page when SAM found no one to replace in it. See
+ * `passThrough` in minimax-h3-swap.ts.
+ */
+export const PASS_THROUGH_PARAM = "pass_through";
+/**
+ * How often a chained swap starts a segment fresh, from the clip and the
+ * picture alone, instead of carrying on from the one before: seconds, "0" for
+ * never. Read by the page (use-long-swap.ts); it changes no graph.
+ */
+export const FRESH_EVERY_PARAM = "fresh_every";
+
 /** Frames of the previous segment's output each segment carries on from: Relay's 18. */
 export const CHAIN_HISTORY = 18;
 

@@ -1,6 +1,6 @@
 import type { ComfyGraph } from "@/lib/comfy";
 import { ParamError } from "@/lib/params";
-import { CHAIN_OVER_SECONDS, MAX_SWAP_SECONDS, SLICE_FPS } from "./slices";
+import { CHAIN_OVER_SECONDS, FRESH_EVERY_PARAM, MAX_SWAP_SECONDS, PASS_THROUGH_PARAM, SLICE_FPS } from "./slices";
 import type { ParamDef, ParamValue, WorkflowDef } from "./types";
 
 /**
@@ -545,6 +545,41 @@ const graph: ComfyGraph = {
   },
 };
 
+/**
+ * A chained segment as the clip's own footage: its stretch of the source,
+ * fitted to the same canvas as the swapped segments and with its own sound, so
+ * the join takes it like any other. Used where SAM finds no one to replace —
+ * the shot has moved off them — so the chain carries on rather than stopping
+ * at a segment that cannot be swapped.
+ *
+ * Prepare Source's `prepared_video` is the source at the canvas, trimmed to
+ * the frames it was given (its IMAGE output is padded to H3's grid). At a
+ * frame size between its two budgets it is scaled the way the swap's frames
+ * are, so the sizes match at the join.
+ */
+function passThrough(graph: ComfyGraph, values: Record<string, ParamValue>) {
+  const keep = new Set(["source", "segment_slice", "prepare", "scale", "save"]);
+  for (const node of Object.keys(graph)) if (!keep.has(node)) delete graph[node];
+  graph.original_parts = {
+    class_type: "GetVideoComponents",
+    inputs: { video: ["prepare", 8] },
+    _meta: { title: "Get Video Components (the clip's own footage)" },
+  };
+  const mp = frameMegapixels(values);
+  if (mp === 1 || mp === 0.5) delete graph.scale;
+  else graph.scale.inputs.image = ["original_parts", 0];
+  graph.original_video = {
+    class_type: "CreateVideo",
+    inputs: {
+      images: graph.scale ? ["scale", 0] : ["original_parts", 0],
+      fps: ["original_parts", 2],
+      audio: ["original_parts", 1],
+    },
+    _meta: { title: "Create Video (the clip's own footage)" },
+  };
+  graph.save.inputs.video = ["original_video", 0];
+}
+
 const params: ParamDef[] = [
   {
     id: VIDEO_PARAM,
@@ -610,6 +645,37 @@ const params: ParamDef[] = [
     maxLength: 512,
     group: "Source",
     targets: [{ node: "history_clip", input: "file" }],
+  },
+  {
+    id: PASS_THROUGH_PARAM,
+    label: "Pass through",
+    type: "written",
+    default: "",
+    maxLength: 1,
+    group: "Source",
+    // The rest of what it does is finalize's: see `passThrough`.
+    targets: [
+      {
+        node: "save",
+        input: "filename_prefix",
+        transform: (value) => (value === "1" ? "video/swap_original" : "video/MiniMax_H3_swap"),
+      },
+    ],
+  },
+  {
+    id: FRESH_EVERY_PARAM,
+    label: "Fresh start every",
+    type: "select",
+    default: "30",
+    options: [
+      { value: "30", label: "30 seconds" },
+      { value: "60", label: "Minute" },
+      { value: "0", label: "Never" },
+    ],
+    help: `For clips over ${CHAIN_OVER_SECONDS} seconds. Each segment carries on from the last frames of the one before, and over minutes small errors build up: the face darkens, gets grainier, drifts from the picture. A fresh start swaps a segment from the clip and the picture alone, which resets that, at the cost of a small jump where it happens.`,
+    group: "Quality",
+    scope: "browser",
+    targets: [],
   },
   {
     id: IMAGE_PARAM,
@@ -792,6 +858,11 @@ export const minimaxH3Swap: WorkflowDef = {
   slicedBy: CLIP_SECONDS_PARAM,
   finalize(graph, values) {
     const segment = segmentOf(values);
+    if (segment && values[PASS_THROUGH_PARAM] === "1") {
+      graph.prepare.inputs.duration_seconds = segmentSeconds(segment);
+      passThrough(graph, values);
+      return;
+    }
     if (!segment) {
       // An ordinary run: the whole clip, no history.
       graph.prepare.inputs.video = ["source", 0];
@@ -883,6 +954,27 @@ export const minimaxH3Swap: WorkflowDef = {
         [HISTORY_CLIP_PARAM]: "../secrets.mp4 [output]",
       },
       rejects: "not a clip this can carry on from",
+    },
+    {
+      name: "a segment passed through as the clip's own footage",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [SEGMENT_PARAM]: "5782:0:0",
+        [PASS_THROUGH_PARAM]: "1",
+      },
+    },
+    {
+      name: "a segment passed through at 0.75 MP",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [SEGMENT_PARAM]: "247:123:0",
+        [PASS_THROUGH_PARAM]: "1",
+        [MEGAPIXELS_PARAM]: 0.75,
+      },
     },
     {
       name: "H3's own sound",

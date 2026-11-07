@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Clock3, LoaderCircle, X } from "lucide-react";
-import type { LongSwapController, SegmentState } from "@/hooks/use-long-swap";
+import { startsFresh, type LongSwapController, type SegmentState } from "@/hooks/use-long-swap";
 import { withToken } from "@/lib/client";
 import type { Job } from "@/lib/jobs";
 import { segmentFrames, SLICE_FPS } from "@/lib/workflows/slices";
@@ -15,7 +15,18 @@ import { Button, buttonClasses } from "./ui/button";
 
 const icon = { className: "size-3 shrink-0 stroke-2", "aria-hidden": true } as const;
 
-function SegmentBadge({ state, job }: { state: SegmentState; job: Job | undefined }) {
+function SegmentBadge({ state, job, original }: { state: SegmentState; job: Job | undefined; original: boolean }) {
+  if (original && state !== "failed") {
+    return state === "done" ? (
+      <span title="SAM found no one to replace here, so this stretch is the clip's own footage.">
+        <Badge tone="warning">original footage</Badge>
+      </span>
+    ) : (
+      <Badge>
+        <LoaderCircle {...icon} className="size-3 shrink-0 stroke-2 motion-safe:animate-spin" /> copying original
+      </Badge>
+    );
+  }
   switch (state) {
     case "waiting":
       return <Badge>waiting</Badge>;
@@ -68,6 +79,7 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
   const joining = joinJob !== undefined && (joinJob.phase === "queued" || joinJob.phase === "running");
   const joinFailed = joinJob !== undefined && ["error", "cancelled", "unknown"].includes(joinJob.phase);
   const stopped = Boolean(project.paused) || failed;
+  const passed = (project.passedThrough ?? []).map((index) => index + 1);
 
   const hint = joined
     ? "Joined, with the clip's own soundtrack."
@@ -100,6 +112,14 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
           role="alert"
         >
           {swap.error}
+        </p>
+      ) : null}
+
+      {passed.length > 0 ? (
+        <p className="mb-4 rounded-lg border border-warning/40 bg-warning/5 p-3 text-[13px] leading-relaxed text-fg" role="status">
+          SAM found no one to replace in segment{passed.length > 1 ? "s" : ""} {passed.join(", ")}, so{" "}
+          {passed.length > 1 ? "those stretches use" : "that stretch uses"} the clip&rsquo;s own footage. The swap starts
+          fresh from the picture after {passed.length > 1 ? "each" : "it"}.
         </p>
       ) : null}
 
@@ -181,7 +201,21 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
                   className="aspect-video max-h-40 w-full rounded bg-black object-contain"
                 />
               ) : null}
-              <SegmentBadge state={states[index]} job={job} />
+              <div className="flex flex-wrap items-center gap-1">
+                <SegmentBadge
+                  state={states[index]}
+                  job={job}
+                  original={project.passedThrough?.includes(index) ?? false}
+                />
+                {index > 0 && startsFresh(project, index) && !project.passedThrough?.includes(index) ? (
+                  <span
+                    className="text-[11px] text-fg-subtle"
+                    title="Swapped from the clip and the picture alone, without carrying on from the segment before, to reset drift."
+                  >
+                    fresh start
+                  </span>
+                ) : null}
+              </div>
             </li>
           );
         })}
