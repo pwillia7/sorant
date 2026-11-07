@@ -40,13 +40,13 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f3f0ea" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f0e0c" },
+    { media: "(prefers-color-scheme: light)", color: "#f2f3f3" },
+    { media: "(prefers-color-scheme: dark)", color: "#121313" },
   ],
 };
 
 /**
- * Applied before paint so a stored theme choice does not flash the wrong
+ * Applied before paint so a stored theme or palette does not flash the wrong
  * colours. Kept tiny and dependency-free on purpose.
  */
 const themeScript = `
@@ -54,6 +54,10 @@ try {
   var stored = localStorage.getItem('theme');
   if (stored === 'light' || stored === 'dark') {
     document.documentElement.dataset.theme = stored;
+  }
+  var palette = localStorage.getItem('palette');
+  if (palette && /^[a-z-]+$/.test(palette) && palette !== 'vichy') {
+    document.documentElement.dataset.palette = palette;
   }
 } catch (e) {}
 `;

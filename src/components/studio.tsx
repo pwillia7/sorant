@@ -20,6 +20,7 @@ import { GenerationStage } from "@/components/generation-stage";
 import { ParamForm } from "@/components/param-form";
 import { SettingsModal } from "@/components/settings-modal";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { PalettePicker } from "@/components/palette-picker";
 import { TipsModal } from "@/components/tips-modal";
 import { tipsFor } from "@/lib/workflows/tips";
 import { TokenGate } from "@/components/token-gate";
@@ -1374,6 +1375,7 @@ function Workbench({
             onRewriteModelChange={onRewriteModelChange}
           />
           <NotifyToggle />
+          <PalettePicker />
           <ThemeToggle />
         </div>
       </header>
