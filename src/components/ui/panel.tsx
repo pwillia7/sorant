@@ -19,8 +19,8 @@ export function Panel({
     <section
       ref={ref}
       style={style}
-      className={`rounded-xl border border-border-default bg-surface ${
-        padded ? "p-4 sm:p-5" : ""
+      className={`rounded-lg border border-border-default bg-surface ${
+        padded ? "p-4" : ""
       } ${className}`}
     >
       {children}
@@ -38,13 +38,11 @@ export function PanelHeader({
   action?: ReactNode;
 }) {
   return (
-    <header className="flex items-start justify-between gap-4 mb-4">
+    <header className="mb-4 flex items-start justify-between gap-4">
       <div className="min-w-0">
-        <h2 className="text-sm font-medium tracking-[-0.01em] text-fg">
-          {title}
-        </h2>
+        <h2 className="label-caps text-fg-muted">{title}</h2>
         {hint ? (
-          <p className="mt-0.5 text-[13px] leading-snug text-fg-subtle">{hint}</p>
+          <p className="mt-1 text-[12px] leading-snug text-fg-subtle">{hint}</p>
         ) : null}
       </div>
       {action}
@@ -73,7 +71,7 @@ export function Badge({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5
+      className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5
         text-[11px] leading-4 font-medium whitespace-nowrap
         ${mono ? "font-mono" : ""} ${TONES[tone]}`}
     >

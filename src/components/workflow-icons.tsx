@@ -41,12 +41,17 @@ export const workflowIcon = (id: string): LucideIcon => ICONS[id] ?? Workflow;
  * The picker's sections, by what someone is trying to do. A workflow in none
  * of them is listed under the last heading.
  */
-export const WORKFLOW_GROUPS: Array<{ title: string; ids: string[] }> = [
+export const WORKFLOW_GROUPS: Array<{ title: string; short: string; ids: string[] }> = [
   {
     title: "Make something new",
+    short: "New",
     ids: ["minimax-h3", "minimax-h3-image", "minimax-h3-i2v", "minimax-h3-ref"],
   },
-  { title: "Work on a clip you made", ids: ["minimax-h3-ref2v", "minimax-h3-swap", "minimax-h3-extend", "upscale"] },
-  { title: "Long videos, scene by scene", ids: ["music-video", "multi-scene"] },
-  { title: "Sound", ids: ["minimax-music3"] },
+  {
+    title: "Work on a clip you made",
+    short: "From a clip",
+    ids: ["minimax-h3-ref2v", "minimax-h3-swap", "minimax-h3-extend", "upscale"],
+  },
+  { title: "Long videos, scene by scene", short: "Long form", ids: ["music-video", "multi-scene"] },
+  { title: "Sound", short: "Sound", ids: ["minimax-music3"] },
 ];

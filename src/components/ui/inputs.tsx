@@ -3,10 +3,10 @@
 import { ChevronDown } from "lucide-react";
 import { useRef, type ChangeEvent, type ReactNode } from "react";
 
-export const CONTROL_BASE = `w-full bg-bg-subtle border border-border-default rounded-md
+export const CONTROL_BASE = `w-full bg-raised border border-border-default rounded-md
   text-fg placeholder:text-fg-subtle transition-colors duration-150
   hover:border-border-strong focus:border-accent focus:outline-none
-  focus:ring-2 focus:ring-accent/25 disabled:opacity-50`;
+  focus:ring-1 focus:ring-accent disabled:opacity-50`;
 
 export function TextInput({
   id,
@@ -32,7 +32,7 @@ export function TextInput({
       disabled={disabled}
       aria-describedby={describedBy}
       onChange={(event) => onChange(event.target.value)}
-      className={`${CONTROL_BASE} h-10 px-3 text-sm`}
+      className={`${CONTROL_BASE} h-9 px-3 text-[13px]`}
     />
   );
 }
@@ -63,7 +63,7 @@ export function PasswordInput({
       disabled={disabled}
       aria-describedby={describedBy}
       onChange={(event) => onChange(event.target.value)}
-      className={`${CONTROL_BASE} h-10 px-3 text-sm`}
+      className={`${CONTROL_BASE} h-9 px-3 text-[13px]`}
     />
   );
 }
@@ -107,7 +107,7 @@ export function TextArea({
         (field-sizing), so a long prompt is read whole rather than through a
         three-line slot. Empty, it is three lines at most, whatever `rows` asks.
       */
-      className={`${CONTROL_BASE} max-h-[50vh] resize-y overflow-y-auto px-3 py-2.5 text-sm leading-relaxed min-h-20
+      className={`${CONTROL_BASE} max-h-[50vh] resize-y overflow-y-auto px-3 py-2.5 text-[14px] leading-relaxed min-h-20
         [field-sizing:content]`}
       style={{ minHeight: `calc(${Math.min(rows, 3)} * 1.625em + 1.25rem)` }}
     />
@@ -162,7 +162,7 @@ export function Select({
         disabled={disabled}
         aria-describedby={describedBy}
         onChange={(event) => onChange(event.target.value)}
-        className={`${CONTROL_BASE} h-10 pl-3 pr-9 text-sm appearance-none cursor-pointer`}
+        className={`${CONTROL_BASE} h-9 pl-3 pr-9 text-[13px] appearance-none cursor-pointer`}
       >
         {groupOptions(options).map(([heading, group]) =>
           heading === undefined ? (
@@ -220,7 +220,7 @@ export function NumberInput({
         const next = Number(event.target.value);
         if (Number.isFinite(next)) onChange(next);
       }}
-      className={`${CONTROL_BASE} h-10 px-3 text-sm font-mono tabular-nums`}
+      className={`${CONTROL_BASE} h-9 px-3 text-[13px] font-mono tabular-nums`}
     />
   );
 }
@@ -284,17 +284,17 @@ export function Toggle({
       aria-describedby={describedBy}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-sm
         border transition-colors duration-200 disabled:opacity-50
         ${
           checked
             ? "bg-accent border-accent"
-            : "bg-track border-border-default hover:border-border-strong"
+            : "bg-track border-border-strong hover:border-fg-subtle"
         }`}
     >
       <span
-        className={`absolute size-4 rounded-full bg-white shadow-sm transition-transform duration-200
-          ${checked ? "translate-x-6" : "translate-x-1"}`}
+        className={`absolute h-3.5 w-3.5 rounded-[1px] shadow-sm transition-transform duration-200
+          ${checked ? "translate-x-[18px] bg-accent-fg" : "translate-x-[2px] bg-fg-muted"}`}
       />
     </button>
   );
@@ -342,7 +342,7 @@ export function Segmented<T extends string | number | boolean>({
       aria-label={label}
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
-      className={`flex rounded-md border border-border-default bg-bg p-0.5 ${className}`}
+      className={`flex rounded-md border border-border-default bg-bg-subtle p-0.5 ${className}`}
     >
       {options.map((option, index) => {
         const selected = option.value === value;
@@ -368,9 +368,9 @@ export function Segmented<T extends string | number | boolean>({
                 move(index, -1);
               }
             }}
-            className={`rounded px-3 py-1 text-[12px] font-medium transition-colors duration-150
+            className={`rounded-sm px-3 py-1 text-[12px] font-medium transition-colors duration-150
               disabled:cursor-not-allowed disabled:opacity-40
-              ${selected ? "bg-accent-subtle text-fg" : "text-fg-subtle enabled:hover:text-fg"}`}
+              ${selected ? "bg-raised text-fg shadow-sm ring-1 ring-border-strong" : "text-fg-subtle enabled:hover:text-fg"}`}
           >
             {option.label}
           </button>

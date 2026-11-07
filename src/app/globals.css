@@ -1,115 +1,113 @@
 @import "tailwindcss";
 
 /*
- * Colour scale follows Geist: near-black canvas, 1px hairline borders, a
- * single blue accent doing all the signalling work, and greys that carry the
- * hierarchy. Dark is the primary theme; light is a faithful inversion.
+ * The edit suite.
+ *
+ * Warm near-black surfaces, separated by hairline rules rather than floating
+ * cards, so the one thing that is lit is the monitor. A single tungsten accent
+ * marks what is live — the selected workflow, the run in flight, the action
+ * that starts one — and nothing else is coloured for decoration.
+ *
+ * Dark is the working theme. Light is a lightbox: warm paper, the same
+ * structure, the accent burnt down far enough to read as text.
+ *
+ * The token names are shared with every component in the app; only their
+ * values belong to this file.
  */
+
 :root {
-  --bg: #ffffff;
-  --bg-subtle: #fafafa;
-  --surface: #ffffff;
-  --surface-hover: #fafafa;
-  --border: #ebebeb;
-  --border-strong: #d4d4d4;
-  --fg: #171717;
-  --fg-muted: #666666;
-  --fg-subtle: #737373;
-  --accent: #0072f5;
-  --accent-hover: #0062d1;
+  --bg: #f3f0ea;
+  --bg-subtle: #ebe7df;
+  --surface: #faf8f4;
+  --surface-hover: #f0ece5;
+  --raised: #ffffff;
+  --border: #ddd7cd;
+  --border-strong: #c7bfb2;
+  --fg: #1b1916;
+  --fg-muted: #57514a;
+  --fg-subtle: #6b645b;
+  --accent: #b9440f;
+  --accent-hover: #9c390c;
   --accent-fg: #ffffff;
-  --accent-subtle: #ebf5ff;
-  --success: #45a557;
-  --warning: #d97706;
-  --danger: #e5484d;
-  --track: #ebebeb;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.06);
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.08);
-  --grid-line: rgb(0 0 0 / 0.028);
+  --accent-subtle: #f6e2d4;
+  --success: #2c7a47;
+  --warning: #8f6400;
+  --danger: #bf3434;
+  --track: #ddd7cd;
+  --screen: #0b0a09;
+  --screen-fg: #ece7df;
+  --screen-muted: #9d968c;
+  --shadow-sm: 0 1px 2px rgb(40 30 20 / 0.08);
+  --shadow-md: 0 8px 24px rgb(40 30 20 / 0.12);
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #000000;
-    --bg-subtle: #0a0a0a;
-    --surface: #0a0a0a;
-    --surface-hover: #141414;
-    --border: #1f1f1f;
-    --border-strong: #2e2e2e;
-    --fg: #ededed;
-    --fg-muted: #a1a1a1;
-    --fg-subtle: #7d7d7d;
-    --accent: #3291ff;
-    --accent-hover: #52a8ff;
-    --accent-fg: #ffffff;
-    --accent-subtle: #0c2b52;
-    --success: #62c073;
-    --warning: #f5a623;
-    --danger: #ff6166;
-    --track: #1f1f1f;
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow-md: 0 4px 16px rgb(0 0 0 / 0.5);
-    --grid-line: rgb(255 255 255 / 0.022);
+  :root:not([data-theme="light"]) {
+    --bg: #0f0e0c;
+    --bg-subtle: #171512;
+    --surface: #13120f;
+    --surface-hover: #1d1b17;
+    --raised: #1f1d19;
+    --border: #2a2722;
+    --border-strong: #3d3933;
+    --fg: #eee9e1;
+    --fg-muted: #b0a99f;
+    --fg-subtle: #8f887e;
+    --accent: #ff8f45;
+    --accent-hover: #ffa466;
+    --accent-fg: #1a0e04;
+    --accent-subtle: #3a2312;
+    --success: #74cc8f;
+    --warning: #e9c55a;
+    --danger: #ff6b62;
+    --track: #2e2b26;
+    --screen: #070605;
+    --screen-fg: #ece7df;
+    --screen-muted: #9d968c;
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+    --shadow-md: 0 12px 32px rgb(0 0 0 / 0.55);
     color-scheme: dark;
   }
 }
 
-/* The toggle stamps data-theme on <html> and must beat the media query. */
-:root[data-theme="light"] {
-  --bg: #ffffff;
-  --bg-subtle: #fafafa;
-  --surface: #ffffff;
-  --surface-hover: #fafafa;
-  --border: #ebebeb;
-  --border-strong: #d4d4d4;
-  --fg: #171717;
-  --fg-muted: #666666;
-  --fg-subtle: #737373;
-  --accent: #0072f5;
-  --accent-hover: #0062d1;
-  --accent-subtle: #ebf5ff;
-  --success: #45a557;
-  --warning: #d97706;
-  --danger: #e5484d;
-  --track: #ebebeb;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.06);
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.08);
-  --grid-line: rgb(0 0 0 / 0.028);
-  color-scheme: light;
-}
-
+/* The toggle stamps data-theme on <html>; dark repeated so it beats the OS. */
 :root[data-theme="dark"] {
-  --bg: #000000;
-  --bg-subtle: #0a0a0a;
-  --surface: #0a0a0a;
-  --surface-hover: #141414;
-  --border: #1f1f1f;
-  --border-strong: #2e2e2e;
-  --fg: #ededed;
-  --fg-muted: #a1a1a1;
-  --fg-subtle: #7d7d7d;
-  --accent: #3291ff;
-  --accent-hover: #52a8ff;
-  --accent-subtle: #0c2b52;
-  --success: #62c073;
-  --warning: #f5a623;
-  --danger: #ff6166;
-  --track: #1f1f1f;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-md: 0 4px 16px rgb(0 0 0 / 0.5);
-  --grid-line: rgb(255 255 255 / 0.022);
+  --bg: #0f0e0c;
+  --bg-subtle: #171512;
+  --surface: #13120f;
+  --surface-hover: #1d1b17;
+  --raised: #1f1d19;
+  --border: #2a2722;
+  --border-strong: #3d3933;
+  --fg: #eee9e1;
+  --fg-muted: #b0a99f;
+  --fg-subtle: #8f887e;
+  --accent: #ff8f45;
+  --accent-hover: #ffa466;
+  --accent-fg: #1a0e04;
+  --accent-subtle: #3a2312;
+  --success: #74cc8f;
+  --warning: #e9c55a;
+  --danger: #ff6b62;
+  --track: #2e2b26;
+  --screen: #070605;
+  --screen-fg: #ece7df;
+  --screen-muted: #9d968c;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-md: 0 12px 32px rgb(0 0 0 / 0.55);
   color-scheme: dark;
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
 
   --color-bg: var(--bg);
   --color-bg-subtle: var(--bg-subtle);
   --color-surface: var(--surface);
   --color-surface-hover: var(--surface-hover);
+  --color-raised: var(--raised);
   --color-border-default: var(--border);
   --color-border-strong: var(--border-strong);
   --color-fg: var(--fg);
@@ -123,22 +121,21 @@
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --color-track: var(--track);
+  --color-screen: var(--screen);
+  --color-screen-fg: var(--screen-fg);
+  --color-screen-muted: var(--screen-muted);
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  /* Squarer than a consumer app: this is equipment. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 12px;
 }
 
 /*
- * Wrapped in @layer base so Tailwind's utilities can still win.
- *
- * Anything written outside a layer beats everything inside one, whatever
- * the specificity — so unlayered `button { font: inherit }` was overriding
- * text-[12px], font-medium and font-sans on every button, and `*
- * { border-color }` was defeating every border colour utility in the app.
- * Putting these in `base` restores the order the utilities assume: theme,
- * base, components, utilities.
+ * Wrapped in @layer base so Tailwind's utilities can still win — anything
+ * unlayered beats every layer whatever its specificity.
  */
 @layer base {
   * {
@@ -153,59 +150,128 @@
     background-color: var(--bg);
     color: var(--fg);
     font-family: var(--font-sans);
+    font-variation-settings: "wdth" 100;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
-  /*
-    Every Lucide icon's stroke, in one place rather than on each of them.
-    CSS outranks the `stroke-width` attribute Lucide writes, so this is the
-    default; at no specificity, and in the base layer, so a `stroke-*`
-    utility on an icon still wins — the large empty-state glyphs are lighter,
-    the small status ones heavier.
-  */
   :where(svg.lucide) {
     stroke-width: 1.75;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* See Tailwind's preflight: `font` resets the longhands it does not name. */
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    color: inherit;
+  }
+
+  /* The UA gives fieldset `min-inline-size: min-content`. */
+  fieldset {
+    min-inline-size: 0;
+  }
+
+  textarea {
+    field-sizing: content;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 22px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 2px;
+    background: var(--border-strong);
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 16px;
+    width: 8px;
+    margin-top: -7px;
+    border-radius: 1px;
+    background: var(--fg);
+    border: 1px solid var(--bg);
+    transition: background-color 120ms ease;
+  }
+
+  input[type="range"]:hover::-webkit-slider-thumb,
+  input[type="range"]:focus-visible::-webkit-slider-thumb {
+    background: var(--accent);
+  }
+
+  input[type="range"]::-moz-range-track {
+    height: 2px;
+    background: var(--border-strong);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    height: 15px;
+    width: 7px;
+    border-radius: 1px;
+    background: var(--fg);
+    border: 1px solid var(--bg);
+  }
+
+  input[type="range"]:hover::-moz-range-thumb {
+    background: var(--accent);
+  }
+
+  input[type="range"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }
 
 /*
- * A column that scrolls on its own, on desktop only — the class is inert
- * wherever the overflow utilities that go with it are not applied, so the
- * mobile layout is untouched.
- *
- * The scrollbar is deliberately quiet: no track, a hairline thumb in the same
- * grey as the borders, darkening only when the pointer is on the column it
- * belongs to. Present enough to say there is more below, faint enough not to
- * draw a second vertical line down the middle of the page.
- *
- * `scrollbar-gutter: stable` reserves the width up front so a panel does not
- * shift sideways the moment its column grows past a screenful. It costs
- * nothing where scrollbars are overlays (macOS, most touch devices) — there
- * the gutter is zero.
+ * Section labels: the condensed cut of the same family, in capitals, like the
+ * lettering on a slate. Used sparingly — region names, not every heading.
  */
+@utility label-caps {
+  font-size: 11px;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-variation-settings: "wdth" 80;
+}
+
+/* Display type: workflow titles and the run clock. */
+@utility display-tight {
+  font-variation-settings: "wdth" 88;
+  letter-spacing: -0.015em;
+}
+
 /*
- * Nothing in a scrolling column may shrink.
- *
- * These panes are flex columns with a definite height, and a flex item defaults
- * to flex-shrink:1 — so rather than overflowing and being scrolled to, an item
- * gives up height until it fits. Its *content* does not shrink with it, so it
- * spills out of a box that is now too short, and the next item along paints
- * over the spill: the stage lost 114px that way and the row of Remix / Extend
- * / Settings / Download buttons under the video ended up behind the history
- * panel. Shrinking is exactly what a scroll container does not want.
+ * A column that scrolls on its own. Nothing in it may shrink: a flex item
+ * defaults to flex-shrink:1 and gives up height rather than overflowing,
+ * which is exactly what a scroll container does not want.
  */
 .scroll-pane > * {
   flex-shrink: 0;
 }
 
-/*
- * Positioned so it is the containing block for anything absolute inside it —
- * every `sr-only` label and file input is. With no positioned ancestor those
- * resolve against the initial containing block instead, outside this scroller
- * and outside the shell's overflow:hidden, and one sitting far down a column
- * stretches the document: the whole app scrolls up over empty space.
- */
+/* Positioned, so `sr-only` labels inside resolve against it, not the page. */
 .scroll-pane {
   position: relative;
   scrollbar-gutter: stable;
@@ -217,7 +283,6 @@
   scrollbar-color: var(--fg-subtle) transparent;
 }
 
-/* Firefox takes the two properties above; WebKit and Blink need these. */
 .scroll-pane::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -227,16 +292,12 @@
   background: transparent;
 }
 
-/* The stepper arrows the platform puts at each end of the track are the one
-   part of a classic scrollbar that reads as chrome from another decade. */
 .scroll-pane::-webkit-scrollbar-button {
   display: none;
 }
 
 .scroll-pane::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  /* Inset with a transparent border rather than a narrower bar, so the thumb
-     keeps a full-width hit target while reading as a 4px hairline. */
   border: 3px solid transparent;
   background-clip: padding-box;
   background-color: var(--border-strong);
@@ -246,128 +307,32 @@
   background-color: var(--fg-subtle);
 }
 
-.scroll-pane::-webkit-scrollbar-thumb:hover {
-  background-color: var(--fg-muted);
+/* The rail's own scrollbar never shows: it is short, and a bar would crowd it. */
+.no-scrollbar {
+  scrollbar-width: none;
 }
 
-/* Faint engineering grid — depth without decoration competing for attention. */
-.app-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
-  background-size: 64px 64px;
-  mask-image: radial-gradient(ellipse 100% 60% at 50% 0%, #000 30%, transparent 75%);
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
-@layer base {
-  ::selection {
-    background: var(--accent);
-    color: var(--accent-fg);
-  }
-
-  :focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-radius: 2px;
-  }
-
-  /*
-   * Native controls should follow the theme rather than fight it.
-   *
-   * The `font` shorthand resets every font longhand it does not name, which is
-   * why Tailwind's own preflight pairs it with these two. Restating them matters
-   * because this rule comes later in the cascade: without them it quietly reverts
-   * variable-font settings for exactly the elements that most need to match the
-   * text around them.
-   */
-  input,
-  textarea,
-  select,
-  button {
-    font: inherit;
-    font-feature-settings: inherit;
-    font-variation-settings: inherit;
-    color: inherit;
-  }
-
-  /*
-   * The UA stylesheet gives fieldset `min-inline-size: min-content`, so it is the
-   * one element that refuses to shrink below its widest child. Inside a sized
-   * grid column that makes a wide image push the whole panel past its track.
-   */
-  fieldset {
-    min-inline-size: 0;
-  }
-
-  textarea {
-    field-sizing: content;
-  }
-
-  /* Range input, restyled to Geist proportions in both themes. */
-  input[type="range"] {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 20px;
-    background: transparent;
-    cursor: pointer;
-  }
-
-  input[type="range"]::-webkit-slider-runnable-track {
-    height: 4px;
-    border-radius: 999px;
-    background: var(--track);
-  }
-
-  input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    height: 14px;
-    width: 14px;
-    margin-top: -5px;
-    border-radius: 999px;
-    background: var(--fg);
-    border: 1px solid var(--bg);
-    box-shadow: var(--shadow-sm);
-    transition: transform 120ms ease;
-  }
-
-  input[type="range"]:hover::-webkit-slider-thumb {
-    transform: scale(1.15);
-  }
-
-  input[type="range"]:active::-webkit-slider-thumb {
-    background: var(--accent);
-  }
-
-  input[type="range"]::-moz-range-track {
-    height: 4px;
-    border-radius: 999px;
-    background: var(--track);
-  }
-
-  input[type="range"]::-moz-range-thumb {
-    height: 13px;
-    width: 13px;
-    border-radius: 999px;
-    background: var(--fg);
-    border: 1px solid var(--bg);
-  }
-
-  input[type="range"]:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+/*
+ * The monitor's idle face: a faint field of scan lines, so an empty screen
+ * reads as a screen rather than a missing image.
+ */
+.screen-idle {
+  background-color: var(--screen);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgb(255 255 255 / 0.018) 0 1px,
+    transparent 1px 3px
+  );
 }
 
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -375,9 +340,8 @@
   }
 }
 
-/* One orchestrated page-load reveal; children opt in with --delay. */
 .rise {
-  animation: rise 420ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation: rise 360ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
   animation-delay: var(--delay, 0ms);
 }
 
@@ -395,13 +359,7 @@
   position: absolute;
   inset-block: 0;
   width: 33%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--accent) 45%,
-    var(--accent) 55%,
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, var(--accent) 45%, var(--accent) 55%, transparent);
   animation: sweep 1.5s ease-in-out infinite;
 }
 

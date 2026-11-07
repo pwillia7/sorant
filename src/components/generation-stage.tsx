@@ -1,8 +1,19 @@
 "use client";
 
-import { Disc3, Download, Drama, FastForward, Film, ImagePlay, RotateCcw, Scaling, Shuffle, SlidersHorizontal, Sprout } from "lucide-react";
-import { useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { Badge, Dot } from "@/components/ui/panel";
+import {
+  Disc3,
+  Download,
+  Drama,
+  FastForward,
+  Film,
+  ImagePlay,
+  RotateCcw,
+  Scaling,
+  Shuffle,
+  SlidersHorizontal,
+  Sprout,
+} from "lucide-react";
+import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { withToken } from "@/lib/client";
 import {
@@ -18,8 +29,13 @@ import type { ClipAction, ClipHandoff } from "@/lib/workflows/types";
 import type { RecheckStatus } from "@/lib/jobs";
 
 /**
- * The canvas: whichever generation is being viewed. Progress while it runs,
- * the video once it lands, or the reason it did not.
+ * The monitor: whichever generation is being viewed, on a screen that stays
+ * dark in both themes, because a picture is judged against black.
+ *
+ * The screen only ever shows state — the picture, the run clock, the reason
+ * something stopped. Everything that can be pressed sits on the bar beneath
+ * it, in the page's own colours, so a control never has to be legible on two
+ * backgrounds and its place does not move between states.
  */
 export function GenerationStage({
   job,
@@ -50,122 +66,165 @@ export function GenerationStage({
    */
   clipActions?: readonly ClipHandoff[];
   onClipAction?: (job: Job, action: ClipAction) => void;
-  /** Opens the record of what this generation was run with. */
   onShowSettings?: () => void;
-  /**
-   * Run a failed generation again as it was. Absent where there is nothing to
-   * run it with — a workflow since unregistered — which is what takes the
-   * button off rather than leaving one that cannot work.
-   */
+  /** Run a failed generation again, exactly as it was. */
   onRetry?: (job: Job) => void;
-  /**
-   * Ask ComfyUI about this run again, on one this device lost track of — it
-   * usually finished. Resolves to what ComfyUI said, or null when it could not
-   * be asked. See `applyRecheck`.
-   */
+  /** Ask ComfyUI again about a run this device lost track of. */
   onCheckAgain?: () => Promise<Record<string, RecheckStatus> | null>;
-  /**
-   * Run a finished generation again: its settings back in the form, a new
-   * seed, submitted. Absent on the same grounds as `onRetry`.
-   */
+  /** Another take of a finished generation: its settings, a new seed. */
   onRerun?: (job: Job) => void;
-  /** A submission is in flight, so the retry waits rather than doubling it. */
   retrying?: boolean;
-  /**
-   * Marks this result as one to keep. Offered here as well as on the history
-   * row because the moment to decide is usually the moment it lands, and that
-   * is what the stage is showing.
-   */
   onToggleFavorite?: (promptId: string) => void;
-  /** The hand-off whose copy into ComfyUI's input directory is in flight. */
+  /** The hand-off whose copy is in flight, if any. */
   busyAction?: ClipAction | null;
 }) {
-  return (
-    <div className="flex min-h-[320px] flex-col sm:min-h-[420px]">
-      {!job ? (
-        <Empty />
-      ) : job.phase === "done" && job.outputs.length > 0 ? (
-        <Result
-          job={job}
-          onReuseSeed={onReuseSeed}
-          clipActions={clipActions}
-          onClipAction={onClipAction}
-          onShowSettings={onShowSettings}
-          onToggleFavorite={onToggleFavorite}
-          onRerun={onRerun ? () => onRerun(job) : undefined}
-          rerunning={retrying}
-          busyAction={busyAction}
-        />
-      ) : job.phase === "error" ? (
-        <Failure
-          job={job}
-          onShowSettings={onShowSettings}
-          onRetry={onRetry ? () => onRetry(job) : undefined}
-          onCheckAgain={onCheckAgain}
-          retrying={retrying}
-        />
-      ) : job.phase === "queued" || job.phase === "running" ? (
-        <InFlight
-          job={job}
-          now={now}
-          estimateSeconds={estimateSeconds}
-          onCancel={onCancel}
-        />
-      ) : (
-        /*
-          Everything else, named or not.
-          
-          This used to be the other way round — in-flight was the fallback, and
-          any state the branches above did not name was drawn as a run still
-          going: "Generating", a progress curve, a live timer counting from
-          whenever it was submitted, and a Cancel button for a job nothing was
-          working on. A `done` whose outputs are empty lands exactly there, and
-          nothing ever reaps it: `expireStale` only reconsiders a job that is
-          queued or running, so it sat at "Generating" for as long as the
-          history kept it. One had been counting for twenty-four hours.
+  if (!job) return <Idle />;
 
-          A run is only in flight while something says it is. Anything else is
-          over, whatever it is, and Closed says so.
-        */
-        <Closed job={job} onCheckAgain={onCheckAgain} />
-      )}
-    </div>
-  );
+  if (job.phase === "done" && job.outputs.length > 0) {
+    return (
+      <Result
+        job={job}
+        onReuseSeed={onReuseSeed}
+        clipActions={clipActions}
+        onClipAction={onClipAction}
+        onShowSettings={onShowSettings}
+        onToggleFavorite={onToggleFavorite}
+        onRerun={onRerun ? () => onRerun(job) : undefined}
+        rerunning={retrying}
+        busyAction={busyAction}
+      />
+    );
+  }
+
+  if (job.phase === "error") {
+    return (
+      <Failure
+        job={job}
+        onShowSettings={onShowSettings}
+        onRetry={onRetry ? () => onRetry(job) : undefined}
+        onCheckAgain={onCheckAgain}
+        retrying={retrying}
+      />
+    );
+  }
+
+  if (job.phase === "queued" || job.phase === "running") {
+    return (
+      <InFlight
+        job={job}
+        now={now}
+        estimateSeconds={estimateSeconds}
+        onCancel={onCancel}
+      />
+    );
+  }
+
+  /*
+    Everything else, named or not. A run is only in flight while something
+    says it is: a `done` with no outputs, a cancel, a run ComfyUI forgot — all
+    of these are over, and drawing them as "Generating" with a live clock left
+    one counting for a day.
+  */
+  return <Closed job={job} onCheckAgain={onCheckAgain} />;
 }
 
-function Frame({
+/** The dark screen every state is drawn on. */
+function Screen({
   children,
-  dashed = false,
+  tally,
+  clock,
+  footer,
+  idle = false,
 }: {
-  children: React.ReactNode;
-  dashed?: boolean;
+  children: ReactNode;
+  /** Top-left: what the screen is showing, with its lamp. */
+  tally?: ReactNode;
+  /** Top-right: a time, set in the mono face. */
+  clock?: ReactNode;
+  /** Pinned to the screen's lower edge — the progress line. */
+  footer?: ReactNode;
+  idle?: boolean;
 }) {
   return (
     <div
-      className={`flex flex-1 flex-col items-center justify-center gap-4 rounded-xl
-        bg-bg-subtle p-6 text-center sm:p-8 ${
-          dashed
-            ? "border border-dashed border-border-strong"
-            : "border border-border-default"
-        }`}
+      className={`relative flex aspect-video max-h-[62vh] min-h-[220px] w-full flex-col overflow-hidden
+        rounded-lg border border-black/40 text-screen-fg shadow-md
+        ${idle ? "screen-idle" : "bg-screen"}`}
     >
-      {children}
+      {tally || clock ? (
+        <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-3 px-4 py-3">
+          <span className="flex min-w-0 items-center gap-2">{tally}</span>
+          <span className="font-mono text-[12px] tabular-nums text-screen-muted">{clock}</span>
+        </div>
+      ) : null}
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center p-6 text-center sm:p-10">
+        {children}
+      </div>
+      {footer}
     </div>
   );
 }
 
-function Empty() {
+/** A lamp and a word: the screen's own status, top-left. */
+function Tally({ tone, pulse = false, children }: {
+  tone: "live" | "idle" | "fault" | "warn";
+  pulse?: boolean;
+  children: ReactNode;
+}) {
+  const lamp = {
+    live: "bg-accent shadow-[0_0_10px_var(--accent)]",
+    idle: "bg-screen-muted",
+    fault: "bg-[#ff6b62] shadow-[0_0_10px_#ff6b62]",
+    warn: "bg-[#e9c55a]",
+  }[tone];
   return (
-    <Frame dashed>
-      <Film className="size-8 text-fg-subtle stroke-[1.5]" aria-hidden="true" />
-      <div>
-        <p className="text-sm font-medium text-fg">Nothing generated yet</p>
-        <p className="mx-auto mt-1 max-w-xs text-[13px] leading-relaxed text-fg-subtle">
-          Pick a workflow, write a prompt, and generate. You can queue more than
-          one — they run in order.
+    <>
+      <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${lamp} ${pulse ? "breathe" : ""}`} />
+      <span className="label-caps text-screen-fg">{children}</span>
+    </>
+  );
+}
+
+/** The strip under the screen. Every state's controls live here. */
+function Transport({ children, meta }: { children?: ReactNode; meta?: ReactNode }) {
+  if (!children && !meta) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-3">
+      {meta ? <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">{meta}</div> : null}
+      {children ? <div className="ml-auto flex flex-wrap items-center justify-end gap-2">{children}</div> : null}
+    </div>
+  );
+}
+
+/** A label and a value in the transport's meta line. */
+function Readout({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span className="flex items-baseline gap-1.5 whitespace-nowrap">
+      <span className="label-caps text-fg-subtle">{label}</span>
+      <span className="font-mono text-[12px] tabular-nums text-fg">{children}</span>
+    </span>
+  );
+}
+
+/** hh:mm:ss, the way a deck counts. */
+function timecode(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(total / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
+}
+
+function Idle() {
+  return (
+    <div className="flex flex-col">
+      <Screen idle tally={<Tally tone="idle">Standby</Tally>}>
+        <Film className="size-7 stroke-[1.25] text-screen-muted" aria-hidden="true" />
+        <p className="mt-4 text-[15px] font-medium text-screen-fg">Nothing generated yet</p>
+        <p className="mt-1.5 max-w-sm text-[13px] leading-relaxed text-screen-muted">
+          Write a prompt and generate. Queue as many as you like — they run in order
+          on your machine, and keep running if you close the tab.
         </p>
-      </div>
-    </Frame>
+      </Screen>
+    </div>
   );
 }
 
@@ -174,6 +233,13 @@ const PHASE_COPY: Record<string, { label: string; detail: string }> = {
   running: { label: "Generating", detail: "Sampling frames. This is the slow part." },
 };
 
+/**
+ * In progress. The clock counts from when it was submitted while queued and
+ * from when the GPU started once it runs — the same number the library shows.
+ * The bar is an estimate from previous runs, so it eases towards 95% rather
+ * than claiming to know when it finishes, and sweeps when there is nothing to
+ * go on.
+ */
 function InFlight({
   job,
   now,
@@ -185,82 +251,79 @@ function InFlight({
   estimateSeconds: number | null;
   onCancel: (promptId: string) => void;
 }) {
-  // Only queued and running reach here now, so the lookup cannot miss — but a
-  // fallback that says "Generating" about an unknown state is how the branch
-  // above went wrong, so this one names what it actually has.
   const copy =
-    // The music video's planning run writes text and samples nothing.
     job.workflowId === "music-video" && job.phase === "running"
       ? { label: "Planning", detail: "Writing a scene for every cut in the song." }
       : job.workflowId === "multi-scene" && job.phase === "running"
         ? { label: "Planning", detail: "Writing the story out scene by scene." }
         : (PHASE_COPY[job.phase] ?? PHASE_COPY.queued);
-  // Waiting time while it waits, render time once it renders — the clock
-  // restarts at the seam rather than running on from submit. See `clockMs`.
+
   const elapsedMs = clockMs(job, now);
-
-  // Progress is measured from when rendering began, not when the job was
-  // accepted — otherwise time spent queued behind other jobs would show up as
-  // progress that has not happened.
-  const renderingMs = job.startedAt ? now - job.startedAt : 0;
-  const renderingSeconds = renderingMs / 1000;
-
-  // ComfyUI publishes no step-level progress over HTTP, so this is a curve
-  // against the expected duration. It eases toward 95% and never claims to be
-  // finished, because it does not actually know.
+  const renderingSeconds = job.startedAt ? (now - job.startedAt) / 1000 : 0;
   const fraction =
     job.startedAt && estimateSeconds
       ? Math.min(0.95, 1 - Math.exp(-renderingSeconds / (estimateSeconds * 0.55)))
       : null;
-
   const remainingSeconds =
     job.startedAt && estimateSeconds
       ? Math.max(0, Math.round(estimateSeconds - renderingSeconds))
       : null;
 
   return (
-    <Frame>
-      <div className="w-full max-w-sm">
-        <div className="mb-3 flex items-center justify-center gap-2">
-          <Dot tone="accent" pulse />
-          <span className="text-sm font-medium text-fg">{copy.label}</span>
-          <span className="font-mono text-[13px] tabular-nums text-fg-muted">
-            {elapsedMs === null ? "" : formatDuration(elapsedMs)}
-          </span>
-        </div>
-
-        <div className="relative h-1 w-full overflow-hidden rounded-full bg-track">
-          {fraction === null ? (
-            <div className="sweep absolute inset-0" />
-          ) : (
-            <div
-              className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out"
-              style={{ width: `${fraction * 100}%` }}
-            />
-          )}
-        </div>
-
-        <p className="mt-3 text-[13px] leading-relaxed text-fg-subtle">
+    <div className="flex flex-col">
+      <Screen
+        tally={
+          <Tally tone={job.phase === "running" ? "live" : "idle"} pulse={job.phase === "running"}>
+            {copy.label}
+          </Tally>
+        }
+        clock={job.workflowName}
+        footer={
+          <div className="relative h-1 w-full overflow-hidden bg-white/10">
+            {fraction === null ? (
+              <div className="sweep absolute inset-0" />
+            ) : (
+              <div
+                className="h-full bg-accent transition-[width] duration-500 ease-out"
+                style={{ width: `${fraction * 100}%` }}
+              />
+            )}
+          </div>
+        }
+      >
+        <p
+          className="display-tight font-mono text-[40px] font-medium leading-none tabular-nums text-screen-fg sm:text-[56px]"
+          aria-label={elapsedMs === null ? undefined : `${formatDuration(elapsedMs)} elapsed`}
+        >
+          {elapsedMs === null ? "--:--:--" : timecode(elapsedMs)}
+        </p>
+        <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-screen-muted" aria-live="polite">
           {job.queuePosition !== null && job.queuePosition > 0
             ? `${job.queuePosition} job${job.queuePosition === 1 ? "" : "s"} ahead of this one.`
             : copy.detail}
         </p>
-
-        {remainingSeconds !== null ? (
-          <p className="mt-1 text-[12px] text-fg-subtle">
-            {remainingSeconds > 0
-              ? `About ${formatDuration(remainingSeconds * 1000)} left, going on previous runs.`
-              : "Taking longer than previous runs."}
+        {job.prompt.trim() ? (
+          <p className="mt-3 line-clamp-2 max-w-md text-[12px] italic leading-relaxed text-screen-muted/80">
+            “{job.prompt.trim()}”
           </p>
         ) : null}
-
-        <div className="mt-5">
-          <Button size="sm" variant="danger" onClick={() => onCancel(job.promptId)}>
-            Cancel
-          </Button>
-        </div>
-      </div>
-    </Frame>
+      </Screen>
+      <Transport
+        meta={
+          remainingSeconds !== null ? (
+            <span className="text-[12px] text-fg-muted">
+              {remainingSeconds > 0
+                ? `About ${formatDuration(remainingSeconds * 1000)} left, going on previous runs.`
+                : "Taking longer than previous runs."}
+            </span>
+          ) : null
+        }
+      >
+        <Button size="sm" variant="danger" onClick={() => onCancel(job.promptId)}>
+          Cancel
+        </Button>
+      </Transport>
+    </div>
   );
 }
 
@@ -277,81 +340,68 @@ function Failure({
   onCheckAgain?: () => Promise<Record<string, RecheckStatus> | null>;
   retrying?: boolean;
 }) {
+  const [note, setNote] = useState<string | null>(null);
   return (
-    <Frame>
-      <div className="w-full max-w-md">
-        <div className="mb-3 flex items-center justify-center gap-2">
-          <Dot tone="danger" />
-          <span className="text-sm font-medium text-fg">Generation failed</span>
-        </div>
-        <p className="text-[13px] leading-relaxed text-fg-muted">{job.error}</p>
-        {/* The two things worth reaching from here, and in this order: run it
-            again, since a good share of failures are the box rather than the
-            run; and what it was run with, which is the first question when it
-            was not. The history row offers the same retry, but this is the
-            screen a failure lands you on, and sending someone back to the list
-            to press the button they are looking at is not offering it. */}
-        {/* A run this device lost contact with is asked about first, since
-            it usually finished: Try again would render it from scratch. */}
-        {onRetry || onShowSettings || onCheckAgain ? (
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            {onCheckAgain ? <CheckAgain job={job} onCheck={onCheckAgain} /> : null}
-            {onRetry ? (
-              <Button
-                size="sm"
-                onClick={onRetry}
-                disabled={retrying}
-              >
-                {retrying ? "Submitting…" : "Try again"}
-              </Button>
-            ) : null}
-            {onShowSettings ? (
-              <Button size="sm" variant="quiet" onClick={onShowSettings}>
-                View settings
-              </Button>
-            ) : null}
-          </div>
+    <div className="flex flex-col">
+      <Screen tally={<Tally tone="fault">Failed</Tally>} clock={job.workflowName}>
+        <p className="text-[15px] font-medium text-screen-fg">This generation did not finish</p>
+        <p className="mt-2 max-w-md whitespace-pre-line text-[13px] leading-relaxed text-screen-muted">
+          {job.error}
+        </p>
+        {note ? <p className="mt-3 max-w-md text-[12px] text-screen-muted">{note}</p> : null}
+      </Screen>
+      {/* Retry first — a good share of failures are the box rather than the
+          run — then what it ran with, the first question when it was not. A
+          run this device lost contact with is asked about before either, since
+          it usually finished and Try again would render it from scratch. */}
+      <Transport>
+        {onCheckAgain ? <CheckAgain job={job} onCheck={onCheckAgain} onNote={setNote} /> : null}
+        {onShowSettings ? (
+          <Button size="sm" variant="quiet" onClick={onShowSettings} icon={<SlidersHorizontal {...ICON} />}>
+            View settings
+          </Button>
         ) : null}
-      </div>
-    </Frame>
+        {onRetry ? (
+          <Button size="sm" variant="secondary" onClick={onRetry} disabled={retrying} icon={<RotateCcw {...ICON} />}>
+            {retrying ? "Submitting…" : "Try again"}
+          </Button>
+        ) : null}
+      </Transport>
+    </div>
   );
 }
 
 /**
- * Asks ComfyUI about a lost run again. When the answer moves the run on, the
- * stage redraws as whatever it now is; this only has to speak when it did not.
+ * Asks ComfyUI about a run this device stopped hearing from, and says what it
+ * found when the answer changes nothing — the job itself updates the rest.
  */
 function CheckAgain({
   job,
   onCheck,
+  onNote,
 }: {
   job: Job;
   onCheck: () => Promise<Record<string, RecheckStatus> | null>;
+  onNote: (note: string | null) => void;
 }) {
   const [checking, setChecking] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+
   const check = async () => {
     setChecking(true);
-    setNote(null);
+    onNote(null);
     const statuses = await onCheck();
     setChecking(false);
     if (statuses === null) {
-      setNote("Could not reach ComfyUI. Check the connection and try again.");
+      onNote("Could not reach ComfyUI. Check the connection and try again.");
     } else if (!statuses[job.promptId] || statuses[job.promptId].state === "unknown") {
-      setNote(
-        "ComfyUI has no record of this run — it was probably restarted since.",
-      );
+      onNote("ComfyUI has no record of this run — it was probably restarted since.");
     }
   };
+
   return (
-    <>
-      <Button size="sm" variant="primary" onClick={() => void check()} disabled={checking}>
-        {checking ? "Checking…" : "Check again"}
-      </Button>
-      {note ? (
-        <p className="w-full text-[12px] leading-relaxed text-fg-subtle">{note}</p>
-      ) : null}
-    </>
+    <Button size="sm" variant="primary" onClick={() => void check()} disabled={checking}>
+      {checking ? "Checking…" : "Check again"}
+    </Button>
   );
 }
 
@@ -362,69 +412,55 @@ function Closed({
   job: Job;
   onCheckAgain?: () => Promise<Record<string, RecheckStatus> | null>;
 }) {
-  // `done` reaching here means the run finished and left nothing behind — the
-  // branch above takes every done job that has an output. Worth its own words:
-  // "no longer tracked" would be wrong about a job ComfyUI finished, and
-  // silence would leave the panel looking broken.
+  const [note, setNote] = useState<string | null>(null);
   const empty = job.phase === "done";
   return (
-    <Frame dashed>
-      <div className="flex items-center gap-2">
-        <Dot tone="warning" />
-        <span className="text-sm font-medium text-fg">
+    <div className="flex flex-col">
+      <Screen
+        tally={
+          <Tally tone="warn">
+            {job.phase === "cancelled" ? "Cancelled" : empty ? "No output" : "Lost"}
+          </Tally>
+        }
+        clock={job.workflowName}
+      >
+        <p className="text-[15px] font-medium text-screen-fg">
           {job.phase === "cancelled"
             ? "Cancelled"
             : empty
               ? "Nothing came back"
               : "No longer tracked"}
-        </span>
-      </div>
-      {job.phase === "unknown" ? (
-        <p className="mx-auto max-w-xs text-[13px] leading-relaxed text-fg-subtle">
-          ComfyUI no longer has a record of this job. It was probably restarted
-          since.
         </p>
-      ) : null}
+        <p className="mt-2 max-w-sm text-[13px] leading-relaxed text-screen-muted">
+          {job.phase === "unknown"
+            ? "ComfyUI no longer has a record of this job. It was probably restarted since."
+            : empty
+              ? "The run finished without saving a file. If the output directory has been cleared since, that is where it went."
+              : "This run was stopped before it finished."}
+        </p>
+        {note ? <p className="mt-3 max-w-md text-[12px] text-screen-muted">{note}</p> : null}
+      </Screen>
       {onCheckAgain ? (
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <CheckAgain job={job} onCheck={onCheckAgain} />
-        </div>
+        <Transport>
+          <CheckAgain job={job} onCheck={onCheckAgain} onNote={setNote} />
+        </Transport>
       ) : null}
-      {empty ? (
-        <p className="mx-auto max-w-xs text-[13px] leading-relaxed text-fg-subtle">
-          The run finished without saving a file. If the output directory has
-          been cleared since, that is where it went.
-        </p>
-      ) : null}
-    </Frame>
+    </div>
   );
 }
 
-/**
- * What can be fed back into another workflow as a clip. A still goes to the
- * hand-offs that take one — see `isImageOnly` — and never to these.
- *
- * There is no audio twin of this: `isAudioOnly` already answers that question
- * off the same filename, and two lists of extensions that had to agree would
- * eventually stop agreeing.
- */
+/** Extensions a LoadVideo node will accept, so we only offer a hand-off that can work. */
 const REUSABLE_VIDEO = /\.(mp4|webm|mkv|mov|m4v)$/i;
 
-
-/**
- * The label and icon for each hand-off. Keyed by action so the buttons are
- * rendered from whatever the registry offers rather than written out one by
- * one — registering a workflow for a new action is all it takes to get one.
- */
-/** Every icon on the stage's buttons: one size and weight. */
 const ICON = { className: "size-3.5 shrink-0", "aria-hidden": true } as const;
 
-const CLIP_BUTTONS: Record<
-  ClipAction,
-  { label: string; title: string; icon: React.ReactNode }
-> = {
+const CLIP_BUTTONS: Record<ClipAction, { label: string; title: string; icon: ReactNode }> = {
   remix: { label: "Remix", title: "Rebuild this clip into a new take", icon: <Shuffle {...ICON} /> },
-  swap: { label: "Swap", title: "Put a character from a picture in place of someone in this clip", icon: <Drama {...ICON} /> },
+  swap: {
+    label: "Swap",
+    title: "Put a character from a picture in place of someone in this clip",
+    icon: <Drama {...ICON} />,
+  },
   extend: { label: "Extend", title: "Carry on from where this clip ends", icon: <FastForward {...ICON} /> },
   upscale: { label: "Upscale", title: "Make this clip larger and sharper", icon: <Scaling {...ICON} /> },
   musicvideo: {
@@ -460,71 +496,40 @@ function Result({
   const [primary, ...rest] = job.outputs;
   const seed = job.resolved?.seed;
   const src = withToken(primary.url);
-  /**
-   * Which hand-offs this particular result can go to.
-   *
-   * The kind decides *which* buttons appear, not merely whether any do: a
-   * finished video is something to remix or extend, a finished track is
-   * something to build a video around, and offering either set on the other
-   * would send a file to a loader that cannot read it. Asked of the file rather
-   * than of the workflow, on the same grounds as `isAudioOnly` — the file is
-   * what has to be readable at the other end.
-   */
+  const audio = isAudioOnly(job);
+  const still = isImageOnly(job);
+
+  // Each hand-off takes one kind of file: a clip's on a video, a track's on a
+  // track, a picture's on a still. Read off the destination's declaration.
   const offered = onClipAction
     ? (clipActions ?? []).filter(({ accepts }) =>
-        accepts === "audio"
-          ? isAudioOnly(job)
-          : accepts === "image"
-            ? isImageOnly(job)
-            : REUSABLE_VIDEO.test(primary.filename),
+        accepts === "audio" ? audio : accepts === "image" ? still : REUSABLE_VIDEO.test(primary.filename),
       )
     : [];
-  const favorite = isFavorite(job);
-  const took =
-    job.completedAt !== undefined
-      ? formatDuration(job.completedAt - job.submittedAt)
-      : null;
 
+  const favorite = isFavorite(job);
+  const took = job.completedAt !== undefined ? formatDuration(job.completedAt - job.submittedAt) : null;
+
+  // The actions keep their labels while they fit and fall back to icons as a
+  // set when they do not, measured against an invisible labelled copy.
   const rowRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const compact = useCompactRow(rowRef, measureRef);
 
-  /**
-   * What can be done with this result itself, labelled or as icons alone.
-   * Icons alone keep their label for screen readers and as a tooltip, so
-   * nothing is lost but width. What can be made from it — the hand-offs —
-   * is a row of its own below: two kinds of action that used to sit in one
-   * row of equal buttons, which made every one of them look as likely.
-   */
   const actions = (iconsOnly: boolean) => {
     const size = iconsOnly ? "icon-sm" : "sm";
-    const label = (text: string) => (
-      <span className={iconsOnly ? "sr-only" : undefined}>{text}</span>
-    );
+    const label = (text: string) => <span className={iconsOnly ? "sr-only" : undefined}>{text}</span>;
     return (
       <>
         {onToggleFavorite ? (
           <Button
             size={size}
-            // The colour rides on the icon rather than on the button, because
-            // an accent utility in `className` and the variant's own text
-            // colour are the same specificity — which one won would come down
-            // to the order Tailwind happened to emit them in.
-            variant={favorite ? "secondary" : "quiet"}
+            variant="quiet"
             onClick={() => onToggleFavorite(job.promptId)}
             aria-pressed={favorite}
-            title={
-              favorite
-                ? "Remove from favorites"
-                : "Keep this at the top of the history"
-            }
+            title={favorite ? "Remove from favorites" : "Keep this at the top of the library"}
             className="shrink-0"
-            icon={
-              <StarIcon
-                filled={favorite}
-                className={`size-3.5 ${favorite ? "text-accent" : ""}`}
-              />
-            }
+            icon={<StarIcon filled={favorite} className={`size-3.5 ${favorite ? "text-accent" : ""}`} />}
           >
             {label(favorite ? "Favorited" : "Favorite")}
           </Button>
@@ -538,7 +543,7 @@ function Result({
             className="shrink-0"
             icon={<SlidersHorizontal {...ICON} />}
           >
-            {label("Use settings")}
+            {label("Settings")}
           </Button>
         ) : null}
         {typeof seed === "number" && onReuseSeed ? (
@@ -566,19 +571,13 @@ function Result({
             {label("Rerun")}
           </Button>
         ) : null}
-        {/* An anchor, not a button: `download` is what saves the file, and
-            there is no way to keep that on a <button>. Borrowing the button
-            recipe keeps it from drifting out of step with the row. The one
-            primary: keeping the file is what a finished result is for. */}
+        {/* An anchor: `download` is what saves the file. The one primary —
+            keeping the file is what a finished result is for. */}
         <a
           href={src}
           download={primary.filename}
           title="Download"
-          className={buttonClasses({
-            variant: "primary",
-            size,
-            className: "shrink-0",
-          })}
+          className={buttonClasses({ variant: "primary", size, className: "shrink-0" })}
         >
           <Download {...ICON} />
           {label("Download")}
@@ -587,106 +586,63 @@ function Result({
     );
   };
 
-  const handoffs =
-    offered.length > 0 ? (
-      <div className="flex flex-wrap items-center gap-2 border-t border-border-default pt-3">
-        <span className="mr-1 text-[12px] text-fg-subtle">
-          Make from this {isAudioOnly(job) ? "track" : isImageOnly(job) ? "picture" : "clip"}
-        </span>
-        {offered.map(({ action }) => {
-          const button = CLIP_BUTTONS[action];
-          return (
-            <Button
-              key={action}
-              size="sm"
-              variant="secondary"
-              loading={busyAction === action}
-              // One copy at a time: both buttons move the same bytes out of
-              // ComfyUI's output directory, and the second would land on a
-              // form the first is still filling in.
-              disabled={busyAction !== null && busyAction !== action}
-              onClick={() => onClipAction?.(job, action)}
-              title={button.title}
-              className="shrink-0"
-              icon={button.icon}
-            >
-              {button.label}
-            </Button>
-          );
-        })}
-      </div>
-    ) : null;
-
   return (
-    <div className="flex flex-1 flex-col gap-3">
-      {isAudioOnly(job) ? (
-        // A player and the filename, on the panel's own background rather than
-        // the black a video sits on — there is nothing to letterbox.
-        <div
-          className="flex flex-col gap-3 rounded-xl border border-border-default
-            bg-bg-subtle p-4"
-        >
-          <p className="truncate font-mono text-[12px] text-fg-muted">
-            {primary.filename}
-          </p>
-          <audio key={src} src={src} controls className="w-full" />
-        </div>
-      ) : isImageOnly(job) ? (
-        <div className="overflow-hidden rounded-xl border border-border-default bg-black">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            key={src}
-            src={src}
-            alt={job.prompt.trim() || job.workflowName}
-            className="mx-auto block max-h-[60vh] w-auto max-w-full bg-black object-contain"
-          />
-        </div>
+    <div className="flex flex-col">
+      {audio ? (
+        <Screen tally={<Tally tone="idle">Track</Tally>} clock={job.workflowName}>
+          <Disc3 className="size-10 stroke-[1.25] text-screen-muted" aria-hidden="true" />
+          {job.prompt.trim() ? (
+            <p className="mt-4 line-clamp-3 max-w-md text-[13px] leading-relaxed text-screen-muted">
+              {job.prompt.trim()}
+            </p>
+          ) : null}
+          <audio key={src} src={src} controls className="mt-6 w-full max-w-lg" />
+        </Screen>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border-default bg-black">
-          {/*
-            Silent workflows autoplay on a loop, which is the nicer preview.
-            Audio workflows must not: autoplay is only allowed while muted, so
-            looping it muted would hide the soundtrack entirely.
-          */}
-          <video
-            key={src}
-            src={src}
-            controls
-            autoPlay={!job.hasAudio}
-            loop={!job.hasAudio}
-            muted={!job.hasAudio}
-            playsInline
-            className="block max-h-[60vh] w-full bg-black"
-          />
+        <div className="relative overflow-hidden rounded-lg border border-black/40 bg-screen shadow-md">
+          {still ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={src}
+              src={src}
+              alt={job.prompt.trim() || job.workflowName}
+              className="mx-auto block max-h-[62vh] w-auto max-w-full object-contain"
+            />
+          ) : (
+            /*
+              Silent workflows autoplay on a loop, which is the nicer preview.
+              Audio workflows must not: autoplay is only allowed while muted,
+              so looping it muted would hide the soundtrack entirely.
+            */
+            <video
+              key={src}
+              src={src}
+              controls
+              autoPlay={!job.hasAudio}
+              loop={!job.hasAudio}
+              muted={!job.hasAudio}
+              playsInline
+              className="block max-h-[62vh] w-full bg-screen"
+            />
+          )}
         </div>
       )}
 
-      {/* The badges and the buttons share a line while they fit, and the
-          buttons drop beneath as a whole when they do not — never one button
-          at a time. See `useCompactRow` for how the buttons themselves stay on
-          one line. */}
-      <div ref={rowRef} className="relative flex flex-wrap items-center gap-2">
-        <Badge tone="success">
-          <Dot tone="success" /> Done
-        </Badge>
-        {took ? <Badge mono>{took}</Badge> : null}
-        {typeof seed === "number" ? <Badge mono>seed {seed}</Badge> : null}
-
-        <div
-          className={`ml-auto flex max-w-full items-center overflow-x-auto
-            ${compact ? "gap-1.5" : "gap-2"}`}
-        >
+      <div ref={rowRef} className="relative flex flex-wrap items-center gap-x-4 gap-y-2 pt-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="flex items-center gap-1.5">
+            <span aria-hidden="true" className="size-1.5 rounded-full bg-success" />
+            <span className="label-caps text-success">Done</span>
+          </span>
+          {took ? <Readout label="Took">{took}</Readout> : null}
+          {typeof seed === "number" ? <Readout label="Seed">{seed}</Readout> : null}
+        </div>
+        <div className={`ml-auto flex max-w-full items-center overflow-x-auto ${compact ? "gap-1.5" : "gap-2"}`}>
           {actions(compact)}
         </div>
-
-        {/* The same buttons with their labels, laid out but never seen or
-            reached, so there is always a width to compare against — the row
-            on screen cannot say how wide its labels would be while it is
-            showing icons. */}
         <div
           inert
           aria-hidden="true"
-          // Clipped to nothing, so its width can never widen the page.
           className="pointer-events-none invisible absolute inset-x-0 top-0 h-0 overflow-hidden"
         >
           <div ref={measureRef} className="flex w-max items-center gap-2">
@@ -695,19 +651,40 @@ function Result({
         </div>
       </div>
 
-      {handoffs}
+      {offered.length > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-border-default bg-surface px-3 py-2.5">
+          <span className="label-caps mr-1 text-fg-subtle">
+            Next, from this {audio ? "track" : still ? "picture" : "clip"}
+          </span>
+          {offered.map(({ action }) => {
+            const button = CLIP_BUTTONS[action];
+            return (
+              <Button
+                key={action}
+                size="sm"
+                variant="secondary"
+                loading={busyAction === action}
+                disabled={busyAction !== null && busyAction !== action}
+                onClick={() => onClipAction?.(job, action)}
+                title={button.title}
+                className="shrink-0"
+                icon={button.icon}
+              >
+                {button.label}
+              </Button>
+            );
+          })}
+        </div>
+      ) : null}
 
+      {/* Upscale and similar leave secondary files beside the main one. */}
       {rest.length > 0 ? (
-        <p className="text-[12px] text-fg-subtle">
+        <p className="mt-2 text-[12px] text-fg-subtle">
           Also produced{" "}
           {rest.map((file, index) => (
             <span key={file.url}>
               {index > 0 ? ", " : ""}
-              <a
-                href={withToken(file.url)}
-                download={file.filename}
-                className="font-mono text-accent hover:underline"
-              >
+              <a href={withToken(file.url)} download={file.filename} className="font-mono text-accent hover:underline">
                 {file.filename}
               </a>
             </span>
@@ -719,16 +696,8 @@ function Result({
 }
 
 /**
- * Whether the result's buttons have to drop their labels to stay on one line.
- *
- * Measured rather than set at a breakpoint: how many buttons there are depends
- * on the result (a track has no Remix, a video has three hand-offs), and the
- * stage's width depends on the window and the column beside it, so no single
- * width is right. The labelled set is laid out off-screen for the comparison;
- * it fits if it is no wider than the row it would sit in, on a line of its own.
- *
- * A layout effect and a ResizeObserver both settle before paint, so the row is
- * never seen wrapped and then corrected.
+ * Whether the action buttons need to drop to icons: true once their labelled
+ * width (measured off-screen) is wider than the row has to give.
  */
 function useCompactRow(
   rowRef: RefObject<HTMLDivElement | null>,
@@ -743,11 +712,8 @@ function useCompactRow(
     check();
     const observer = new ResizeObserver(check);
     observer.observe(row);
-    // The labelled set changes width on its own too — "Favorite" becomes
-    // "Favorited", a hand-off gains a spinner.
     observer.observe(measure);
     return () => observer.disconnect();
   }, [rowRef, measureRef]);
   return compact;
 }
-

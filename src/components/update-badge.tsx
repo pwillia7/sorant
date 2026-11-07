@@ -94,8 +94,8 @@ export function UpdateBadge({
       aria-label={`Soran’t ${latest.version} is out. How to update`}
       // On a phone the header has no room for it: the dot on the status pill
       // says the same, and opens the same panel.
-      className="hidden items-center gap-2 rounded-full border border-accent/40 sm:inline-flex
-        bg-accent-subtle px-2.5 py-1 text-[12px] text-fg-muted transition-colors duration-150
+      className="hidden h-8 items-center gap-2 rounded-md border border-accent/40 sm:inline-flex
+        bg-accent-subtle px-2.5 text-[12px] text-fg-muted transition-colors duration-150
         hover:border-accent"
     >
       <Dot tone={latest.machineChanges === false ? "accent" : "warning"} />

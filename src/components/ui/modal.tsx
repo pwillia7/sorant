@@ -49,10 +49,10 @@ export function Modal({
         if (event.target === ref.current) onClose();
       }}
       aria-labelledby={titleId}
-      className="m-0 mt-auto max-h-[85dvh] w-full max-w-none overflow-hidden rounded-t-2xl
-        border border-border-default bg-surface p-0 text-fg shadow-lg
-        backdrop:bg-black/60 backdrop:backdrop-blur-[2px]
-        sm:m-auto sm:max-h-[80dvh] sm:w-[min(32rem,calc(100vw-2rem))] sm:rounded-xl"
+      className="m-0 mt-auto max-h-[85dvh] w-full max-w-none overflow-hidden rounded-t-xl
+        border border-border-strong bg-surface p-0 text-fg shadow-md
+        backdrop:bg-black/70
+        sm:m-auto sm:max-h-[80dvh] sm:w-[min(32rem,calc(100vw-2rem))] sm:rounded-lg"
     >
       <div className="flex max-h-[85dvh] flex-col sm:max-h-[80dvh]">
         <header
@@ -62,7 +62,7 @@ export function Modal({
           <div className="min-w-0">
             <h2
               id={titleId}
-              className="text-sm font-medium tracking-[-0.01em] text-fg"
+              className="display-tight text-[17px] font-semibold text-fg"
             >
               {title}
             </h2>

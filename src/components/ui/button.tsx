@@ -4,63 +4,43 @@ type Variant = "primary" | "secondary" | "quiet" | "quiet-danger" | "danger";
 type Size = "xs" | "sm" | "md" | "lg" | "icon-sm" | "icon-md";
 
 /**
- * Four weights, and the gap between them is what makes a screen readable: one
- * primary action, a bordered secondary, and quiet actions for everything that
- * should be reachable without competing.
- *
- * Every variant carries a border at rest, including the quiet one. That is the
- * point of it — a bare label with a hover colour reads as text until you happen
- * to point at it, so the affordance only exists for people who already suspect
- * it is there. A hairline costs almost nothing visually and says "control"
- * immediately, which is how the rest of this interface draws its edges.
+ * One primary per screen, a raised secondary, and quiet actions for everything
+ * that should be reachable without competing. Every variant keeps a hairline
+ * at rest, so a quiet action still reads as a control before it is pointed at.
  */
 const VARIANTS: Record<Variant, string> = {
-  // Geist's primary is a solid fill that inverts on hover rather than dimming.
+  // The one lit control on a screen: a solid tungsten fill with dark type.
   primary:
-    "bg-accent text-accent-fg border border-accent hover:bg-accent-hover hover:border-accent-hover",
+    "bg-accent text-accent-fg border border-accent hover:bg-accent-hover hover:border-accent-hover shadow-sm",
   secondary:
-    "bg-surface text-fg border border-border-default hover:border-border-strong hover:bg-surface-hover",
+    "bg-raised text-fg border border-border-strong hover:border-fg-subtle hover:bg-surface-hover",
   quiet:
     "bg-transparent text-fg-muted border border-border-default hover:border-border-strong hover:bg-surface-hover hover:text-fg",
-  // Destructive, but not shouting about it until you reach for it. Its own
-  // variant rather than a className override on `quiet`: two hover:border-*
-  // utilities have no defined precedence, so which one won would come down to
-  // the order Tailwind happened to emit them in.
+  // Its own variant rather than an override on `quiet`: two hover:border-*
+  // utilities have no defined precedence.
   "quiet-danger":
     "bg-transparent text-fg-muted border border-border-default hover:border-danger hover:bg-surface-hover hover:text-danger",
   danger:
-    "bg-transparent text-danger border border-border-default hover:border-danger hover:bg-surface-hover",
+    "bg-transparent text-danger border border-danger/50 hover:border-danger hover:bg-danger/10",
 };
 
 /**
- * `xs` is for actions that sit inside another component's furniture — a panel
- * header, a day divider, the footer of a file preview.
- *
- * It shares its type size with `sm` rather than stepping down again: 11px read
- * as a footnote next to the 12px controls it sits beside, and small text is
- * where legibility goes first. The two differ in density — how much room the
- * action takes — not in how readable it is.
+ * `xs` sits inside another component's furniture — a section header, a day
+ * divider. It shares `sm`'s type size: the two differ in density, not in how
+ * readable they are.
  */
 const SIZES: Record<Size, string> = {
-  xs: "h-6 px-2 text-[12px] rounded gap-1",
+  xs: "h-6 px-2 text-[12px] rounded-sm gap-1",
   sm: "h-7 px-2.5 text-[12px] rounded-md gap-1.5",
-  md: "h-10 px-4 text-sm rounded-md gap-2",
-  lg: "h-12 px-5 text-[15px] rounded-lg gap-2",
-  // `sm`'s height, square, for a button whose label is only for screen readers.
+  md: "h-9 px-3.5 text-[13px] rounded-md gap-2",
+  lg: "h-11 px-5 text-[14px] rounded-md gap-2",
   "icon-sm": "size-7 text-[12px] rounded-md",
-  // `md`'s height, square: beside an input, which is that tall.
-  "icon-md": "size-10 shrink-0 text-sm rounded-md",
+  "icon-md": "size-9 shrink-0 text-[13px] rounded-md",
 };
 
-/**
- * `font-sans` is stated rather than inherited. A <button> only gets the page
- * font through `font: inherit` in the preflight, and the `font` shorthand
- * resets every font longhand it does not mention — so the family survives only
- * as long as nothing later in the cascade touches that rule. Naming it here
- * costs one utility and takes the question off the table.
- */
+/** `font-sans` stated rather than inherited; see the preflight note in globals. */
 const BASE = `inline-flex items-center justify-center font-sans font-medium
-  tracking-[-0.01em] transition-colors duration-150 select-none whitespace-nowrap
+  transition-colors duration-150 select-none whitespace-nowrap
   disabled:opacity-45 disabled:pointer-events-none`;
 
 /**

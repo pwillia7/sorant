@@ -101,8 +101,8 @@ export function ConnectionPill({
       onClick={onOpen}
       title={update ? `${title}\nSoran’t ${update} is out — open to update` : title}
       aria-label={`ComfyUI: ${label}.${update ? ` Soran’t ${update} is out.` : ""} Open status`}
-      className="relative inline-flex items-center gap-2 rounded-full border border-border-default
-        bg-surface px-2.5 py-1 text-[12px] text-fg-muted transition-colors duration-150
+      className="relative inline-flex items-center gap-2 rounded-md border border-border-default
+        bg-surface h-8 px-2.5 text-[12px] text-fg-muted transition-colors duration-150
         hover:border-border-strong hover:bg-surface-hover"
     >
       <Dot
@@ -174,7 +174,7 @@ export function ConnectionNotice({ health }: { health: Health | null }) {
   return (
     <div
       role="status"
-      className="mb-5 shrink-0 rounded-lg border border-danger/40 bg-danger/5 p-3
+      className="shrink-0 border-b border-danger/40 bg-danger/10 px-4 py-2.5
         text-[12px] leading-relaxed text-fg-muted"
     >
       <p className="font-medium text-fg">{headline}</p>

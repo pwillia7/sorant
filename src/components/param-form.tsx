@@ -113,7 +113,7 @@ export function ParamForm({
               className={
                 visible[0]?.label === group
                   ? "sr-only"
-                  : "mb-1 text-[12px] font-semibold text-fg-muted"
+                  : "label-caps mb-1 text-fg-subtle"
               }
             >
               {group}

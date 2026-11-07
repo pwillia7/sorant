@@ -7,7 +7,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from "react";
 import {
   ConnectionNotice,
@@ -29,8 +28,13 @@ import { ModelOptions } from "@/components/model-options";
 import { TurboSwitch } from "@/components/turbo-switch";
 import { patchSuppressed } from "@/lib/workflows/patches";
 import { Button } from "@/components/ui/button";
-import { Panel, PanelHeader } from "@/components/ui/panel";
-import { WorkflowPicker } from "@/components/workflow-picker";
+import {
+  MachineNote,
+  WorkflowMark,
+  WorkflowRail,
+  WorkflowSwitcher,
+} from "@/components/workflow-picker";
+import { workflowIcon } from "@/components/workflow-icons";
 import { UpdateBadge, useUpdates } from "@/components/update-badge";
 import { StatusPanel } from "@/components/status-panel";
 import { GenerationsPanel } from "@/components/generations-panel";
@@ -69,7 +73,7 @@ import {
 } from "@/lib/param-storage";
 import { workflowLabel } from "@/lib/workflows/modes";
 import { QualityFold, runSummary } from "./run-bar";
-import { runEstimate } from "@/lib/workflows/estimate";
+import { formatEstimate, runEstimate } from "@/lib/workflows/estimate";
 import { CHAIN_OVER_SECONDS, estimateScale } from "@/lib/workflows/slices";
 import type { DirectorEngine } from "@/lib/workflows/local-director";
 import { REWRITE_MODEL } from "@/lib/workflows/rewrite-model";
@@ -1244,205 +1248,196 @@ function Workbench({
       })
     : "";
 
-  return (
-    /* At lg the shell is exactly the viewport and nothing outside a column
-       scrolls, so the height is pinned rather than a minimum — a fractional
-       dvh would otherwise leave the document a pixel taller than the window
-       and grow a page scrollbar with nowhere to go. Relative so that clip
-       also holds anything absolute outside the two columns. */
-    <div className="relative min-h-dvh lg:h-dvh lg:overflow-hidden">
-      <header
-        className="sticky top-0 z-20 border-b border-border-default
-          bg-bg/80 backdrop-blur-md"
-      >
-        <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-2 px-4 sm:gap-3 sm:px-5">
-          {/* Decorative: the h1 beside it says the name, and a mark that
-              announced it too would have a screen reader read it twice. */}
-          <SorantMark aria-hidden="true" className="size-7 shrink-0 text-fg" />
-          <h1 className="text-[13px] font-medium tracking-[-0.01em] text-fg">
-            {/* Live text rather than the drawn wordmark, so it stays Geist and
-                stays selectable. The apostrophe carries the accent — the one
-                piece of colour in the header, and the thing the name turns on. */}
-            Soran<span className="text-accent">’</span>t
-          </h1>
-          {/* Secondary label: the first thing to go when space is tight. */}
-          <span className="hidden text-[13px] text-fg-subtle sm:inline">
-            / ComfyUI
-          </span>
+  /** Choosing a workflow by hand supersedes whatever a hand-off set up. */
+  const selectWorkflow = (id: string) => {
+    setClipNotice(null);
+    setClipSource(null);
+    setSelectedId(id);
+  };
 
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            <UpdateBadge info={updates.info} onOpen={() => setStatusOpen(true)} />
-            <ConnectionPill
-              health={health}
-              onOpen={() => setStatusOpen(true)}
-              update={updates.info?.latest?.version}
-            />
-            <RewriteKeyButton
-              engine={directorEngine}
-              onEngineChange={onDirectorEngineChange}
-              localDirector={localDirector}
-              onLocalDirectorChange={onLocalDirectorChange}
-              installedDirectors={installedDirectors}
-              rewritePicker={rewritePicker}
-              rewriteModel={rewriteModel}
-              onRewriteModelChange={onRewriteModelChange}
-            />
-            <NotifyToggle />
-            <ThemeToggle />
-          </div>
+  const SelectedIcon = selected ? workflowIcon(selected.id) : null;
+  const runEstimateSeconds = selected && !selected.scenes
+    ? scaledEstimate(
+        runEstimate(modesFor ?? selected, turboOn, patchesOn),
+        estimateScale(selected.slicedBy, values),
+      )
+    : undefined;
+
+  const generateButton = (className: string) => (
+    <Button
+      variant="primary"
+      size="lg"
+      onClick={submit}
+      loading={jobs.submitting || (Boolean(selected?.scenes) && planning)}
+      disabled={!selected}
+      className={className}
+    >
+      {queueLabel}
+    </Button>
+  );
+
+  return (
+    /*
+      Three columns in the order the work goes: what to make, how, and what
+      came of it. At lg the shell is exactly the viewport and each column
+      scrolls on its own, so the one under the pointer is the one that moves;
+      below lg it is one column the document scrolls, switched by the tabs
+      pinned to the foot of the screen.
+    */
+    <div className="relative flex min-h-dvh flex-col lg:h-dvh lg:overflow-hidden">
+      <header className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border-default bg-bg px-3 sm:gap-3 sm:px-4">
+        <SorantMark aria-hidden="true" className="size-6 shrink-0 text-fg" />
+        <h1 className="display-tight text-[17px] font-bold text-fg">
+          Soran<span className="text-accent">’</span>t
+        </h1>
+        {/* What the machine is, at a glance, where there is room for it. */}
+        {health?.reachable && health.authorized !== false && health.device ? (
+          <span className="hidden min-w-0 items-center gap-3 border-l border-border-default pl-3 xl:flex">
+            <span className="truncate font-mono text-[11px] text-fg-subtle">
+              {/* "cuda:0 NVIDIA GeForce RTX 3090 : cudaMallocAsync" → the card. */}
+              {health.device.replace(/^\S+:\d+\s+/, "").replace(/\s*:\s*\S+$/, "")}
+            </span>
+            {health.vramFreeMb && health.vramTotalMb ? (
+              <span className="shrink-0 font-mono text-[11px] tabular-nums text-fg-subtle">
+                {(health.vramFreeMb / 1024).toFixed(1)}/{(health.vramTotalMb / 1024).toFixed(0)} GB free
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <UpdateBadge info={updates.info} onOpen={() => setStatusOpen(true)} />
+          <ConnectionPill
+            health={health}
+            onOpen={() => setStatusOpen(true)}
+            update={updates.info?.latest?.version}
+          />
+          <RewriteKeyButton
+            engine={directorEngine}
+            onEngineChange={onDirectorEngineChange}
+            localDirector={localDirector}
+            onLocalDirectorChange={onLocalDirectorChange}
+            installedDirectors={installedDirectors}
+            rewritePicker={rewritePicker}
+            rewriteModel={rewriteModel}
+            onRewriteModelChange={onRewriteModelChange}
+          />
+          <NotifyToggle />
+          <ThemeToggle />
         </div>
       </header>
 
-      {/* pb-24 on mobile keeps the sticky action bar from covering the last
-          control; the bar is not rendered at lg, so the padding goes away.
+      <ConnectionNotice health={health} />
+      {problems?.length ? (
+        <div className="shrink-0 border-b border-warning/40 bg-warning/10 px-4 py-2.5 text-[12px] leading-relaxed text-warning">
+          <p className="font-semibold">A workflow definition looks out of sync with its graph:</p>
+          <ul className="mt-1 list-inside list-disc font-mono">
+            {problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
-          At lg this stops being a page that scrolls and becomes a shell that
-          does not: a column exactly one viewport tall, less the 56px header
-          above it. Each of the two tracks inside then scrolls on its own, so
-          the one under the pointer is the one that moves. Below lg it is an
-          ordinary block and the document scrolls as before. */}
-      <main
-        // Room under the last thing on a phone for the bar pinned there:
-        // taller on Create, which carries Generate as well as the tabs.
-        className={`mx-auto max-w-[1400px] px-4 pt-5 sm:px-5 lg:flex
-          lg:h-[calc(100dvh_-_3.5rem)] lg:flex-col lg:overflow-hidden lg:pb-6 lg:pt-6
-          ${mobileTab === "create" ? "pb-44" : "pb-24"}`}
-      >
-        <ConnectionNotice health={health} />
-        {problems?.length ? (
-          <div
-            className="mb-5 shrink-0 rounded-lg border border-warning/40 bg-warning/5
-              p-3 text-[12px] leading-relaxed text-warning"
-          >
-            <p className="font-medium">
-              A workflow definition looks out of sync with its graph:
-            </p>
-            <ul className="mt-1 list-inside list-disc font-mono">
-              {problems.map((problem) => (
-                <li key={problem}>{problem}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+      <div className="flex min-h-0 flex-1">
+        <aside className="hidden w-16 shrink-0 border-r border-border-default bg-surface lg:block xl:w-56">
+          <WorkflowRail
+            workflows={workflows}
+            turbo={turboByWorkflow}
+            patches={patchesByWorkflow}
+            compat={compat}
+            selectedId={selectedId}
+            onSelect={selectWorkflow}
+          />
+        </aside>
 
-        {/*
-          minmax(0,1fr) rather than 1fr: a flexible track's automatic minimum
-          is min-content, so the widest unwrappable thing in the column sets a
-          floor the track cannot go below. The history list is full of them —
-          every entry's prompt line is `truncate`, which is white-space:nowrap,
-          so its min-content is the whole prompt however long it runs. One long
-          prompt was widening this track past the page and scrolling the
-          document sideways. Capping the minimum at 0 lets the ellipsis do the
-          job it was there for.
-        */}
-        {/*
-          The form column is the one being worked in — Reference to Video puts
-          26 controls in it — while the right-hand track holds one video and a
-          list. It used to stop at 380px and hand the rest to the stage, which
-          left the controls in a third of the width and the preview in two
-          thirds. It grows to 460 now, and at a wide enough viewport to 520,
-          where the extra goes to the column that has something to put in it.
-        */}
-        <div
-          className="grid gap-5 lg:min-h-0 lg:flex-1
-            lg:grid-cols-[minmax(340px,460px)_minmax(0,1fr)]
-            2xl:grid-cols-[minmax(400px,520px)_minmax(0,1fr)]"
+        {/* The composer. Deliberately never disabled: a running generation
+            should not stop you setting up the next one. */}
+        <section
+          aria-label="Settings"
+          className={`flex min-w-0 flex-1 flex-col bg-surface lg:w-[400px] lg:flex-none lg:border-r lg:border-border-default
+            2xl:w-[460px] ${mobileTab === "create" ? "" : "max-lg:hidden"}`}
         >
-          {/* min-w-0: a grid item defaults to min-width:auto and would grow
-              past its track to fit wide content such as an image preview.
-
-              overscroll-contain so that reaching the end of this column stops
-              there rather than handing the leftover scroll to the page. */}
           <div
-            className={`scroll-pane flex min-w-0 flex-col gap-5 lg:h-full lg:min-h-0
-              lg:overflow-y-auto lg:overscroll-contain lg:pr-2
-              ${mobileTab === "create" ? "" : "max-lg:hidden"}`}
+            className={`scroll-pane flex min-h-0 flex-1 flex-col px-4 pt-4 sm:px-5 lg:overflow-y-auto lg:overscroll-contain lg:pt-5
+              ${mobileTab === "create" ? "pb-44 lg:pb-6" : "pb-6"}`}
           >
-            <Panel className="rise" padded>
-              <PanelHeader title="Workflow" />
-              <WorkflowPicker
+            <div className="lg:hidden">
+              <WorkflowSwitcher
                 workflows={workflows}
                 turbo={turboByWorkflow}
                 patches={patchesByWorkflow}
                 compat={compat}
                 selectedId={selectedId}
-                onSelect={(id) => {
-                  // Choosing a workflow by hand supersedes whatever Remix or
-                  // Extend set up, so the note about it goes.
-                  setClipNotice(null);
-                  setClipSource(null);
-                  setSelectedId(id);
-                }}
+                onSelect={selectWorkflow}
               />
-            </Panel>
+            </div>
+
+            {selected && SelectedIcon ? (
+              <div className="rise mt-4 lg:mt-0">
+                <div className="flex items-start gap-3">
+                  <span className="hidden lg:block">
+                    <WorkflowMark icon={SelectedIcon} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="display-tight hidden text-[22px] font-semibold leading-tight text-fg lg:block">
+                      {selected.name}
+                    </h2>
+                    <p className="text-[13px] leading-snug text-fg-muted lg:mt-1">{selected.description}</p>
+                  </div>
+                </div>
+                <MachineNote status={compat?.workflows[selected.id]} />
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-border-default pb-4">
+                  {runEstimateSeconds ? (
+                    <span className="mr-auto flex items-baseline gap-1.5">
+                      <span className="label-caps text-fg-subtle">Runs</span>
+                      <span className="font-mono text-[12px] tabular-nums text-fg">
+                        ~{formatEstimate(runEstimateSeconds)}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="mr-auto" />
+                  )}
+                  {tips ? (
+                    <Button variant="quiet" size="xs" onClick={() => setTipsOpen(true)}>
+                      Tips
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="quiet"
+                    size="xs"
+                    onClick={resetToDefaults}
+                    disabled={isDefaults}
+                    title={
+                      isDefaults
+                        ? "Already at the defaults"
+                        : "Put every setting on this workflow back to its default"
+                    }
+                  >
+                    Restore defaults
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {selected && clipNotice && selected.clipTarget?.action === clipNotice.action ? (
+              <div className="mt-4 flex items-start gap-3 border-l-2 border-accent bg-accent-subtle/60 py-2.5 pl-3 pr-2 text-[12px] leading-relaxed text-fg-muted">
+                <span className="min-w-0 flex-1">
+                  {CLIP_NOTICE[clipNotice.action].verb}{" "}
+                  <span className="text-fg">“{clipNotice.label}”</span>. {CLIP_NOTICE[clipNotice.action].detail}
+                </span>
+                <Button variant="quiet" size="xs" className="shrink-0" onClick={() => setClipNotice(null)}>
+                  Dismiss
+                </Button>
+              </div>
+            ) : null}
 
             {selected ? (
-              <Panel
-                className="rise"
-                style={{ "--delay": "80ms" } as CSSProperties}
-                padded
-              >
-                <PanelHeader
-                  title="Settings"
-                  action={
-                    <div className="flex shrink-0 items-center gap-2">
-                      {tips ? (
-                        <Button
-                          variant="quiet"
-                          size="xs"
-                          onClick={() => setTipsOpen(true)}
-                        >
-                          Tips
-                        </Button>
-                      ) : null}
-                      <Button
-                        variant="quiet"
-                        size="xs"
-                        onClick={resetToDefaults}
-                        disabled={isDefaults}
-                        title={
-                          isDefaults
-                            ? "Already at the defaults"
-                            : "Put every setting on this workflow back to its default"
-                        }
-                      >
-                        Restore defaults
-                      </Button>
-                    </div>
-                  }
-                />
-                {clipNotice &&
-                selected.clipTarget?.action === clipNotice.action ? (
-                  <div
-                    className="mb-5 flex items-start gap-3 rounded-lg border border-accent/40
-                      bg-accent-subtle/30 p-3 text-[12px] leading-relaxed text-fg-muted"
-                  >
-                    <span className="min-w-0 flex-1">
-                      {CLIP_NOTICE[clipNotice.action].verb}{" "}
-                      <span className="text-fg">“{clipNotice.label}”</span>.{" "}
-                      {CLIP_NOTICE[clipNotice.action].detail}
-                    </span>
-                    <Button
-                      variant="quiet"
-                      size="xs"
-                      className="shrink-0"
-                      onClick={() => setClipNotice(null)}
-                    >
-                      Dismiss
-                    </Button>
-                  </div>
-                ) : null}
-
-                {/* Deliberately never disabled: a running generation should not
-                    stop you setting up the next one. */}
+              <div className="mt-5">
                 <ParamForm
-                  // Per workflow: two graphs can share a param id — Upscale
-                  // and Extend both call their clip `source_video` — and a
-                  // control kept across the switch keeps its local state, so
-                  // one workflow's upload error would show on the other's.
+                  // Per workflow: two graphs can share a param id, and a
+                  // control kept across the switch keeps its local state.
                   key={selected.id}
-                  // The rewrite model is chosen for the whole app, in the
-                  // key's dialog; see `rewriteModel`.
                   params={whatParams}
                   values={values}
                   onChange={onParamChange}
@@ -1457,9 +1452,7 @@ function Workbench({
                         on={turboOn}
                         onChange={setTurbo}
                         strength={strengths[TURBO_STRENGTH]}
-                        onStrengthChange={(value) =>
-                          setStrength(TURBO_STRENGTH, value)
-                        }
+                        onStrengthChange={(value) => setStrength(TURBO_STRENGTH, value)}
                       />
                     ) : null}
 
@@ -1491,199 +1484,126 @@ function Workbench({
                     />
                   </QualityFold>
                 ) : null}
-              </Panel>
-            ) : null}
-
-            {/* Where the form ends, so the button is beside the last thing
-                filled in, with what it is about to run. At lg only; below it,
-                the bar pinned to the screen's foot does this. */}
-            {selected ? (
-              <div
-                className="sticky bottom-0 z-10 -mt-2 hidden shrink-0 flex-col gap-1.5 border-t
-                  border-border-default bg-bg/95 pb-1 pt-3 backdrop-blur-md lg:flex"
-              >
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    onClick={submit}
-                    loading={jobs.submitting || (Boolean(selected?.scenes) && planning)}
-                    className="flex-1"
-                  >
-                    {queueLabel}
-                  </Button>
-                  <kbd
-                    title="Press ⌘↵ (Ctrl+Enter) to run from anywhere"
-                    className="rounded border border-border-default bg-bg-subtle
-                      px-1.5 py-0.5 font-mono text-[11px] text-fg-subtle"
-                  >
-                    ⌘↵
-                  </kbd>
-                </div>
-                {summary ? <p className="truncate text-[12px] text-fg-subtle">{summary}</p> : null}
               </div>
             ) : null}
           </div>
 
-          <div
-            /* min-w-0 for the same reason as the left column: without it this
-               grid item takes min-width:auto and grows past its track.
-
-               This was `lg:sticky lg:top-20`, which is what made the two
-               columns take turns: a sticky box taller than the viewport pins
-               its top and leaves its bottom off-screen until the whole grid
-               has finished scrolling, so the history below the stage could not
-               be reached until the settings column had run out. It scrolls
-               itself now instead. */
-            className={`flex min-w-0 flex-col gap-4 lg:h-full lg:min-h-0
-              ${mobileTab === "create" ? "max-lg:hidden" : ""}`}
-          >
-            <div
-              className="scroll-pane flex min-w-0 flex-col gap-4 lg:min-h-0 lg:flex-1
-                lg:overflow-y-auto lg:overscroll-contain lg:pr-2"
-            >
-              {/* The Result tab on a phone: what is wrong, the planned
-                  video's scenes, and the run being looked at. */}
-              <div
-                className={`flex min-w-0 flex-col gap-4 ${mobileTab === "history" ? "max-lg:hidden" : ""}`}
-              >
-              {jobs.submitError &&
-              (!jobs.submitErrorField || submittedFor !== selectedId) ? (
-                <div
-                  className="flex items-start gap-3 rounded-lg border border-danger/40
-                    bg-danger/5 p-3 text-[13px] leading-relaxed text-danger"
+          {/* The run, at the foot of the column it is set up in: the button
+              and what it is about to make. lg only; a phone pins it to the
+              screen's foot instead. */}
+          {selected ? (
+            <div className="hidden shrink-0 border-t border-border-default bg-surface px-5 py-3 lg:block">
+              <div className="flex items-center gap-2">
+                {generateButton("flex-1")}
+                <kbd
+                  title="Press ⌘↵ (Ctrl+Enter) to run from anywhere"
+                  className="grid h-11 place-items-center rounded-md border border-border-default bg-bg-subtle px-2
+                    font-mono text-[11px] text-fg-subtle"
                 >
-                  <span className="min-w-0 flex-1">{jobs.submitError}</span>
-                  <Button
-                    variant="danger"
-                    size="xs"
-                    className="shrink-0"
-                    onClick={jobs.dismissSubmitError}
-                  >
-                    Dismiss
-                  </Button>
-                </div>
-              ) : null}
+                  ⌘↵
+                </kbd>
+              </div>
+              {summary ? <p className="mt-2 truncate font-mono text-[11px] text-fg-subtle">{summary}</p> : null}
+            </div>
+          ) : null}
+        </section>
 
-              {clipError ? (
-                <div
-                  className="flex items-start gap-3 rounded-lg border border-danger/40
-                    bg-danger/5 p-3 text-[13px] leading-relaxed text-danger"
-                >
-                  <span className="min-w-0 flex-1">{clipError}</span>
-                  <Button
-                    variant="danger"
-                    size="xs"
-                    className="shrink-0"
-                    onClick={() => setClipError(null)}
-                  >
-                    Dismiss
-                  </Button>
-                </div>
+        {/* The monitor and, under it, the library. */}
+        <main
+          className={`scroll-pane min-w-0 flex-1 bg-bg lg:overflow-y-auto lg:overscroll-contain
+            ${mobileTab === "create" ? "max-lg:hidden" : ""}`}
+        >
+          <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-6 px-4 pb-28 pt-4 sm:px-6 lg:pb-10 lg:pt-6">
+            <div className={`flex min-w-0 flex-col gap-4 ${mobileTab === "history" ? "max-lg:hidden" : ""}`}>
+              {jobs.submitError && (!jobs.submitErrorField || submittedFor !== selectedId) ? (
+                <Alert onDismiss={jobs.dismissSubmitError}>{jobs.submitError}</Alert>
               ) : null}
+              {clipError ? <Alert onDismiss={() => setClipError(null)}>{clipError}</Alert> : null}
 
               {selected?.scenes ? <MusicVideoPanel video={musicVideo} /> : null}
               {selected?.slicedBy && longSwap.project ? <LongSwapPanel swap={longSwap} /> : null}
 
-              <GenerationStage
-                job={viewedJob}
-                now={now}
-                estimateSeconds={viewedJob ? jobs.estimateFor(viewedJob) : null}
-                onCancel={(promptId) => void jobs.cancel(promptId)}
-                onReuseSeed={(seed) => setValue("seed", seed)}
-                clipActions={offeredActions}
-                onClipAction={
-                  offeredActions.length > 0
-                    ? (job, action) => void sendClip(job, action)
-                    : undefined
-                }
-                onShowSettings={
-                  viewedJob
-                    ? () => setSettingsForId(viewedJob.promptId)
-                    : undefined
-                }
-                onToggleFavorite={jobs.toggleFavorite}
-                onRetry={viewedJob && retryable(viewedJob) ? retry : undefined}
-                onCheckAgain={
-                  viewedJob && lostTrackOf(viewedJob)
-                    ? () => jobs.recheckLost([viewedJob.promptId])
-                    : undefined
-                }
-                onRerun={viewedJob && rerunnable(viewedJob) ? rerun : undefined}
-                retrying={jobs.submitting}
-                busyAction={sending}
-              />
-              </div>
-
-              <Panel padded className={mobileTab === "result" ? "max-lg:hidden" : undefined}>
-                <PanelHeader
-                  title="Generations"
-                  hint={
-                    jobs.jobs.length > 0
-                      ? `${jobs.jobs.length} on this device`
-                      : undefined
-                  }
-                />
-                <GenerationsPanel
-                  jobs={jobs.jobs}
-                  selectedId={viewedJob?.promptId ?? null}
+              <section aria-label="Monitor">
+                <GenerationStage
+                  job={viewedJob}
                   now={now}
-                  onSelect={(promptId) => {
-                    setViewedId(promptId);
-                    showTab("result");
-                  }}
+                  estimateSeconds={viewedJob ? jobs.estimateFor(viewedJob) : null}
                   onCancel={(promptId) => void jobs.cancel(promptId)}
-                  onRemove={jobs.remove}
-                  onRemoveMany={jobs.removeMany}
+                  onReuseSeed={(seed) => setValue("seed", seed)}
+                  clipActions={offeredActions}
+                  onClipAction={offeredActions.length > 0 ? (job, action) => void sendClip(job, action) : undefined}
+                  onShowSettings={viewedJob ? () => setSettingsForId(viewedJob.promptId) : undefined}
                   onToggleFavorite={jobs.toggleFavorite}
-                  onClearFinished={jobs.clearFinished}
-                  onRetry={retry}
-                  canRetry={retryable}
-                  onRerun={rerun}
-                  canRerun={rerunnable}
+                  onRetry={viewedJob && retryable(viewedJob) ? retry : undefined}
+                  onCheckAgain={
+                    viewedJob && lostTrackOf(viewedJob) ? () => jobs.recheckLost([viewedJob.promptId]) : undefined
+                  }
+                  onRerun={viewedJob && rerunnable(viewedJob) ? rerun : undefined}
                   retrying={jobs.submitting}
-                  inUse={takesInUse}
+                  busyAction={sending}
                 />
-              </Panel>
+              </section>
             </div>
-          </div>
-        </div>
-      </main>
 
-      {/* The phone's bar: Generate and what it will run, on Create, above
-          the three tabs. Pinned, so the primary action is never a scroll
-          away and neither is the result. */}
+            <section
+              aria-labelledby="library-heading"
+              className={`border-t border-border-default pt-5 ${mobileTab === "result" ? "max-lg:hidden" : ""}`}
+            >
+              <header className="mb-3 flex items-baseline gap-3">
+                <h2 id="library-heading" className="display-tight text-[18px] font-semibold text-fg">
+                  Library
+                </h2>
+                {jobs.jobs.length > 0 ? (
+                  <span className="font-mono text-[11px] tabular-nums text-fg-subtle">
+                    {jobs.jobs.length} on this device
+                    {jobs.activeCount > 0 ? ` · ${jobs.activeCount} running` : ""}
+                  </span>
+                ) : null}
+              </header>
+              <GenerationsPanel
+                jobs={jobs.jobs}
+                selectedId={viewedJob?.promptId ?? null}
+                now={now}
+                onSelect={(promptId) => {
+                  setViewedId(promptId);
+                  showTab("result");
+                }}
+                onCancel={(promptId) => void jobs.cancel(promptId)}
+                onRemove={jobs.remove}
+                onRemoveMany={jobs.removeMany}
+                onToggleFavorite={jobs.toggleFavorite}
+                onClearFinished={jobs.clearFinished}
+                onRetry={retry}
+                canRetry={retryable}
+                onRerun={rerun}
+                canRerun={rerunnable}
+                retrying={jobs.submitting}
+                inUse={takesInUse}
+              />
+            </section>
+          </div>
+        </main>
+      </div>
+
+      {/* The phone's bar: Generate on Compose, above the three screens. */}
       <div
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-border-default
-          bg-bg/90 backdrop-blur-md lg:hidden"
-        style={{
-          // Clear the iOS home indicator without adding dead space elsewhere.
-          paddingBottom: "env(safe-area-inset-bottom)",
-        }}
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-border-default bg-bg/95 backdrop-blur-md lg:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {mobileTab === "create" ? (
           <div className="px-4 pt-3">
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={submit}
-              loading={jobs.submitting || (Boolean(selected?.scenes) && planning)}
-              disabled={!selected}
-              className="w-full"
-            >
-              {queueLabel}
-            </Button>
+            {generateButton("w-full")}
             {summary ? (
-              <p className="mt-1.5 truncate text-center text-[12px] text-fg-subtle">{summary}</p>
+              <p className="mt-1.5 truncate text-center font-mono text-[11px] text-fg-subtle">{summary}</p>
             ) : null}
           </div>
         ) : null}
-        <nav aria-label="Screens" className="flex justify-around px-2 pb-1.5 pt-1.5">
+        <nav aria-label="Screens" className="grid grid-cols-3 px-2 pb-1.5 pt-1.5">
           {(
             [
-              { tab: "create", label: "Create", Icon: PenLine },
-              { tab: "result", label: "Result", Icon: SquarePlay },
-              { tab: "history", label: "History", Icon: LayoutGrid },
+              { tab: "create", label: "Compose", Icon: PenLine },
+              { tab: "result", label: "Monitor", Icon: SquarePlay },
+              { tab: "history", label: "Library", Icon: LayoutGrid },
             ] as const
           ).map(({ tab, label, Icon }) => (
             <button
@@ -1691,16 +1611,19 @@ function Workbench({
               type="button"
               onClick={() => showTab(tab)}
               aria-current={mobileTab === tab ? "page" : undefined}
-              className={`relative flex min-w-20 flex-col items-center gap-0.5 rounded-md px-3 py-1 text-[11px]
-                font-medium transition-colors ${mobileTab === tab ? "text-accent" : "text-fg-muted hover:text-fg"}`}
+              className={`relative flex flex-col items-center gap-0.5 py-1 text-[11px] font-semibold transition-colors
+                ${mobileTab === tab ? "text-accent" : "text-fg-muted hover:text-fg"}`}
             >
+              <span
+                aria-hidden="true"
+                className={`absolute inset-x-6 -top-1.5 h-0.5 ${mobileTab === tab ? "bg-accent" : "bg-transparent"}`}
+              />
               <Icon className="size-5" aria-hidden="true" />
               {label}
-              {/* Something running is worth a glance from wherever you are. */}
               {tab === "result" && jobs.activeCount > 0 ? (
                 <span
                   aria-label={`${jobs.activeCount} running`}
-                  className="absolute right-4 top-0.5 size-2 rounded-full bg-accent motion-safe:animate-pulse"
+                  className="absolute right-[calc(50%-1.25rem)] top-0.5 size-2 rounded-full bg-accent breathe"
                 />
               ) : null}
             </button>
@@ -1731,18 +1654,11 @@ function Workbench({
           open
           onClose={() => setSettingsForId(null)}
           job={settingsJob}
-          workflow={workflows.find(
-            (workflow) => workflow.id === settingsJob.workflowId,
-          )}
-          // Withheld when the workflow that made this run is no longer
-          // registered: there is nothing to load the settings into, and a
-          // button that cannot work is worse than no button.
+          workflow={workflows.find((workflow) => workflow.id === settingsJob.workflowId)}
+          // Withheld when the workflow that made this run is gone: there is
+          // nothing to load the settings into.
           onReuse={
-            workflows.some(
-              (workflow) => workflow.id === settingsJob.workflowId,
-            )
-              ? reuseSettings
-              : undefined
+            workflows.some((workflow) => workflow.id === settingsJob.workflowId) ? reuseSettings : undefined
           }
         />
       ) : null}
@@ -1750,30 +1666,41 @@ function Workbench({
   );
 }
 
+/** A refusal or a failed hand-off, above the monitor until dismissed. */
+function Alert({ children, onDismiss }: { children: React.ReactNode; onDismiss: () => void }) {
+  return (
+    <div
+      role="alert"
+      className="flex items-start gap-3 border-l-2 border-danger bg-danger/10 py-2.5 pl-3 pr-2 text-[13px] leading-relaxed text-fg"
+    >
+      <span className="min-w-0 flex-1">{children}</span>
+      <Button variant="quiet" size="xs" className="shrink-0" onClick={onDismiss}>
+        Dismiss
+      </Button>
+    </div>
+  );
+}
+
 /**
- * The studio's shape while the workflows load: the header, the form column
- * and the stage, as blocks. A centred "Loading…" left the screen empty and
- * then filled it all at once, so the eye had nowhere to start; this way the
- * layout is already where it will be.
+ * The studio's shape while the workflows load: the bar, the rail, the
+ * composer and the monitor, as blocks, so the eye knows where to start.
  */
 type MobileTab = "create" | "result" | "history";
 
 function StudioSkeleton() {
-  const block = "rounded-xl bg-bg-subtle motion-safe:animate-pulse";
+  const block = "rounded-md bg-bg-subtle motion-safe:animate-pulse";
   return (
-    <div className="min-h-dvh" aria-busy="true" aria-label="Loading">
-      <div className="h-14 border-b border-border-default" />
-      <div
-        className="mx-auto grid max-w-[1400px] gap-5 px-4 pt-5 sm:px-5 lg:grid-cols-[minmax(340px,460px)_minmax(0,1fr)]
-          lg:pt-6 2xl:grid-cols-[minmax(400px,520px)_minmax(0,1fr)]"
-      >
-        <div className="flex flex-col gap-5">
-          <div className={`${block} h-28`} />
-          <div className={`${block} h-[28rem]`} />
-        </div>
-        <div className="hidden flex-col gap-4 lg:flex">
-          <div className={`${block} aspect-video`} />
+    <div className="flex min-h-dvh flex-col" aria-busy="true" aria-label="Loading">
+      <div className="h-12 border-b border-border-default" />
+      <div className="flex flex-1">
+        <div className="hidden w-16 border-r border-border-default bg-surface lg:block xl:w-56" />
+        <div className="flex flex-1 flex-col gap-4 bg-surface p-5 lg:w-[400px] lg:flex-none lg:border-r lg:border-border-default">
+          <div className={`${block} h-12`} />
           <div className={`${block} h-40`} />
+          <div className={`${block} h-24`} />
+        </div>
+        <div className="hidden flex-1 p-6 lg:block">
+          <div className={`${block} aspect-video max-h-[62vh] w-full`} />
         </div>
       </div>
     </div>

@@ -73,7 +73,7 @@ export function Field({
         <div className="flex min-w-0 items-center gap-1.5">
           <label
             htmlFor={id}
-            className="text-[13px] font-medium tracking-[-0.01em] text-fg"
+            className="text-[13px] font-semibold text-fg"
           >
             {label}
           </label>
@@ -111,7 +111,7 @@ export function Field({
       ) : open && more ? (
         <p
           id={`${id}-help`}
-          className="rounded-r-md border-l-2 border-accent bg-bg-subtle px-3 py-2
+          className="border-l-2 border-accent bg-bg-subtle px-3 py-2
             text-[12px] leading-relaxed text-fg-muted"
         >
           <span id={`${id}-more`}>{more}</span>
@@ -134,7 +134,7 @@ export function Field({
         >
           <span
             aria-hidden="true"
-            className="size-1 shrink-0 translate-y-[-2px] rounded-full bg-accent"
+            className="size-1.5 shrink-0 translate-y-[-1px] bg-accent"
           />
           {note}
         </p>

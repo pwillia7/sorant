@@ -1,8 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { GeistMono } from "geist/font/mono";
-import { GeistSans } from "geist/font/sans";
+import { Archivo, JetBrains_Mono } from "next/font/google";
 import { siteUrl } from "@/lib/env";
 import "./globals.css";
+
+/*
+  Archivo for everything set in words, with its width axis loaded: the
+  condensed cut is the section lettering and the display titles, the normal
+  cut the working text. JetBrains Mono for anything read as a number — run
+  clocks, seeds, estimates — where columns of digits have to line up.
+*/
+const archivo = Archivo({
+  subsets: ["latin"],
+  axes: ["wdth"],
+  variable: "--font-archivo",
+  display: "swap",
+});
+
+const jetbrains = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Soran’t",
@@ -22,8 +40,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+    { media: "(prefers-color-scheme: light)", color: "#f3f0ea" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f0e0c" },
   ],
 };
 
@@ -50,8 +68,8 @@ export default function RootLayout({
       The font variables belong on <html>, not <body>.
 
       Tailwind declares --font-sans and --default-font-family on :root as
-      `var(--font-geist-sans), …`. A custom property is substituted using the
-      variables of the element it is declared on, so with --font-geist-sans
+      `var(--font-archivo), …`. A custom property is substituted using the
+      variables of the element it is declared on, so with --font-archivo
       defined a level lower there is nothing for :root to resolve against and
       --font-sans computes to the guaranteed-invalid value. Everything
       inheriting it then silently falls back to the browser default, and a
@@ -62,14 +80,13 @@ export default function RootLayout({
     */
     <html
       lang="en"
-      className={`${GeistSans.variable} ${GeistMono.variable}`}
+      className={`${archivo.variable} ${jetbrains.variable}`}
       suppressHydrationWarning
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <div className="app-backdrop" aria-hidden="true" />
         {children}
       </body>
     </html>

@@ -23,25 +23,24 @@ export function QualityFold({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="mt-7 rounded-lg border border-border-default">
+    <div className="mt-8 border-t border-border-default">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-controls="quality-and-speed"
-        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left
-          transition-colors hover:bg-surface-hover"
+        className="flex w-full items-center gap-2.5 py-3 text-left transition-colors hover:text-fg"
       >
         <Gauge aria-hidden="true" className="size-4 shrink-0 text-fg-muted" />
-        <span className="text-[13px] font-medium text-fg">Quality &amp; speed</span>
-        <span className="ml-auto min-w-0 truncate text-[12px] text-fg-subtle">{summary}</span>
+        <span className="label-caps text-fg-muted">Quality &amp; speed</span>
+        <span className="ml-auto min-w-0 truncate font-mono text-[11px] text-fg-subtle">{summary}</span>
         <ChevronRight
           aria-hidden="true"
           className={`size-3.5 shrink-0 text-fg-subtle transition-transform ${open ? "rotate-90" : ""}`}
         />
       </button>
       {open ? (
-        <div id="quality-and-speed" className="border-t border-border-default p-3 pt-4">
+        <div id="quality-and-speed" className="pb-2 pt-2">
           {children}
         </div>
       ) : null}
