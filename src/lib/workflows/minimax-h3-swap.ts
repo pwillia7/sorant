@@ -666,13 +666,16 @@ const params: ParamDef[] = [
     id: FRESH_EVERY_PARAM,
     label: "Fresh start every",
     type: "select",
-    default: "30",
+    // Never by default: tested on a 4-minute chain, a fresh start brought the
+    // face back but dropped the costume where the mask did not reach it (the
+    // source's own shirt came back), which the carry-on had been holding.
+    default: "0",
     options: [
+      { value: "0", label: "Never" },
       { value: "30", label: "30 seconds" },
       { value: "60", label: "Minute" },
-      { value: "0", label: "Never" },
     ],
-    help: `For clips over ${CHAIN_OVER_SECONDS} seconds. Each segment carries on from the last frames of the one before, and over minutes small errors build up: the face darkens, gets grainier, drifts from the picture. A fresh start swaps a segment from the clip and the picture alone, which resets that, at the cost of a small jump where it happens.`,
+    help: `For clips over ${CHAIN_OVER_SECONDS} seconds. Each segment carries on from the last frames of the one before, and over minutes small errors build up: the face darkens, gets grainier, drifts from the picture. A fresh start swaps a segment from the clip and the picture alone, which resets that. The cost is a jump where it happens, and clothing the mask does not cover can go back to the source's.`,
     group: "Quality",
     scope: "browser",
     targets: [],
