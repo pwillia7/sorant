@@ -148,11 +148,20 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
           </Button>
         ) : null}
         {done === total && (joinFailed || !joinJob) ? (
-          <Button size="sm" onClick={() => void swap.join()}>
+          <Button size="sm" onClick={() => void swap.join()} loading={swap.sending}>
             {joinFailed ? "Join again" : "Join"}
           </Button>
         ) : null}
       </div>
+
+      {joining ? (
+        <p className="mb-4 flex items-center gap-2 text-[13px] text-fg-muted" role="status">
+          <LoaderCircle {...icon} className="size-3.5 shrink-0 stroke-2 motion-safe:animate-spin" />
+          {joinJob?.phase === "queued"
+            ? `Join queued${joinJob.queuePosition ? `, ${joinJob.queuePosition} ahead` : ""}…`
+            : "Joining the segments…"}
+        </p>
+      ) : null}
 
       {joined ? (
         <div className="mb-5">
