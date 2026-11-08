@@ -240,6 +240,18 @@ swap.
   Prepare Source scales them down.
 - **The estimate** is one window's times the windows (`slicedBy` on the
   measured clip length; slices.ts plans the same 124-frame windows).
+- **Redoing a segment.** Each finished segment on the panel has **Redo**,
+  which swaps it again with a new seed, carrying on from the segment before as
+  it did the first time, and **from here**, which redoes it and every segment
+  after it. Redo on its own leaves the next segment carrying on from frames
+  that are no longer there, which can show as a jump at that join; from here
+  costs a run per segment but keeps every join a carry-on. A redo sets the
+  segment's earlier takes aside (`redoneAt`, with its seed in `seeds`), so
+  the chain sees it as waiting and sends it, and the swap is joined again
+  once every segment is done. A redone segment that had passed through as the
+  clip's own footage is tried as a swap again. The buttons wait while a
+  segment, a join or an upscale is in flight. A redone segment needs its own
+  upscale again; the panel then offers the ones remaining.
 - **Upscaling a chained swap** works as a music video's does: once it is
   joined, the panel offers **Upscale the video** at 1080 px or 4K and 24 or
   48 fps with RTX Video. Each segment goes through [Upscale](#upscale) on its

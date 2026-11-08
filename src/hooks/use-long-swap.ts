@@ -51,6 +51,14 @@ import { defaultValuesFor, type ParamValue, type WorkflowSummary } from "@/lib/w
  * and because a failure then costs one segment's upscale, not the lot. The
  * upscales are found by their history tags too, each tied to the take it was
  * made from by `derivedFrom`, so a segment swapped again needs its own again.
+ *
+ * Any finished segment can be redone, with a new seed: on its own, carrying on
+ * from the segment before as it did the first time, or with every segment
+ * after it too. On its own leaves the segment after it carrying on from frames
+ * that are no longer there, which can show as a jump at that join; from here
+ * on costs a run per segment but keeps every join a carry-on. Either way a
+ * redo sets the segment's takes aside (`redoneAt`) so the chain sees it as
+ * waiting and sends it, and the join follows on its own once all are done.
  */
 
 const STORAGE_KEY = "sorant-long-swap";
@@ -88,6 +96,13 @@ export interface LongSwapProject {
    * time the page came back.
    */
   upscaledJoinTried?: string;
+  /**
+   * When each redone segment was asked for again: a take submitted before it
+   * is set aside, so the chain sees the segment as waiting and sends it.
+   */
+  redoneAt?: Record<number, number>;
+  /** The seed each redone segment runs with in place of the swap's own. */
+  seeds?: Record<number, number>;
 }
 
 type SubmitModes = RunModes & { lowVram?: boolean; localDirector?: string; rewriteModel?: string };
@@ -120,6 +135,11 @@ export interface LongSwapController {
   upscaleAll: (size: number, frameRate: number) => Promise<void>;
   /** Join the upscaled segments; on its own once they are all done, this is for after that failed. */
   joinUpscaled: () => Promise<void>;
+  /**
+   * Swap a finished segment again with a new seed — on its own, or with every
+   * segment after it (`onward`) so each still carries on from the one before.
+   */
+  redo: (index: number, onward: boolean) => void;
   clear: () => void;
 }
 
@@ -265,12 +285,23 @@ export function useLongSwap({
     return { segments, upscales, joins, upscaledJoins };
   }, [project, jobs.jobs]);
 
+  // A segment's newest take, unless it was redone since: then it is waiting.
   const segmentJobs = useMemo(
-    () => (project ? project.segments.map((_, index) => runs.segments.get(index)?.[0]) : []),
+    () =>
+      project
+        ? project.segments.map((_, index) => {
+            const take = runs.segments.get(index)?.[0];
+            const redone = project.redoneAt?.[index];
+            return take && redone !== undefined && take.submittedAt < redone ? undefined : take;
+          })
+        : [],
     [project, runs],
   );
   const states = useMemo(() => segmentJobs.map(stateOf), [segmentJobs]);
-  const joinJob = runs.joins[0];
+  // A join of takes since replaced is not this swap's any more; the chain
+  // joins again once the redone segments are done.
+  const newestTake = segmentJobs.every(Boolean) ? Math.max(...segmentJobs.map((job) => job!.submittedAt)) : Infinity;
+  const joinJob = runs.joins[0] && runs.joins[0].submittedAt >= newestTake ? runs.joins[0] : undefined;
   // An upscale counts for a segment only while the take it was made from is
   // still that segment's newest.
   const upscaleJobs = useMemo(
@@ -280,7 +311,12 @@ export function useLongSwap({
       ),
     [segmentJobs, runs],
   );
-  const upscaledJoinJob = runs.upscaledJoins[0];
+  // Likewise an upscaled join of upscales that no longer match the takes.
+  const newestUpscale = upscaleJobs.every(Boolean)
+    ? Math.max(...upscaleJobs.map((job) => job!.submittedAt))
+    : Infinity;
+  const upscaledJoinJob =
+    runs.upscaledJoins[0] && runs.upscaledJoins[0].submittedAt >= newestUpscale ? runs.upscaledJoins[0] : undefined;
 
   /**
    * Send one segment, carrying on from the one before's video. Its clip
@@ -295,6 +331,7 @@ export function useLongSwap({
       const carried = history && !passThrough ? segment.history : 0;
       const values: Record<string, ParamValue> = {
         ...current.values,
+        seed: current.seeds?.[index] ?? current.values.seed,
         segment: segmentValue(segment, carried),
         history_clip: carried ? history! : "",
         [PASS_THROUGH_PARAM]: passThrough ? "1" : "",
@@ -568,6 +605,32 @@ export function useLongSwap({
     await sendUpscaledJoin();
   }, [sendUpscaledJoin]);
 
+  const redo = useCallback(
+    (index: number, onward: boolean) => {
+      if (!project) return;
+      const at = Date.now();
+      const redone = project.segments
+        .map((_, i) => i)
+        .filter((i) => (onward ? i >= index : i === index));
+      const redoneAt = { ...project.redoneAt };
+      const seeds = { ...project.seeds };
+      for (const i of redone) {
+        redoneAt[i] = at;
+        seeds[i] = Math.floor(Math.random() * 2 ** 31);
+      }
+      setError(null);
+      setProject({
+        ...project,
+        paused: false,
+        redoneAt,
+        seeds,
+        // Tried for a swap again: if SAM still finds no one, it passes through again.
+        passedThrough: project.passedThrough?.filter((i) => !redone.includes(i)),
+      });
+    },
+    [project],
+  );
+
   const clear = useCallback(() => {
     setProject(null);
     setError(null);
@@ -590,6 +653,7 @@ export function useLongSwap({
     join,
     upscaleAll,
     joinUpscaled,
+    redo,
     clear,
   };
 }
