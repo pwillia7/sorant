@@ -167,6 +167,14 @@ interface ParamBase {
    * with targets as well writes them too.
    */
   scope?: "scenes" | "browser";
+  /**
+   * Read by the workflow's `finalize` rather than written by targets: for a
+   * value whose effect depends on the rest of the run — a box that becomes
+   * pixels only once the frame size is known, a mask that replaces a node's
+   * input rather than setting one. Such a param has no targets, and the
+   * workflow's `finalizeCases` are what hold it honest.
+   */
+  readBy?: "finalize";
 }
 
 /**
@@ -461,6 +469,20 @@ export interface WrittenParam extends ParamBase {
   maxLength: number;
 }
 
+/**
+ * A box drawn on a frame of a `video` param's clip — the Character swap's
+ * "who to replace" when a description alone picks the wrong person. Its value
+ * is `subject-box.ts`'s JSON, or empty for no box. It has no targets of its
+ * own: what a box does to the graph depends on the frame size and the rest of
+ * the run, so the workflow's `finalize` reads it.
+ */
+export interface BoxParam extends ParamBase {
+  type: "box";
+  default: "";
+  /** The `video` param whose clip the box is drawn on, at its first frame. */
+  on: string;
+}
+
 export type ParamDef =
   | TextParam
   | NumberParam
@@ -472,7 +494,8 @@ export type ParamDef =
   | AudioParam
   | MeasuredParam
   | CarriedParam
-  | WrittenParam;
+  | WrittenParam
+  | BoxParam;
 
 export type ParamValue = string | number | boolean;
 

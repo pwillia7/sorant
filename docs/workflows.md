@@ -179,6 +179,25 @@ swap.
   grows the mask by *Mask margin* (64 px by default). The edit is confined to
   the mask: the rest of each frame comes from the source latent
   (`H3RelayApplyEditMask`).
+- **Or a box picks them.** *Or draw a box around them* is drawn on the clip's
+  first frame (`BoxPicker`, a `box` param read by `finalize`). It is kept as
+  fractions of that frame with the frame's size (subject-box.ts), and
+  `swapFrameSize` turns it into the run's pixels by Relay's own
+  `canvas_dimensions` and ComfyUI's ImageScaleToTotalPixels — SAM3_Detect
+  divides a box by the size of the image it is given. With a box, the text
+  conditioning is taken off the detector, so SAM segments whoever is in the
+  box (`bboxes`, its SAM-decoder path), and Select Person takes that mask by
+  index. The rule still decides on a frame where the track drops: Recover
+  Masks reads it from its own `recover_select` node, since an index means
+  nothing on a frame detected afresh.
+- **Tuning, in the Prompt group's advanced controls.** *If SAM loses them*
+  (`recover_empty_frames`): *Find them again* re-detects that frame alone by
+  the rule, with no memory of where they were, which can land on someone else
+  for a moment; *Stop with an error* lets `H3RelayExpandMask` fail the run
+  naming the frames. *Match threshold* is SAM3_Detect's `threshold` on the
+  first frame (0.35 by default): lower finds a small or half-hidden person and
+  more false matches, higher ignores weak ones. Recover Masks keeps its own
+  0.35, which its node does not expose.
 - **The clip is made in windows that continue.** `H3RelayWindowPlan` plans
   windows on H3's 17k+5 grid. From the second window on, each carries the last
   18 frames of what was already made as its history (`H3RelayApplyHistory`),
@@ -240,17 +259,35 @@ swap.
   Prepare Source scales them down.
 - **The estimate** is one window's times the windows (`slicedBy` on the
   measured clip length; slices.ts plans the same 124-frame windows).
+- **The same person in every segment.** Each segment is its own run, and
+  left to the rule a segment would pick again on its own first frame — and
+  follow whoever is biggest *there*. So every segment but the last saves the
+  person's mask (`saveMaskForNext`: MaskToImage, ImageFromBatch, SaveImage
+  into `swap_mask/`) on two frames: the one the next segment's source starts
+  on when it carries on (18 frames before this one's end, the same source
+  frame), and its own last frame, one before where a fresh start begins. The
+  next segment loads it (`subject_mask`, LoadImage of the `[output]` file,
+  ImageToMask) as SAM Video Track's `initial_mask`, so it starts from the
+  person exactly as tracked rather than picking. The form's box is drawn on
+  the clip's first frame and so applies to the first segment only; a segment
+  after one that passed through as the clip's own footage has no mask to
+  carry and picks by the rule.
 - **Redoing a segment.** Each finished segment on the panel has **Redo**,
-  which swaps it again with a new seed, carrying on from the segment before as
-  it did the first time, and **from here**, which redoes it and every segment
-  after it. Redo on its own leaves the next segment carrying on from frames
-  that are no longer there, which can show as a jump at that join; from here
-  costs a run per segment but keeps every join a carry-on. A redo sets the
+  which opens a choice of who it follows: the same person as the segment
+  before (its carried mask, the default), the biggest, leftmost or rightmost,
+  or a box drawn on the frame that segment's run starts from. Then **Redo
+  segment N**, which swaps it again with a new seed, carrying on from the
+  segment before as it did the first time, or **Redo N–last**, which redoes it
+  and every segment after it, each following on from the redone one. A redo
+  of one segment leaves the next carrying on from frames that are no longer
+  there, which can show as a jump at that join; redoing to the end costs a run
+  per segment but keeps every join a carry-on. The choice is kept per segment
+  (`choices`) and applies to the first redone segment only. A redo sets the
   segment's earlier takes aside (`redoneAt`, with its seed in `seeds`), so
   the chain sees it as waiting and sends it, and the swap is joined again
   once every segment is done. A redone segment that had passed through as the
-  clip's own footage is tried as a swap again. The buttons wait while a
-  segment, a join or an upscale is in flight. A redone segment needs its own
+  clip's own footage is tried as a swap again. Redo waits while a segment, a
+  join or an upscale is in flight. A redone segment needs its own
   upscale again; the panel then offers the ones remaining.
 - **Upscaling a chained swap** works as a music video's does: once it is
   joined, the panel offers **Upscale the video** at 1080 px or 4K and 24 or

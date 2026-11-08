@@ -6,6 +6,7 @@ import {
   promptConsumer,
 } from "@/lib/workflows/director";
 import { attachBriefPreviews } from "@/lib/workflows/brief";
+import { BOX_MAX_LENGTH, parseBox } from "@/lib/workflows/subject-box";
 import { modelLoaderIn } from "@/lib/workflows/model-chain";
 import {
   applyLocalRewrite,
@@ -193,6 +194,16 @@ function coerce(
           `${param.label} is limited to ${param.maxLength} characters.`,
           param.id,
         );
+      }
+      return raw;
+    }
+
+    // Drawn, not typed, but it arrives over the same wire: anything that is
+    // not a usable box is refused rather than sent to SAM.
+    case "box": {
+      if (raw == null || raw === "") return "";
+      if (typeof raw !== "string" || raw.length > BOX_MAX_LENGTH || !parseBox(raw)) {
+        throw new ParamError(`${param.label} is not a usable box. Draw it again.`, param.id);
       }
       return raw;
     }
@@ -545,7 +556,9 @@ export function validateWorkflow(workflow: WorkflowDef): string[] {
       param.id !== workflow.directorBypass?.param &&
       // Read by the scene runs or the page rather than by this graph. See
       // `scope`, and check-workflows for what holds a "scenes" one honest.
-      !param.scope
+      !param.scope &&
+      // Turned into graph changes by finalize, which its cases exercise.
+      param.readBy !== "finalize"
     ) {
       problems.push(`Param "${param.id}" has no targets.`);
     }

@@ -3,6 +3,7 @@
 import { ChevronRight, Dices, Pin } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AudioUpload } from "@/components/ui/audio-upload";
+import { BoxPicker, inputVideoUrl } from "@/components/ui/box-picker";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { ImageUpload } from "@/components/ui/image-upload";
@@ -124,6 +125,7 @@ export function ParamForm({
                 key={param.id}
                 param={param}
                 value={values[param.id]}
+                values={values}
                 // Something else is holding this control at a value — see
                 // `pinnedBy`. Resolved here rather than inside the control so
                 // it reads the same submission `paramVisible` just did.
@@ -204,9 +206,12 @@ export function Control({
   disabled,
   error,
   idPrefix = "param",
+  values,
 }: {
   param: ClientParam;
   value: ParamValue | undefined;
+  /** The rest of the form, for a control drawn on another's value — a box on the clip. */
+  values?: Record<string, ParamValue>;
   /** The value this control is held at, if it is. See `pinnedBy`. */
   pinned?: ParamValue;
   onChange: (id: string, value: ParamValue) => void;
@@ -487,6 +492,22 @@ export function Control({
             compact={param.compact}
             disabled={readOnly}
             describedBy={describedBy}
+          />
+        </Field>
+      );
+    }
+
+    case "box": {
+      const clip = String(values?.[param.on] ?? "");
+      if (!clip) return null;
+      return (
+        <Field id={id} label={param.label} help={param.help} hint={param.hint} note={note} error={error}>
+          <BoxPicker
+            src={inputVideoUrl(clip)}
+            value={String(value ?? "")}
+            onChange={(next) => onChange(param.id, next)}
+            disabled={readOnly}
+            label={`${param.label}: the clip's first frame`}
           />
         </Field>
       );

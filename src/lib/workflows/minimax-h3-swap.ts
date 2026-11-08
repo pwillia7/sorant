@@ -1,6 +1,22 @@
 import type { ComfyGraph } from "@/lib/comfy";
 import { ParamError } from "@/lib/params";
-import { CHAIN_OVER_SECONDS, FRESH_EVERY_PARAM, MAX_SWAP_SECONDS, PASS_THROUGH_PARAM, SLICE_FPS } from "./slices";
+import {
+  CHAIN_HISTORY,
+  CHAIN_OVER_SECONDS,
+  FRESH_EVERY_PARAM,
+  MAX_SWAP_SECONDS,
+  PASS_THROUGH_PARAM,
+  SLICE_FPS,
+} from "./slices";
+import {
+  boxInPixels,
+  CARRY_MASK_PREFIX,
+  END_MASK_PREFIX,
+  parseBox,
+  PICK_PARAM,
+  SUBJECT_BOX_PARAM,
+  SUBJECT_MASK_PARAM,
+} from "./subject-box";
 import type { ParamDef, ParamValue, WorkflowDef } from "./types";
 
 /**
@@ -70,6 +86,7 @@ const MEGAPIXELS_PARAM = "megapixels";
 export const SEGMENT_PARAM = "segment";
 /** The previous segment's saved video, "video/name.mp4 [output]", for its history. */
 export const HISTORY_CLIP_PARAM = "history_clip";
+export { CARRY_MASK_PREFIX, END_MASK_PREFIX, PICK_PARAM, SUBJECT_BOX_PARAM, SUBJECT_MASK_PARAM };
 
 /** The author's: no trigger word, and 1.0 is what it was trained at. */
 const SWAP_LORA = "h3_character_swap_v1.5.safetensors";
@@ -325,6 +342,14 @@ const graph: ComfyGraph = {
     inputs: { masks: ["detect", 0], selection: "largest", index: 0 },
     _meta: { title: "Select Person" },
   },
+  // The rule Recover Masks re-picks by on a frame where the track drops. Its
+  // own node, because with a box the person is picked by index — the box's
+  // mask comes first — and an index means nothing on a frame detected afresh.
+  recover_select: {
+    class_type: "H3RelaySelectMask",
+    inputs: { masks: ["detect", 0], selection: "largest", index: 0 },
+    _meta: { title: "Recovery rule" },
+  },
   track: {
     class_type: "SAM3_VideoTrack",
     inputs: {
@@ -351,7 +376,7 @@ const graph: ComfyGraph = {
       source_frames: ["prepare", 5],
       model: ["sam", 0],
       conditioning: ["subject", 0],
-      selection: ["select", 1],
+      selection: ["recover_select", 1],
       recover_empty_frames: true,
     },
     _meta: { title: "Recover Masks" },
@@ -545,6 +570,77 @@ const graph: ComfyGraph = {
   },
 };
 
+/** A carried mask's file, as LoadImage names one in ComfyUI's output folder. */
+const CARRIED_MASK = /^swap_mask\/(carry|end)_\d{5,}_\.png \[output\]$/;
+
+/**
+ * Who the run follows, by what it was given. A carried mask is the person
+ * exactly as the segment before tracked them on this very frame, so tracking
+ * starts from it and nothing is picked. A box is drawn around them: SAM
+ * segments whatever is in it, with no text, and that mask comes first. With
+ * neither, the description and the rule pick, as before. The rule still picks
+ * on a frame where the track drops (`recover_select`), whichever started it.
+ */
+function pickSubject(graph: ComfyGraph, values: Record<string, ParamValue>) {
+  const carried = String(values[SUBJECT_MASK_PARAM] ?? "");
+  if (carried) {
+    if (!CARRIED_MASK.test(carried)) {
+      throw new ParamError("The person's mask from the segment before is not one this can load.", SUBJECT_MASK_PARAM);
+    }
+    graph.carried_mask_image = {
+      class_type: "LoadImage",
+      inputs: { image: carried },
+      _meta: { title: "Load Image (the person, from the segment before)" },
+    };
+    graph.carried_mask = {
+      class_type: "ImageToMask",
+      inputs: { image: ["carried_mask_image", 0], channel: "red" },
+      _meta: { title: "Image To Mask" },
+    };
+    graph.track.inputs.initial_mask = ["carried_mask", 0];
+    return;
+  }
+  const box = parseBox(values[SUBJECT_BOX_PARAM]);
+  if (box) {
+    graph.detect.inputs.bboxes = boxInPixels(box, frameMegapixels(values));
+    // Text and a box together make the box a hint to the text detector; alone,
+    // it is segmented as it is.
+    delete graph.detect.inputs.conditioning;
+    graph.select.inputs.selection = "index";
+    graph.select.inputs.index = 0;
+  }
+}
+
+/**
+ * Save the person's mask where the next segment will need it: on the frame its
+ * source starts when it carries on (CHAIN_HISTORY before this segment's end),
+ * and on this segment's last frame, one before where a fresh start begins.
+ * Indices are into this run's source, which starts `history` frames early.
+ */
+function saveMaskForNext(graph: ComfyGraph, segment: { frames: number; history: number }) {
+  graph.mask_frames = {
+    class_type: "MaskToImage",
+    inputs: { mask: ["recover", 0] },
+    _meta: { title: "Mask To Image" },
+  };
+  const frames: Array<[string, number, string]> = [
+    ["carry", segment.history + segment.frames - CHAIN_HISTORY, CARRY_MASK_PREFIX],
+    ["end", segment.history + segment.frames - 1, END_MASK_PREFIX],
+  ];
+  for (const [name, index, prefix] of frames) {
+    graph[`${name}_mask_frame`] = {
+      class_type: "ImageFromBatch",
+      inputs: { image: ["mask_frames", 0], batch_index: index, length: 1 },
+      _meta: { title: `The person, for the next segment (${name})` },
+    };
+    graph[`${name}_mask_save`] = {
+      class_type: "SaveImage",
+      inputs: { images: [`${name}_mask_frame`, 0], filename_prefix: prefix },
+      _meta: { title: "Save Image" },
+    };
+  }
+}
+
 /**
  * A chained segment as the clip's own footage: its stretch of the source,
  * fitted to the same canvas as the swapped segments and with its own sound, so
@@ -701,7 +797,7 @@ const params: ParamDef[] = [
     targets: [promptTarget, { node: "subject", input: "text", transform: (_v, values) => samSubject(values) }],
   },
   {
-    id: "pick",
+    id: PICK_PARAM,
     label: "If several match",
     type: "select",
     default: "largest",
@@ -710,9 +806,62 @@ const params: ParamDef[] = [
       { value: "leftmost", label: "The one furthest left" },
       { value: "rightmost", label: "The one furthest right" },
     ],
-    help: "Which match on the first frame to follow, when the description fits more than one person.",
+    help: "Which match on the first frame to follow, when the description fits more than one person. Drawing a box around them is surer.",
     group: "Prompt",
-    targets: [{ node: "select", input: "selection" }],
+    targets: [
+      { node: "select", input: "selection" },
+      { node: "recover_select", input: "selection" },
+    ],
+  },
+  {
+    id: SUBJECT_BOX_PARAM,
+    label: "Or draw a box around them",
+    type: "box",
+    default: "",
+    on: VIDEO_PARAM,
+    help: "Drag a box around the person to replace on the clip's first frame. SAM takes whoever is in the box, whatever the description and rule say — the surest way to pick one of several look-alikes.",
+    group: "Prompt",
+    revealedBy: VIDEO_PARAM,
+    readBy: "finalize",
+    targets: [],
+  },
+  {
+    id: SUBJECT_MASK_PARAM,
+    label: "Carried mask",
+    type: "written",
+    default: "",
+    maxLength: 512,
+    group: "Prompt",
+    readBy: "finalize",
+    targets: [],
+  },
+  {
+    id: "track_drop",
+    label: "If SAM loses them",
+    type: "select",
+    default: "recover",
+    options: [
+      { value: "recover", label: "Find them again" },
+      { value: "stop", label: "Stop with an error" },
+    ],
+    help: "When the track drops for a frame — they turn away, someone walks in front — SAM can look again on that frame alone, using the rule above with no memory of where they were, which can land on someone else for a moment. Stop fails the run instead, naming the frames, so nobody else is swapped quietly.",
+    group: "Prompt",
+    advanced: true,
+    targets: [{ node: "recover", input: "recover_empty_frames", transform: (value) => value !== "stop" }],
+  },
+  {
+    id: "sam_threshold",
+    label: "Match threshold",
+    type: "slider",
+    default: 0.35,
+    min: 0.1,
+    max: 0.9,
+    step: 0.05,
+    hint: "Lower finds more; higher only sure matches.",
+    help: "How sure SAM has to be that someone matches the description on the first frame. Lower finds a small, turned or half-hidden person, and more things that are not them; higher ignores weak matches like someone in the background or on a poster. A drawn box does not use it, and nor does the re-find when the track drops, which stays at 0.35.",
+    group: "Prompt",
+    advanced: true,
+    targets: [{ node: "detect", input: "threshold" }],
   },
   {
     id: "character",
@@ -895,6 +1044,8 @@ export const minimaxH3Swap: WorkflowDef = {
         }
       }
     }
+    pickSubject(graph, values);
+    if (segment && segment.frames > 0) saveMaskForNext(graph, segment);
     // At either of Prepare Source's own budgets the frames are already that
     // size, and scaling them again would only nudge the shape off by a few
     // pixels. The scale node's readers read Prepare Source instead.
@@ -946,6 +1097,41 @@ export const minimaxH3Swap: WorkflowDef = {
         [SEGMENT_PARAM]: "1354:0:18",
         [HISTORY_CLIP_PARAM]: "video/MiniMax_H3_swap_00011_.mp4 [output]",
       },
+    },
+    {
+      name: "a box drawn around who to replace",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [SUBJECT_BOX_PARAM]: '{"x":0.4,"y":0.1,"w":0.25,"h":0.85,"sw":1280,"sh":720}',
+        [MEGAPIXELS_PARAM]: 0.7,
+        track_drop: "stop",
+        sam_threshold: 0.5,
+      },
+    },
+    {
+      name: "a middle segment, tracking from the mask the one before saved",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [SEGMENT_PARAM]: "247:123:18",
+        [HISTORY_CLIP_PARAM]: "video/MiniMax_H3_swap_00002_.mp4 [output]",
+        [SUBJECT_MASK_PARAM]: "swap_mask/carry_00001_.png [output]",
+      },
+    },
+    {
+      name: "a carried mask from outside the mask folder",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [SEGMENT_PARAM]: "247:123:18",
+        [HISTORY_CLIP_PARAM]: "video/MiniMax_H3_swap_00002_.mp4 [output]",
+        [SUBJECT_MASK_PARAM]: "../secrets.png [output]",
+      },
+      rejects: "not one this can load",
     },
     {
       name: "a segment whose history climbs out of the output folder",

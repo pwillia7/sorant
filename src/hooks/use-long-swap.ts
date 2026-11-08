@@ -14,6 +14,13 @@ import {
   SLICE_FRAMES,
   type ChainSegment,
 } from "@/lib/workflows/slices";
+import {
+  CARRY_MASK_PREFIX,
+  END_MASK_PREFIX,
+  PICK_PARAM,
+  SUBJECT_BOX_PARAM,
+  SUBJECT_MASK_PARAM,
+} from "@/lib/workflows/subject-box";
 import { defaultValuesFor, type ParamValue, type WorkflowSummary } from "@/lib/workflows/types";
 
 /**
@@ -59,7 +66,24 @@ import { defaultValuesFor, type ParamValue, type WorkflowSummary } from "@/lib/w
  * on costs a run per segment but keeps every join a carry-on. Either way a
  * redo sets the segment's takes aside (`redoneAt`) so the chain sees it as
  * waiting and sends it, and the join follows on its own once all are done.
+ *
+ * **Who is swapped stays who was swapped.** Each segment runs SAM afresh, and
+ * picked by the form's rule alone, a segment could follow someone else — the
+ * one now biggest in frame. So each segment saves the person's mask on the
+ * frame the next one starts on (the swap graph's `saveMaskForNext`), and the
+ * next starts tracking from it (`subject_mask`) instead of picking. The form's
+ * box is drawn on the clip's first frame, so it applies to the first segment
+ * only. A redo can choose for itself (`choices`): a rule, or a box drawn on
+ * that segment's own first frame, in place of carrying on from the one before.
  */
+
+/** How a redone segment picks who to replace, in place of the carried mask. */
+export interface SegmentChoice {
+  /** The rule, as the form's "If several match" takes it. */
+  pick?: string;
+  /** A box drawn on the segment's first frame (subject-box.ts). */
+  box?: string;
+}
 
 const STORAGE_KEY = "sorant-long-swap";
 
@@ -103,6 +127,8 @@ export interface LongSwapProject {
   redoneAt?: Record<number, number>;
   /** The seed each redone segment runs with in place of the swap's own. */
   seeds?: Record<number, number>;
+  /** How a redone segment picks who to replace, where it was told. */
+  choices?: Record<number, SegmentChoice>;
 }
 
 type SubmitModes = RunModes & { lowVram?: boolean; localDirector?: string; rewriteModel?: string };
@@ -139,7 +165,7 @@ export interface LongSwapController {
    * Swap a finished segment again with a new seed — on its own, or with every
    * segment after it (`onward`) so each still carries on from the one before.
    */
-  redo: (index: number, onward: boolean) => void;
+  redo: (index: number, onward: boolean, choice?: SegmentChoice) => void;
   clear: () => void;
 }
 
@@ -224,6 +250,46 @@ function soundtrackedRef(job: Job | undefined): string | null {
   if (!saved) return clipRef(job);
   const path = saved.subfolder ? `${saved.subfolder}/${saved.filename}` : saved.filename;
   return `${path} [output]`;
+}
+
+/**
+ * The mask a finished segment saved for the next one, as LoadImage names a
+ * file in the output folder: the frame the next starts on when it carries on,
+ * or its own last frame when the next starts fresh.
+ */
+export function savedMask(job: Job | undefined, carriesOn: boolean): string | null {
+  if (job?.phase !== "done") return null;
+  const prefix = carriesOn ? CARRY_MASK_PREFIX : END_MASK_PREFIX;
+  const [folder, name] = prefix.split("/");
+  const saved = job.outputs.find(
+    (file) =>
+      (file.type || "output") === "output" &&
+      file.subfolder === folder &&
+      file.filename.startsWith(`${name}_`) &&
+      file.filename.endsWith(".png"),
+  );
+  return saved ? `${folder}/${saved.filename} [output]` : null;
+}
+
+/**
+ * Who a segment replaces, as the swap's params take it. A redo's own choice
+ * first; then, after the first segment, the person as the segment before
+ * tracked them; the first segment uses the form's box or rule.
+ */
+function subjectValues(
+  project: LongSwapProject,
+  index: number,
+  carriesOn: boolean,
+  previous: Job | undefined,
+): Record<string, ParamValue> {
+  const choice = project.choices?.[index];
+  if (choice?.box) return { [SUBJECT_BOX_PARAM]: choice.box, [SUBJECT_MASK_PARAM]: "" };
+  if (choice?.pick) return { [PICK_PARAM]: choice.pick, [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: "" };
+  if (index === 0) return { [SUBJECT_MASK_PARAM]: "" };
+  // The form's box was drawn on the clip's first frame, which is not this one.
+  // With no saved mask (the segment before was the clip's own footage, or ran
+  // before masks were saved), the form's rule picks.
+  return { [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: savedMask(previous, carriesOn) ?? "" };
 }
 
 /** A segment as the swap workflow's `segment` param takes it. */
@@ -323,7 +389,14 @@ export function useLongSwap({
    * length is the segment's own, so the run's estimate is one window's.
    */
   const submitSegment = useCallback(
-    async (current: LongSwapProject, index: number, history: string | null, passThrough = false) => {
+    async (
+      current: LongSwapProject,
+      index: number,
+      history: string | null,
+      passThrough = false,
+      /** The segment before's finished take, for the mask it saved. */
+      previous?: Job,
+    ) => {
       if (!workflow) return null;
       const segment = current.segments[index];
       // A fresh start or a pass-through loads no history, so its source begins
@@ -331,6 +404,7 @@ export function useLongSwap({
       const carried = history && !passThrough ? segment.history : 0;
       const values: Record<string, ParamValue> = {
         ...current.values,
+        ...(passThrough ? {} : subjectValues(current, index, carried > 0, previous)),
         seed: current.seeds?.[index] ?? current.values.seed,
         segment: segmentValue(segment, carried),
         history_clip: carried ? history! : "",
@@ -383,7 +457,7 @@ export function useLongSwap({
     inFlight.current = next;
     setSending(true);
     setError(null);
-    void submitSegment(project, next, history)
+    void submitSegment(project, next, history, false, segmentJobs[next - 1])
       .then((promptId) => {
         if (!promptId) {
           setError(`Segment ${next + 1} was refused. See the message above, then press Resume.`);
@@ -440,7 +514,7 @@ export function useLongSwap({
       const history = passThrough || startsFresh(project, failed) ? null : clipRef(segmentJobs[failed - 1]);
       inFlight.current = failed;
       setSending(true);
-      void submitSegment(project, failed, history, passThrough)
+      void submitSegment(project, failed, history, passThrough, segmentJobs[failed - 1])
         .then((promptId) => {
           if (!promptId) setError(`Segment ${failed + 1} was refused. See the message above.`);
         })
@@ -606,7 +680,7 @@ export function useLongSwap({
   }, [sendUpscaledJoin]);
 
   const redo = useCallback(
-    (index: number, onward: boolean) => {
+    (index: number, onward: boolean, choice?: SegmentChoice) => {
       if (!project) return;
       const at = Date.now();
       const redone = project.segments
@@ -614,16 +688,21 @@ export function useLongSwap({
         .filter((i) => (onward ? i >= index : i === index));
       const redoneAt = { ...project.redoneAt };
       const seeds = { ...project.seeds };
+      const choices = { ...project.choices };
       for (const i of redone) {
         redoneAt[i] = at;
         seeds[i] = Math.floor(Math.random() * 2 ** 31);
+        // Those after the first carry on from it, whatever they were told before.
+        delete choices[i];
       }
+      if (choice && (choice.box || choice.pick)) choices[index] = choice;
       setError(null);
       setProject({
         ...project,
         paused: false,
         redoneAt,
         seeds,
+        choices,
         // Tried for a swap again: if SAM still finds no one, it passes through again.
         passedThrough: project.passedThrough?.filter((i) => !redone.includes(i)),
       });

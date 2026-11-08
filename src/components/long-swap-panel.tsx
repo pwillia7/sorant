@@ -2,11 +2,12 @@
 
 import { Check, Clock3, LoaderCircle, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
-import { startsFresh, type LongSwapController, type SegmentState } from "@/hooks/use-long-swap";
+import { savedMask, startsFresh, type LongSwapController, type SegmentChoice, type SegmentState } from "@/hooks/use-long-swap";
 import { withToken } from "@/lib/client";
 import type { Job } from "@/lib/jobs";
 import { MUSIC_VIDEO_FRAME_RATES, MUSIC_VIDEO_UPSCALE_SIZES } from "@/lib/music-video/project";
 import { segmentFrames, SLICE_FPS } from "@/lib/workflows/slices";
+import { BoxPicker, inputVideoUrl } from "./ui/box-picker";
 import { Badge, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
 import { Segmented } from "./ui/inputs";
@@ -60,6 +61,120 @@ function SegmentBadge({ state, job, original }: { state: SegmentState; job: Job 
   }
 }
 
+type RedoMode = "carry" | "form" | "largest" | "leftmost" | "rightmost" | "box";
+
+const RULES: Array<{ value: RedoMode; label: string }> = [
+  { value: "largest", label: "Biggest" },
+  { value: "leftmost", label: "Leftmost" },
+  { value: "rightmost", label: "Rightmost" },
+  { value: "box", label: "Draw a box" },
+];
+
+/**
+ * Setting up a redo: who the segment follows, and how far the redo reaches.
+ * By default it follows whoever the segment before tracked into it — the
+ * carried mask — or, for the first, whatever the form says. A rule or a box,
+ * drawn on the frame this segment's run starts on, replaces that for it.
+ */
+function RedoEditor({
+  swap,
+  index,
+  onDone,
+}: {
+  swap: LongSwapController;
+  index: number;
+  onDone: () => void;
+}) {
+  const project = swap.project!;
+  const total = project.segments.length;
+  const segment = project.segments[index];
+  const carried = startsFresh(project, index) ? 0 : segment.history;
+  const canCarry = index > 0 && savedMask(swap.segmentJobs[index - 1], carried > 0) !== null;
+  const [mode, setMode] = useState<RedoMode>(index === 0 ? "form" : canCarry ? "carry" : "form");
+  const [box, setBox] = useState("");
+  const clip = String(project.values.source_video ?? "");
+  // The frame SAM looks at first in this segment's run: its own start, or the
+  // history before it when it carries on.
+  const time = (segment.start - carried) / SLICE_FPS;
+
+  const choice: SegmentChoice | undefined =
+    mode === "box" ? { box } : mode === "carry" || mode === "form" ? undefined : { pick: mode };
+  const ready = mode !== "box" || Boolean(box);
+  const send = (onward: boolean) => {
+    swap.redo(index, onward, choice);
+    onDone();
+  };
+
+  const modes: Array<{ value: RedoMode; label: string; title?: string }> = [
+    canCarry
+      ? {
+          value: "carry",
+          label: `Same as segment ${index}`,
+          title: "Starts from whoever the segment before tracked into this one: the same person, with no fresh pick.",
+        }
+      : {
+          value: "form",
+          label: "As in the form",
+          title:
+            index === 0
+              ? "The form's box, or its description and rule."
+              : "The form's description and rule. The segment before saved no mask to carry on from.",
+        },
+    ...RULES,
+  ];
+
+  return (
+    <section className="mt-4 flex flex-col gap-3 rounded-lg border border-border-default bg-bg-subtle p-3" aria-label={`Redo segment ${index + 1}`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-[13px] font-medium text-fg">Redo segment {index + 1}</h3>
+        <span className="text-[12px] text-fg-subtle">A new seed; choose who it follows.</span>
+      </div>
+      <Segmented label="Who it follows" value={mode} onChange={setMode} options={modes} />
+      {mode === "box" ? (
+        clip ? (
+          <BoxPicker
+            src={inputVideoUrl(clip)}
+            time={time}
+            value={box}
+            onChange={setBox}
+            label={`The frame segment ${index + 1} starts from`}
+          />
+        ) : (
+          <p className="text-[12px] text-danger">The clip this swap was made from is not known, so there is no frame to draw on.</p>
+        )
+      ) : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={!ready}
+          onClick={() => send(false)}
+          title={
+            index < total - 1
+              ? `Swaps segment ${index + 1} again, carrying on from the one before, then joins again. Segment ${index + 2} still carries on from this one's old frames, so that join can show a jump; from here on avoids it.`
+              : `Swaps segment ${index + 1} again, carrying on from the one before, then joins again.`
+          }
+        >
+          Redo segment {index + 1}
+        </Button>
+        {index < total - 1 ? (
+          <Button
+            size="sm"
+            disabled={!ready}
+            onClick={() => send(true)}
+            title={`Swaps segment ${index + 1} and the ${total - index - 1} after it again, each carrying on from the one before and following the same person, then joins again.`}
+          >
+            Redo {index + 1}–{total}
+          </Button>
+        ) : null}
+        <Button size="sm" variant="quiet" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 /** "1:05" from seconds. */
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
@@ -104,6 +219,8 @@ function JoinedVideo({ url, label, download }: { url: string; label?: string; do
 export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
   const { project, states, segmentJobs, joinJob, upscaleJobs, upscaledJoinJob } = swap;
   const [chosenSize, setChosenSize] = useState<number>(MUSIC_VIDEO_UPSCALE_SIZES[0].px);
+  /** The segment whose redo is being set up, if one is. */
+  const [redoing, setRedoing] = useState<number | null>(null);
   const [chosenRate, setChosenRate] = useState<number>(MUSIC_VIDEO_FRAME_RATES[0].multiplier);
   /** Each segment's shorter side, by URL, read off its preview as it loads. */
   const [shorterSides, setShorterSides] = useState<Record<string, number>>({});
@@ -345,32 +462,17 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
                   original={project.passedThrough?.includes(index) ?? false}
                 />
                 {states[index] === "done" && canRedo ? (
-                  <span className="ml-auto flex items-center gap-1">
-                    <Button
-                      variant="quiet"
-                      size="xs"
-                      onClick={() => swap.redo(index, false)}
-                      aria-label={`Redo segment ${index + 1}`}
-                      title={
-                        index < total - 1
-                          ? `Swaps segment ${index + 1} again with a new seed, carrying on from the one before, then joins again. Segment ${index + 2} still carries on from this one's old frames, so that join can show a jump; Redo from here avoids it.`
-                          : `Swaps segment ${index + 1} again with a new seed, carrying on from the one before, then joins again.`
-                      }
-                    >
-                      <RotateCcw {...icon} /> Redo
-                    </Button>
-                    {index < total - 1 ? (
-                      <Button
-                        variant="quiet"
-                        size="xs"
-                        onClick={() => swap.redo(index, true)}
-                        aria-label={`Redo from segment ${index + 1} on`}
-                        title={`Swaps segment ${index + 1} and the ${total - index - 1} after it again, each carrying on from the one before, then joins again.`}
-                      >
-                        from here
-                      </Button>
-                    ) : null}
-                  </span>
+                  <Button
+                    variant="quiet"
+                    size="xs"
+                    className="ml-auto"
+                    onClick={() => setRedoing(redoing === index ? null : index)}
+                    aria-expanded={redoing === index}
+                    aria-label={`Redo segment ${index + 1}`}
+                    title={`Swap segment ${index + 1} again with a new seed — and choose who it follows.`}
+                  >
+                    <RotateCcw {...icon} /> Redo
+                  </Button>
                 ) : null}
                 {index > 0 && startsFresh(project, index) && !project.passedThrough?.includes(index) ? (
                   <span
@@ -385,6 +487,15 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
           );
         })}
       </ol>
+
+      {redoing !== null && redoing < total && canRedo && states[redoing] === "done" ? (
+        <RedoEditor
+          key={redoing}
+          swap={swap}
+          index={redoing}
+          onDone={() => setRedoing(null)}
+        />
+      ) : null}
     </Panel>
   );
 }
