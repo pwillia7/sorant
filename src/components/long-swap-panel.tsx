@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Clock3, LoaderCircle, X } from "lucide-react";
+import { Check, Clock3, LoaderCircle, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
 import { startsFresh, type LongSwapController, type SegmentState } from "@/hooks/use-long-swap";
 import { withToken } from "@/lib/client";
@@ -139,6 +139,9 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
     const side = Math.min(element.videoWidth, element.videoHeight);
     if (side > 0 && shorterSides[url] !== side) setShorterSides((current) => ({ ...current, [url]: side }));
   };
+  // Redo waits for the chain and any join to settle, so one is never sent
+  // underneath a segment still carrying on from the take it replaces.
+  const canRedo = !active && !joining && !upscaling && !upscaledJoining && !swap.sending;
   const showUpscale = Boolean(joined) && swap.canUpscale && !upscaling && !upscaledJoining && !upscaled;
 
   const hint = joined
@@ -341,6 +344,34 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
                   job={job}
                   original={project.passedThrough?.includes(index) ?? false}
                 />
+                {states[index] === "done" && canRedo ? (
+                  <span className="ml-auto flex items-center gap-1">
+                    <Button
+                      variant="quiet"
+                      size="xs"
+                      onClick={() => swap.redo(index, false)}
+                      aria-label={`Redo segment ${index + 1}`}
+                      title={
+                        index < total - 1
+                          ? `Swaps segment ${index + 1} again with a new seed, carrying on from the one before, then joins again. Segment ${index + 2} still carries on from this one's old frames, so that join can show a jump; Redo from here avoids it.`
+                          : `Swaps segment ${index + 1} again with a new seed, carrying on from the one before, then joins again.`
+                      }
+                    >
+                      <RotateCcw {...icon} /> Redo
+                    </Button>
+                    {index < total - 1 ? (
+                      <Button
+                        variant="quiet"
+                        size="xs"
+                        onClick={() => swap.redo(index, true)}
+                        aria-label={`Redo from segment ${index + 1} on`}
+                        title={`Swaps segment ${index + 1} and the ${total - index - 1} after it again, each carrying on from the one before, then joins again.`}
+                      >
+                        from here
+                      </Button>
+                    ) : null}
+                  </span>
+                ) : null}
                 {index > 0 && startsFresh(project, index) && !project.passedThrough?.includes(index) ? (
                   <span
                     className="text-[11px] text-fg-subtle"
