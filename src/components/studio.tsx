@@ -1029,6 +1029,7 @@ function Workbench({
   const longSwap = useLongSwap({
     workflow: swapWorkflow,
     stitchWorkflow: SWAP_STITCH,
+    upscaleWorkflow: workflows.find((workflow) => workflow.clipTarget?.action === "upscale"),
     jobs,
   });
   /** The planned video on screen, or the music video's when neither is. */

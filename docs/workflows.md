@@ -240,6 +240,18 @@ swap.
   Prepare Source scales them down.
 - **The estimate** is one window's times the windows (`slicedBy` on the
   measured clip length; slices.ts plans the same 124-frame windows).
+- **Upscaling a chained swap** works as a music video's does: once it is
+  joined, the panel offers **Upscale the video** at 1080 px or 4K and 24 or
+  48 fps with RTX Video. Each segment goes through [Upscale](#upscale) on its
+  own — Upscale takes a minute at most and a swap runs to eight, and a failed
+  segment then costs only its own upscale — and once they are all done the
+  upscaled segments are joined by the same `multi-scene-stitch`, reading each
+  upscale's file with sound, into a second video beside the first. The
+  upscales are found by their history tags (`part: "upscale"`), each tied to
+  the take it was made from by `derivedFrom`, so a segment swapped again
+  needs its own upscale again. A size no bigger than the segments already are
+  is not offered. A swap of 20 s or less is one run, and its result's own
+  Upscale button does the same.
 
 It needs, on the ComfyUI machine: the H3 Relay pack, SAM 3.1
 (`checkpoints/sam3.1_multiplex_fp16.safetensors`) and the FL2V Turbo LoRA
@@ -1149,7 +1161,8 @@ SeedVR2, so a 4K clip never holds more than a couple of seconds of frames in
 RAM. **Mode** is NVIDIA's `ULTRA` (for compressed video, which every H3 clip
 is) or `HIGHBITRATE_ULTRA` (for a clean source). **Frame rate** works as below. Expect well under a minute for a 15-second clip at 1080 px.
 
-A music video's upscale uses RTX Video, at 1080 or 4K and 24 or 48 fps.
+A music video's upscale uses RTX Video, at 1080 or 4K and 24 or 48 fps, and
+so does a chained Character swap's — see [Character swap](#character-swap).
 
 ### SeedVR2
 
