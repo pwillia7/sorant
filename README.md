@@ -36,7 +36,7 @@ soundtrack:
 - **Character swap** — puts the person in your picture in place of one person
   in a clip you have. SAM finds and tracks them, so everyone and everything
   else stays, and long clips are made in windows that carry on from each
-  other.
+  other. A long swap can be upscaled to 1080 px or 4K once it is joined.
 - **Extend** — carries a clip on from where it stopped.
 - **Music video** — a whole song and one idea: the song is cut into scenes on
   its beats, each scene is planned and rendered with the song under it, and

@@ -1,12 +1,15 @@
 "use client";
 
 import { Check, Clock3, LoaderCircle, X } from "lucide-react";
+import { useState } from "react";
 import { startsFresh, type LongSwapController, type SegmentState } from "@/hooks/use-long-swap";
 import { withToken } from "@/lib/client";
 import type { Job } from "@/lib/jobs";
+import { MUSIC_VIDEO_FRAME_RATES, MUSIC_VIDEO_UPSCALE_SIZES } from "@/lib/music-video/project";
 import { segmentFrames, SLICE_FPS } from "@/lib/workflows/slices";
 import { Badge, Panel, PanelHeader } from "./ui/panel";
-import { Button, buttonClasses } from "./ui/button";
+import { Button, buttonClasses, Spinner } from "./ui/button";
+import { Segmented } from "./ui/inputs";
 
 /**
  * A long Character swap in progress: its segments, how far the chain has got,
@@ -67,8 +70,43 @@ function videoUrl(job: Job | undefined): string | undefined {
     : undefined;
 }
 
+const FAILED_PHASES = new Set(["error", "cancelled", "unknown"]);
+
+/** "12 min" or "1.5 h": roughly how long an upscale of this many seconds of clip takes. */
+function upscaleTime(seconds: number, px: number, multiplier: number): string {
+  const size = MUSIC_VIDEO_UPSCALE_SIZES.find((option) => option.px === px) ?? MUSIC_VIDEO_UPSCALE_SIZES[0];
+  const rate =
+    MUSIC_VIDEO_FRAME_RATES.find((option) => option.multiplier === multiplier) ?? MUSIC_VIDEO_FRAME_RATES[0];
+  const hours = (seconds * size.secondsPerSecond * rate.timeFactor[size.px]) / 3600;
+  return hours < 1 ? `${Math.max(1, Math.round(hours * 60))} min` : `${hours.toFixed(1)} h`;
+}
+
+function JoinedVideo({ url, label, download }: { url: string; label?: string; download: string }) {
+  return (
+    <div className="mb-5">
+      {label ? <p className="label-caps mb-1.5 text-fg-muted">{label}</p> : null}
+      <video
+        src={withToken(url)}
+        controls
+        playsInline
+        preload="metadata"
+        className="mx-auto block max-h-[75vh] w-full rounded-lg border border-border-default bg-black object-contain"
+      />
+      <div className="mt-2 flex gap-2">
+        <a href={withToken(url)} download={download} className={buttonClasses({ variant: "secondary", size: "sm" })}>
+          Download
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
-  const { project, states, segmentJobs, joinJob } = swap;
+  const { project, states, segmentJobs, joinJob, upscaleJobs, upscaledJoinJob } = swap;
+  const [chosenSize, setChosenSize] = useState<number>(MUSIC_VIDEO_UPSCALE_SIZES[0].px);
+  const [chosenRate, setChosenRate] = useState<number>(MUSIC_VIDEO_FRAME_RATES[0].multiplier);
+  /** Each segment's shorter side, by URL, read off its preview as it loads. */
+  const [shorterSides, setShorterSides] = useState<Record<string, number>>({});
   if (!project) return null;
 
   const total = project.segments.length;
@@ -80,6 +118,28 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
   const joinFailed = joinJob !== undefined && ["error", "cancelled", "unknown"].includes(joinJob.phase);
   const stopped = Boolean(project.paused) || failed;
   const passed = (project.passedThrough ?? []).map((index) => index + 1);
+
+  // The upscale: offered once the swap is joined, at a size that would make
+  // the smallest segment bigger — Upscale scales a larger source down.
+  const upscaled = videoUrl(upscaledJoinJob);
+  const upscalesDone = upscaleJobs.filter((job) => job?.phase === "done").length;
+  const upscaleRemaining = upscaleJobs.filter((job) => !job || FAILED_PHASES.has(job.phase)).length;
+  const upscaling = upscaleJobs.some((job) => job && (job.phase === "queued" || job.phase === "running"));
+  const upscaledJoining =
+    upscaledJoinJob !== undefined && (upscaledJoinJob.phase === "queued" || upscaledJoinJob.phase === "running");
+  const measured = segmentJobs
+    .map((job) => videoUrl(job))
+    .flatMap((url) => (url && shorterSides[url] !== undefined ? [shorterSides[url]] : []));
+  const smallestSide = measured.length > 0 ? Math.min(...measured) : undefined;
+  const enlarges = (px: number) => smallestSide === undefined || px > smallestSide;
+  const offered = MUSIC_VIDEO_UPSCALE_SIZES.filter(({ px }) => enlarges(px));
+  const upscaleSize = project.upscaleSize ?? (enlarges(chosenSize) ? chosenSize : (offered[0]?.px ?? chosenSize));
+  const upscaleRate = project.upscaleFrameRate ?? chosenRate;
+  const measure = (url: string, element: HTMLVideoElement) => {
+    const side = Math.min(element.videoWidth, element.videoHeight);
+    if (side > 0 && shorterSides[url] !== side) setShorterSides((current) => ({ ...current, [url]: side }));
+  };
+  const showUpscale = Boolean(joined) && swap.canUpscale && !upscaling && !upscaledJoining && !upscaled;
 
   const hint = joined
     ? "Joined, with the clip's own soundtrack."
@@ -163,25 +223,89 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
         </p>
       ) : null}
 
+      {upscaled ? (
+        <JoinedVideo url={upscaled} label="Upscaled" download="character-swap-upscaled.mp4" />
+      ) : null}
       {joined ? (
-        <div className="mb-5">
-          <video
-            src={withToken(joined)}
-            controls
-            playsInline
-            preload="metadata"
-            className="mx-auto block max-h-[75vh] w-full rounded-lg border border-border-default bg-black object-contain"
-          />
-          <div className="mt-2 flex gap-2">
-            <a
-              href={withToken(joined)}
-              download="character-swap.mp4"
-              className={buttonClasses({ variant: "secondary", size: "sm" })}
+        <JoinedVideo url={joined} label={upscaled ? "Original" : undefined} download="character-swap.mp4" />
+      ) : null}
+
+      {showUpscale ? (
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          {!project.upscaleSize && offered.length === 0 ? (
+            <span className="text-[12px] text-fg-subtle">
+              Already {smallestSide} px on its shorter side, so upscaling would not make it any bigger.
+            </span>
+          ) : upscaleRemaining === 0 ? (
+            <Button
+              size="sm"
+              onClick={() => void swap.joinUpscaled()}
+              loading={swap.sending}
+              title="Every segment is upscaled. Joins them into the upscaled video again, after the last try failed."
             >
-              Download
-            </a>
-          </div>
+              Join the upscaled segments
+            </Button>
+          ) : (
+            <>
+              <Button
+                size="sm"
+                onClick={() => void swap.upscaleAll(upscaleSize, upscaleRate)}
+                loading={swap.sending}
+                title={`Upscales every segment to ${upscaleSize} px${upscaleRate > 1 ? ` at ${24 * upscaleRate} fps` : ""} with RTX Video, then joins them into a second video. Roughly ${upscaleTime(project.seconds, upscaleSize, upscaleRate)} for this clip.`}
+              >
+                {upscaleRemaining < upscaleJobs.length ? `Upscale the ${upscaleRemaining} remaining` : "Upscale the video"}
+              </Button>
+              {project.upscaleSize ? (
+                <span className="text-[12px] text-fg-subtle">
+                  at {project.upscaleSize} px{upscaleRate > 1 ? `, ${24 * upscaleRate} fps` : ""}, like the rest
+                </span>
+              ) : (
+                <>
+                  <Segmented
+                    label="Upscale size"
+                    value={upscaleSize}
+                    onChange={setChosenSize}
+                    options={MUSIC_VIDEO_UPSCALE_SIZES.map(({ px }) => ({
+                      value: px,
+                      disabled: !enlarges(px),
+                      title: enlarges(px) ? undefined : `The segments are already ${smallestSide} px on their shorter side`,
+                      label: (
+                        <>
+                          {px === 2160 ? "4K" : `${px} px`}
+                          <span className="ml-1.5 font-normal text-fg-subtle">
+                            ~{upscaleTime(project.seconds, px, upscaleRate)}
+                          </span>
+                        </>
+                      ),
+                    }))}
+                  />
+                  <Segmented
+                    label="Upscale frame rate"
+                    value={upscaleRate}
+                    onChange={setChosenRate}
+                    options={MUSIC_VIDEO_FRAME_RATES.map(({ multiplier, label }) => ({
+                      value: multiplier,
+                      label,
+                      title:
+                        multiplier > 1
+                          ? "Makes a new frame between every pair with RIFE, for smoother motion. The sound is unchanged."
+                          : "Keeps the swap's own frames.",
+                    }))}
+                  />
+                </>
+              )}
+            </>
+          )}
         </div>
+      ) : null}
+
+      {upscaling || upscaledJoining ? (
+        <p className="mb-4 flex items-center gap-2 text-[13px] text-fg-muted" role="status">
+          <Spinner className="size-3.5" />
+          {upscaledJoining
+            ? "Joining the upscaled segments…"
+            : `Upscaling: ${upscalesDone} of ${upscaleJobs.length} segments`}
+        </p>
       ) : null}
 
       <ol className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2">
@@ -207,6 +331,7 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
                   playsInline
                   preload="metadata"
                   controls
+                  onLoadedMetadata={(event) => measure(url, event.currentTarget)}
                   className="aspect-video max-h-40 w-full rounded bg-black object-contain"
                 />
               ) : null}

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JobsController } from "@/hooks/use-jobs";
-import type { Job, JobOutput, MusicVideoTag } from "@/lib/jobs";
+import { api, ApiError } from "@/lib/client";
+import type { Job, JobOutput, MusicVideoPart, MusicVideoTag } from "@/lib/jobs";
 import type { RunModes } from "@/lib/workflows/modes";
 import {
   chainSegments,
@@ -13,7 +14,7 @@ import {
   SLICE_FRAMES,
   type ChainSegment,
 } from "@/lib/workflows/slices";
-import type { ParamValue, WorkflowSummary } from "@/lib/workflows/types";
+import { defaultValuesFor, type ParamValue, type WorkflowSummary } from "@/lib/workflows/types";
 
 /**
  * A Character swap of a clip too long for one run, as a chain of runs.
@@ -42,6 +43,14 @@ import type { ParamValue, WorkflowSummary } from "@/lib/workflows/types";
  * - **A pass-through.** A segment where SAM finds no one to replace (the shot
  *   has moved off them) cannot be swapped, so it is sent again as the clip's
  *   own footage and the chain carries on. The segment after it starts fresh.
+ *
+ * Once joined, the swap can be upscaled the way a music video is: each segment
+ * through the Upscale workflow at one size and frame rate, then the upscaled
+ * segments joined again — a second video beside the first. Segment by segment
+ * because Upscale takes a minute of video at most and a swap runs to eight,
+ * and because a failure then costs one segment's upscale, not the lot. The
+ * upscales are found by their history tags too, each tied to the take it was
+ * made from by `derivedFrom`, so a segment swapped again needs its own again.
  */
 
 const STORAGE_KEY = "sorant-long-swap";
@@ -63,6 +72,22 @@ export interface LongSwapProject {
   freshEvery?: number;
   /** Segments sent as the clip's own footage, because SAM found no one in them. */
   passedThrough?: number[];
+  /**
+   * The shorter side the segments are upscaled to, set when the first upscale
+   * is sent: one size for all of them, or the join has two to reconcile.
+   */
+  upscaleSize?: number;
+  /** The frame-rate multiplier the segments are upscaled with, fixed with the size. */
+  upscaleFrameRate?: number;
+  /** Set once someone asks for the upscaled video; the join of it follows on its own. */
+  upscaleRequested?: boolean;
+  /**
+   * The upscales the upscaled join last went ahead with on its own, as their
+   * prompt ids in order. Once per set: a join that failed is offered again
+   * rather than sent again, since one that took ComfyUI down would do so every
+   * time the page came back.
+   */
+  upscaledJoinTried?: string;
 }
 
 type SubmitModes = RunModes & { lowVram?: boolean; localDirector?: string; rewriteModel?: string };
@@ -76,12 +101,25 @@ export interface LongSwapController {
   states: SegmentState[];
   /** The newest join, if one has been sent. */
   joinJob: Job | undefined;
+  /** Each segment's upscale of its current take, where it has one. */
+  upscaleJobs: Array<Job | undefined>;
+  /** The newest join of the upscaled segments, if one has been sent. */
+  upscaledJoinJob: Job | undefined;
+  /** Whether the Upscale workflow is there to send segments to. */
+  canUpscale: boolean;
   sending: boolean;
   error: string | null;
   start: (values: Record<string, ParamValue>, modes: SubmitModes) => Promise<void>;
   resume: () => void;
   stop: () => Promise<void>;
   join: () => Promise<void>;
+  /**
+   * Upscale every segment without a good upscale of its current take, then
+   * join them. The size and rate are the project's once the first has gone.
+   */
+  upscaleAll: (size: number, frameRate: number) => Promise<void>;
+  /** Join the upscaled segments; on its own once they are all done, this is for after that failed. */
+  joinUpscaled: () => Promise<void>;
   clear: () => void;
 }
 
@@ -152,16 +190,35 @@ export function clipRef(job: Job | undefined): string | null {
   return `${path} [output]`;
 }
 
+/**
+ * The upscale's copy of a segment with its sound. VHS writes a silent file and
+ * an "-audio" one beside it; the join keeps each segment's own stretch of the
+ * clip's sound, so it reads the one with it.
+ */
+const SOUNDTRACKED = /^(.+_\d{5,})-audio(\.[a-z0-9]+)$/i;
+function soundtrackedRef(job: Job | undefined): string | null {
+  const saved =
+    job?.phase === "done"
+      ? job.outputs.find((file) => (file.type || "output") === "output" && SOUNDTRACKED.test(file.filename))
+      : undefined;
+  if (!saved) return clipRef(job);
+  const path = saved.subfolder ? `${saved.subfolder}/${saved.filename}` : saved.filename;
+  return `${path} [output]`;
+}
+
 /** A segment as the swap workflow's `segment` param takes it. */
 const segmentValue = (segment: ChainSegment, history: number) => `${segment.start}:${segment.frames}:${history}`;
 
 export function useLongSwap({
   workflow,
   stitchWorkflow,
+  upscaleWorkflow,
   jobs,
 }: {
   workflow: WorkflowSummary | undefined;
   stitchWorkflow: WorkflowSummary | undefined;
+  /** Whichever workflow the Upscale button sends a clip to. */
+  upscaleWorkflow: WorkflowSummary | undefined;
   jobs: JobsController;
 }): LongSwapController {
   const [project, setProject] = useState<LongSwapProject | null>(() => readProject());
@@ -170,7 +227,7 @@ export function useLongSwap({
   useEffect(() => writeProject(project), [project]);
 
   const tagFor = useCallback(
-    (current: LongSwapProject, part: "scene" | "join", scene?: number): MusicVideoTag => ({
+    (current: LongSwapProject, part: MusicVideoPart, scene?: number): MusicVideoTag => ({
       projectId: current.id,
       part,
       scene,
@@ -184,22 +241,28 @@ export function useLongSwap({
   /** Each segment's runs newest first, and the joins, from the history's tags. */
   const runs = useMemo(() => {
     const segments = new Map<number, Job[]>();
+    const upscales = new Map<number, Job[]>();
     const joins: Job[] = [];
-    if (!project) return { segments, joins };
+    const upscaledJoins: Job[] = [];
+    if (!project) return { segments, upscales, joins, upscaledJoins };
+    const add = (map: Map<number, Job[]>, index: number, job: Job) => {
+      const list = map.get(index) ?? [];
+      list.push(job);
+      map.set(index, list);
+    };
     for (const job of jobs.jobs) {
       const tag = job.musicVideo;
       if (tag?.projectId !== project.id) continue;
       if (tag.part === "join") joins.push(job);
-      else if (tag.part === "scene" && tag.scene !== undefined) {
-        const list = segments.get(tag.scene) ?? [];
-        list.push(job);
-        segments.set(tag.scene, list);
-      }
+      else if (tag.part === "upscaled-join") upscaledJoins.push(job);
+      else if (tag.part === "scene" && tag.scene !== undefined) add(segments, tag.scene, job);
+      else if (tag.part === "upscale" && tag.scene !== undefined) add(upscales, tag.scene, job);
     }
     const newest = (a: Job, b: Job) => b.submittedAt - a.submittedAt;
-    for (const list of segments.values()) list.sort(newest);
+    for (const list of [...segments.values(), ...upscales.values()]) list.sort(newest);
     joins.sort(newest);
-    return { segments, joins };
+    upscaledJoins.sort(newest);
+    return { segments, upscales, joins, upscaledJoins };
   }, [project, jobs.jobs]);
 
   const segmentJobs = useMemo(
@@ -208,6 +271,16 @@ export function useLongSwap({
   );
   const states = useMemo(() => segmentJobs.map(stateOf), [segmentJobs]);
   const joinJob = runs.joins[0];
+  // An upscale counts for a segment only while the take it was made from is
+  // still that segment's newest.
+  const upscaleJobs = useMemo(
+    () =>
+      segmentJobs.map((take, index) =>
+        take ? runs.upscales.get(index)?.find((job) => job.derivedFrom === take.promptId) : undefined,
+      ),
+    [segmentJobs, runs],
+  );
+  const upscaledJoinJob = runs.upscaledJoins[0];
 
   /**
    * Send one segment, carrying on from the one before's video. Its clip
@@ -391,6 +464,110 @@ export function useLongSwap({
     void join();
   }, [project, stitchWorkflow, segmentJobs, joinJob, join]);
 
+  /**
+   * Send every segment without a good upscale to the Upscale workflow, at its
+   * defaults bar the size and frame rate. One after another into the queue;
+   * the join follows on its own once they are all done.
+   */
+  const upscaleAll = useCallback(
+    async (size: number, frameRate: number) => {
+      if (!project || !upscaleWorkflow) return;
+      if (!segmentJobs.every((job) => job?.phase === "done")) {
+        setError("Every segment needs a finished take before it can be upscaled.");
+        return;
+      }
+      const current: LongSwapProject = {
+        ...project,
+        upscaleRequested: true,
+        upscaleSize: project.upscaleSize ?? size,
+        upscaleFrameRate: project.upscaleFrameRate ?? frameRate,
+      };
+      setProject(current);
+      setError(null);
+      setSending(true);
+      try {
+        for (let index = 0; index < segmentJobs.length; index += 1) {
+          const existing = upscaleJobs[index];
+          if (existing && !FAILED.has(existing.phase)) continue;
+          const take = segmentJobs[index]!;
+          const output = take.outputs.find(
+            (file) => (file.type || "output") === "output" && /\.(mp4|webm|mov|mkv)$/i.test(file.filename),
+          );
+          if (!output) {
+            setError(`Segment ${index + 1} has no saved video to upscale.`);
+            return;
+          }
+          // Into ComfyUI's input folder, where the upscale's loader reads — the
+          // same copy the Upscale button makes.
+          const { ref } = await api<{ ref: string }>("/api/remix", {
+            method: "POST",
+            body: JSON.stringify({ filename: output.filename, subfolder: output.subfolder, type: output.type }),
+          });
+          const promptId = await jobs.submit(
+            upscaleWorkflow,
+            {
+              ...defaultValuesFor(upscaleWorkflow),
+              source_video: ref,
+              shorter_side: current.upscaleSize!,
+              frame_rate: String(current.upscaleFrameRate ?? 1),
+            },
+            { derivedFrom: take.promptId, musicVideo: tagFor(current, "upscale", index) },
+          );
+          if (!promptId) return;
+        }
+      } catch (cause) {
+        setError(cause instanceof ApiError ? cause.message : "A segment could not be sent to the upscale.");
+      } finally {
+        setSending(false);
+      }
+    },
+    [project, upscaleWorkflow, segmentJobs, upscaleJobs, jobs, tagFor],
+  );
+
+  const allUpscaled = upscaleJobs.length > 0 && upscaleJobs.every((job) => job?.phase === "done");
+  const upscaleSet = upscaleJobs.map((job) => job?.promptId ?? "").join(",");
+  const joiningUpscaled = useRef(false);
+  const sendUpscaledJoin = useCallback(async () => {
+    if (!project || !stitchWorkflow || !allUpscaled || joiningUpscaled.current) return;
+    const clips = upscaleJobs.map((job, index) => {
+      const file = soundtrackedRef(job);
+      const frames = segmentFrames(project.segments[index], project.seconds);
+      // By time, so a segment at 48 fps trims the same as at 24.
+      return file ? { file, seconds: frames / SLICE_FPS } : null;
+    });
+    if (clips.some((clip) => clip === null)) {
+      setError("Every segment needs a finished upscale before they can be joined.");
+      return;
+    }
+    joiningUpscaled.current = true;
+    setProject((previous) => (previous ? { ...previous, upscaledJoinTried: upscaleSet } : previous));
+    setError(null);
+    try {
+      const promptId = await jobs.submit(
+        stitchWorkflow,
+        { scenes: JSON.stringify(clips), prompt: `Character swap, upscaled: ${project.title}` },
+        { derivedFrom: segmentJobs[0]?.promptId, musicVideo: tagFor(project, "upscaled-join") },
+      );
+      if (!promptId) setError("The join of the upscaled segments was refused. See the message above.");
+    } finally {
+      joiningUpscaled.current = false;
+    }
+  }, [project, stitchWorkflow, allUpscaled, upscaleJobs, upscaleSet, segmentJobs, jobs, tagFor]);
+
+  // Join the upscales on their own once they are all done, once per set.
+  useEffect(() => {
+    if (!project?.upscaleRequested || !allUpscaled) return;
+    const joined =
+      upscaledJoinJob !== undefined &&
+      upscaledJoinJob.submittedAt >= Math.max(...upscaleJobs.map((job) => job!.submittedAt));
+    if (joined || project.upscaledJoinTried === upscaleSet) return;
+    void sendUpscaledJoin();
+  }, [project, allUpscaled, upscaleJobs, upscaleSet, upscaledJoinJob, sendUpscaledJoin]);
+
+  const joinUpscaled = useCallback(async () => {
+    await sendUpscaledJoin();
+  }, [sendUpscaledJoin]);
+
   const clear = useCallback(() => {
     setProject(null);
     setError(null);
@@ -402,12 +579,17 @@ export function useLongSwap({
     segmentJobs,
     states,
     joinJob,
+    upscaleJobs,
+    upscaledJoinJob,
+    canUpscale: upscaleWorkflow !== undefined && stitchWorkflow !== undefined,
     sending,
     error,
     start,
     resume,
     stop,
     join,
+    upscaleAll,
+    joinUpscaled,
     clear,
   };
 }
