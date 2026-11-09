@@ -312,13 +312,14 @@ swap.
 - **Redoing a segment.** Each finished segment on the panel has **Redo**,
   which opens a choice of who it follows: the same person as the segment
   before (its carried mask, the default), the biggest, leftmost or rightmost,
-  or a box drawn on the frame that segment's run starts from. Then **Redo
-  segment N**, which swaps it again with a new seed, carrying on from the
-  segment before as it did the first time, or **Redo N–last**, which redoes it
-  and every segment after it, each following on from the redone one. A redo
-  of one segment leaves the next carrying on from frames that are no longer
-  there, which can show as a jump at that join; redoing to the end costs a run
-  per segment but keeps every join a carry-on. The choice is kept per segment
+  or a box drawn on the frame that segment's run starts from. The redo
+  reaches to the next segment that starts at a cut or a fresh start
+  (`shotEndOf`): **Redo segments N–M** swaps them again with a new seed, each
+  carrying on from the one before, so no segment left alone carries on from
+  frames that are gone and no join shows a jump. When the next segment
+  already starts fresh, that is just **Redo segment N**. **Only segment N**
+  is offered beside it, cheaper, for when a jump at the next join is
+  acceptable. The choice is kept per segment
   (`choices`) and applies to the first redone segment only. A redo sets the
   segment's earlier takes aside (`redoneAt`, with its seed in `seeds`), so
   the chain sees it as waiting and sends it, and the swap is joined again

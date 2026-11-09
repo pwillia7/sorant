@@ -2,7 +2,7 @@
 
 import { Check, Clock3, LoaderCircle, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
-import { savedMask, startsFresh, type LongSwapController, type SegmentChoice, type SegmentState } from "@/hooks/use-long-swap";
+import { savedMask, shotEndOf, startsFresh, type LongSwapController, type SegmentChoice, type SegmentState } from "@/hooks/use-long-swap";
 import { withToken } from "@/lib/client";
 import type { Job } from "@/lib/jobs";
 import { MUSIC_VIDEO_FRAME_RATES, MUSIC_VIDEO_UPSCALE_SIZES } from "@/lib/music-video/project";
@@ -136,8 +136,11 @@ function RedoEditor({
   const choice: SegmentChoice | undefined =
     mode === "box" ? { box } : mode === "carry" || mode === "form" ? undefined : { pick: mode };
   const ready = mode !== "box" || Boolean(box);
-  const send = (onward: boolean) => {
-    swap.redo(index, onward, choice);
+  // How far a redo has to reach for no segment after it to carry on from
+  // frames that are gone: to the next cut or fresh start.
+  const end = shotEndOf(project, index);
+  const send = (through: number) => {
+    swap.redo(index, through, choice);
     onDone();
   };
 
@@ -200,23 +203,26 @@ function RedoEditor({
           size="sm"
           variant="primary"
           disabled={!ready}
-          onClick={() => send(false)}
+          onClick={() => send(end)}
           title={
-            index < total - 1
-              ? `Swaps segment ${index + 1} again, carrying on from the one before, then joins again. Segment ${index + 2} still carries on from this one's old frames, so that join can show a jump; from here on avoids it.`
-              : `Swaps segment ${index + 1} again, carrying on from the one before, then joins again.`
+            end === index + 1
+              ? index < total - 1
+                ? `Swaps segment ${index + 1} again, then joins again. Segment ${index + 2} starts fresh, without carrying on from this one, so the join shows no jump.`
+                : `Swaps segment ${index + 1} again, then joins again.`
+              : `Swaps segments ${index + 1} to ${end} again, each carrying on from the one before, then joins again. ${end < total ? `Segment ${end + 1} starts fresh, so nothing is left carrying on from the old take and there is no jump.` : "They run to the end of the clip, so there is no jump."}`
           }
         >
-          Redo segment {index + 1}
+          {end === index + 1 ? `Redo segment ${index + 1}` : `Redo segments ${index + 1}–${end}`}
         </Button>
-        {index < total - 1 ? (
+        {end > index + 1 ? (
           <Button
             size="sm"
+            variant="quiet"
             disabled={!ready}
-            onClick={() => send(true)}
-            title={`Swaps segment ${index + 1} and the ${total - index - 1} after it again, each carrying on from the one before and following the same person, then joins again.`}
+            onClick={() => send(index + 1)}
+            title={`Swaps only segment ${index + 1} again. Segment ${index + 2} still carries on from this one's old frames, so that join can show a jump.`}
           >
-            Redo {index + 1}–{total}
+            Only segment {index + 1}
           </Button>
         ) : null}
         <Button size="sm" variant="quiet" onClick={onDone}>

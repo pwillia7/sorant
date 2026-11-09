@@ -191,10 +191,11 @@ export interface LongSwapController {
   /** Join the upscaled segments; on its own once they are all done, this is for after that failed. */
   joinUpscaled: () => Promise<void>;
   /**
-   * Swap a finished segment again with a new seed — on its own, or with every
-   * segment after it (`onward`) so each still carries on from the one before.
+   * Swap finished segments again with a new seed: `index` up to, not
+   * including, `through` — each after the first carrying on from the one
+   * before. Up to `shotEndOf` leaves no seam a later segment carries on from.
    */
-  redo: (index: number, onward: boolean, choice?: SegmentChoice) => void;
+  redo: (index: number, through: number, choice?: SegmentChoice) => void;
   /**
    * End planning: split the clip at these cuts, with who each shot replaces,
    * and start sending. A clip short enough for one run with no cuts in it is
@@ -228,6 +229,20 @@ const FAILED = new Set<Job["phase"]>(["error", "cancelled", "unknown"]);
 
 /** Relay's error when the first frame has no one matching "Who to replace". */
 const NO_SUBJECT = /SAM found no subject/i;
+
+/**
+ * Where the run of carried-on segments holding `index` ends: the next segment
+ * that starts at a cut or a fresh start, or the end of the clip. That segment
+ * takes nothing from the one before it, so a redo reaching it leaves no take
+ * carrying on from frames that are gone — no jump. (A pass-through is left
+ * out: whether a redone segment passes through is not known until it runs.)
+ */
+export function shotEndOf(project: Pick<LongSwapProject, "segments" | "freshEvery">, index: number): number {
+  for (let j = index + 1; j < project.segments.length; j += 1) {
+    if (project.segments[j].cut || (project.freshEvery && j % project.freshEvery === 0)) return j;
+  }
+  return project.segments.length;
+}
 
 /** Whether a segment's newest take failed because there was no one to swap. */
 export function foundNoOne(job: Job | undefined): boolean {
@@ -783,12 +798,12 @@ export function useLongSwap({
   }, [sendUpscaledJoin]);
 
   const redo = useCallback(
-    (index: number, onward: boolean, choice?: SegmentChoice) => {
+    (index: number, through: number, choice?: SegmentChoice) => {
       if (!project) return;
       const at = Date.now();
       const redone = project.segments
         .map((_, i) => i)
-        .filter((i) => (onward ? i >= index : i === index));
+        .filter((i) => i >= index && i < Math.max(through, index + 1));
       const redoneAt = { ...project.redoneAt };
       const seeds = { ...project.seeds };
       const choices = { ...project.choices };
