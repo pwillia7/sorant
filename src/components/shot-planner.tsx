@@ -13,8 +13,9 @@ import {
   type Thumb,
 } from "@/lib/scene-cuts";
 import { CHAIN_OVER_SECONDS, shotSegments } from "@/lib/workflows/slices";
-import { PICK_PARAM } from "@/lib/workflows/subject-box";
+import { MAX_CHECK_SECONDS, PICK_PARAM, SUBJECT_BOX_PARAM } from "@/lib/workflows/subject-box";
 import { BoxPicker, inputVideoUrl } from "./ui/box-picker";
+import { MaskCheck } from "./ui/mask-check";
 import { Button, Spinner } from "./ui/button";
 import { Select } from "./ui/inputs";
 
@@ -214,7 +215,7 @@ export function ShotPlanner({ swap }: { swap: LongSwapController }) {
     { value: "largest", label: RULE_LABELS.largest },
     { value: "leftmost", label: RULE_LABELS.leftmost },
     { value: "rightmost", label: RULE_LABELS.rightmost },
-    { value: "box", label: "Draw a box" },
+    { value: "box", label: "Point them out" },
     ...(shots && shots.length > 1 ? [{ value: "original", label: "No one: leave it as it is" }] : []),
   ];
 
@@ -299,6 +300,26 @@ export function ShotPlanner({ swap }: { swap: LongSwapController }) {
                 value={shot.box}
                 onChange={(box) => update(index, { box })}
                 label={`The first frame of shot ${index + 1}`}
+              />
+            ) : null}
+            {shot.who !== "original" && clip ? (
+              <MaskCheck
+                values={{
+                  ...project.values,
+                  // As the chain will run it (use-long-swap.ts, `subjectFor`):
+                  // the form's box is drawn on the clip's first frame, so it is
+                  // the first shot's only.
+                  ...(shot.who === "box"
+                    ? { [SUBJECT_BOX_PARAM]: shot.box }
+                    : shot.who === "form"
+                      ? index === 0
+                        ? {}
+                        : { [SUBJECT_BOX_PARAM]: "" }
+                      : { [PICK_PARAM]: shot.who, [SUBJECT_BOX_PARAM]: "" }),
+                }}
+                start={shot.start / CUT_FPS}
+                seconds={Math.min(MAX_CHECK_SECONDS, (ends(index) - shot.start) / CUT_FPS)}
+                disabled={shot.who === "box" && !shot.box}
               />
             ) : null}
             {index > 0 ? (

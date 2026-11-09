@@ -8,7 +8,9 @@ import type { Job } from "@/lib/jobs";
 import { MUSIC_VIDEO_FRAME_RATES, MUSIC_VIDEO_UPSCALE_SIZES } from "@/lib/music-video/project";
 import { segmentFrames, SLICE_FPS } from "@/lib/workflows/slices";
 import { ShotPlanner } from "./shot-planner";
+import { MAX_CHECK_SECONDS, PICK_PARAM, SUBJECT_BOX_PARAM } from "@/lib/workflows/subject-box";
 import { BoxPicker, inputVideoUrl } from "./ui/box-picker";
+import { MaskCheck } from "./ui/mask-check";
 import { Badge, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
 import { Segmented } from "./ui/inputs";
@@ -85,8 +87,23 @@ const RULES: Array<{ value: RedoMode; label: string }> = [
   { value: "largest", label: "Biggest" },
   { value: "leftmost", label: "Leftmost" },
   { value: "rightmost", label: "Rightmost" },
-  { value: "box", label: "Draw a box" },
+  { value: "box", label: "Point them out" },
 ];
+
+/**
+ * Who a segment follows when nothing is chosen for it and nothing is carried,
+ * as use-long-swap.ts's `subjectValues` works it out: a shot's own choice, or
+ * the form's box on the first segment only, or the form's rule.
+ */
+function planned(project: LongSwapController["project"] & object, index: number): Record<string, string> {
+  if (index === 0 || project.segments[index]?.cut) {
+    const shot = project.shotChoices?.[index];
+    if (shot?.box) return { [SUBJECT_BOX_PARAM]: shot.box };
+    if (shot?.pick) return { [PICK_PARAM]: shot.pick, [SUBJECT_BOX_PARAM]: "" };
+    if (index === 0) return {};
+  }
+  return { [SUBJECT_BOX_PARAM]: "" };
+}
 
 /**
  * Setting up a redo: who the segment follows, and how far the redo reaches.
@@ -161,6 +178,21 @@ function RedoEditor({
         ) : (
           <p className="text-[12px] text-danger">The clip this swap was made from is not known, so there is no frame to draw on.</p>
         )
+      ) : null}
+      {mode !== "carry" && clip ? (
+        <MaskCheck
+          values={{
+            ...project.values,
+            ...(mode === "box"
+              ? { [SUBJECT_BOX_PARAM]: box }
+              : mode === "form"
+                ? planned(project, index)
+                : { [PICK_PARAM]: mode, [SUBJECT_BOX_PARAM]: "" }),
+          }}
+          start={time}
+          seconds={segment.frames ? Math.min(MAX_CHECK_SECONDS, (segment.frames + carried) / SLICE_FPS) : MAX_CHECK_SECONDS}
+          disabled={mode === "box" && !box}
+        />
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button

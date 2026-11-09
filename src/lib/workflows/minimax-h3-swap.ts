@@ -13,7 +13,8 @@ import {
   boxInPixels,
   CARRY_MASK_PREFIX,
   END_MASK_PREFIX,
-  parseBox,
+  parsePick,
+  pointsInPixels,
   PICK_PARAM,
   SUBJECT_BOX_PARAM,
   SUBJECT_MASK_PARAM,
@@ -571,18 +572,54 @@ const graph: ComfyGraph = {
   },
 };
 
+/**
+ * The nodes that find and track who to replace, copied fresh: the mask check
+ * (swap-mask-check.ts) runs them alone, under the same names, so what it shows
+ * is what a swap would edit.
+ */
+export const SAM_STAGE = [
+  "source",
+  "segment_slice",
+  "prepare",
+  "sam",
+  "subject",
+  "first_frame",
+  "detect",
+  "select",
+  "recover_select",
+  "track",
+  "mask",
+  "recover",
+] as const;
+
+export function samStage(): ComfyGraph {
+  const stage: ComfyGraph = {};
+  for (const id of SAM_STAGE) stage[id] = structuredClone(graph[id]);
+  return stage;
+}
+
 /** A carried mask's file, as LoadImage names one in ComfyUI's output folder. */
 const CARRIED_MASK = /^swap_mask\/(carry|end)_\d{5,}_\.png \[output\]$/;
 
 /**
  * Who the run follows, by what it was given. A carried mask is the person
  * exactly as the segment before tracked them on this very frame, so tracking
- * starts from it and nothing is picked. A box is drawn around them: SAM
+ * starts from it and nothing is picked. Points clicked on them are segmented by
+ * H3 Relay's Refine Mask, which keeps the clicks — on them and on anyone to
+ * leave out — through both of its passes. A box is drawn around them: SAM
  * segments whatever is in it, with no text, and that mask comes first. With
- * neither, the description and the rule pick, as before. The rule still picks
- * on a frame where the track drops (`recover_select`), whichever started it.
+ * none of these, the description and the rule pick, as before. The rule still
+ * picks on a frame where the track drops (`recover_select`), whichever
+ * started it.
+ *
+ * A box gets one SAM pass, not the two a description gets: core SAM3 Detect's
+ * second pass re-prompts with the mask alone and drops the box, which lets the
+ * mask wander onto whoever stands beside them.
+ *
+ * Shared with the mask check (swap-mask-check.ts), whose graph has the same
+ * SAM nodes under the same names.
  */
-function pickSubject(graph: ComfyGraph, values: Record<string, ParamValue>) {
+export function pickSubject(graph: ComfyGraph, values: Record<string, ParamValue>, megapixels: number) {
   const carried = String(values[SUBJECT_MASK_PARAM] ?? "");
   if (carried) {
     if (!CARRIED_MASK.test(carried)) {
@@ -601,12 +638,29 @@ function pickSubject(graph: ComfyGraph, values: Record<string, ParamValue>) {
     graph.track.inputs.initial_mask = ["carried_mask", 0];
     return;
   }
-  const box = parseBox(values[SUBJECT_BOX_PARAM]);
-  if (box) {
-    graph.detect.inputs.bboxes = boxInPixels(box, frameMegapixels(values));
+  const pick = parsePick(values[SUBJECT_BOX_PARAM]);
+  if (pick?.include.length) {
+    graph.pick_points = {
+      class_type: "H3RelayRefineMask",
+      inputs: {
+        model: ["sam", 0],
+        image: ["first_frame", 0],
+        positive_coords: JSON.stringify(pointsInPixels(pick.include, pick, megapixels)),
+        negative_coords: JSON.stringify(pointsInPixels(pick.exclude, pick, megapixels)),
+        prior_file: "",
+        frame: 0,
+      },
+      _meta: { title: "The person, from the points clicked on them" },
+    };
+    graph.track.inputs.initial_mask = ["pick_points", 0];
+    return;
+  }
+  if (pick?.box) {
+    graph.detect.inputs.bboxes = boxInPixels({ ...pick.box, sw: pick.sw, sh: pick.sh }, megapixels);
     // Text and a box together make the box a hint to the text detector; alone,
     // it is segmented as it is.
     delete graph.detect.inputs.conditioning;
+    graph.detect.inputs.refine_iterations = 1;
     graph.select.inputs.selection = "index";
     graph.select.inputs.index = 0;
   }
@@ -698,7 +752,7 @@ function passThrough(graph: ComfyGraph, values: Record<string, ParamValue>) {
   graph.save.inputs.video = ["original_video", 0];
 }
 
-const params: ParamDef[] = [
+export const swapParams: ParamDef[] = [
   {
     id: VIDEO_PARAM,
     label: "Clip",
@@ -824,7 +878,7 @@ const params: ParamDef[] = [
     type: "text",
     default: "",
     placeholder: "man in a cowboy hat",
-    help: "A short description SAM can find them by on the first frame — what they are and what they wear. Only they are changed; everyone else is kept.",
+    help: "A few words SAM can find them by on the first frame — \"man\", \"woman in a red coat\". SAM reads short names of things, not sentences: a longer description finds no one or everyone. With several people in shot, point them out below instead. Only they are changed; everyone else is kept.",
     group: "Prompt",
     targets: [promptTarget, { node: "subject", input: "text", transform: (_v, values) => samSubject(values) }],
   },
@@ -847,11 +901,11 @@ const params: ParamDef[] = [
   },
   {
     id: SUBJECT_BOX_PARAM,
-    label: "Or draw a box around them",
+    label: "Or point them out",
     type: "box",
     default: "",
     on: VIDEO_PARAM,
-    help: "Drag a box around the person to replace on the clip's first frame. SAM takes whoever is in the box, whatever the description and rule say — the surest way to pick one of several look-alikes.",
+    help: "On the clip's first frame: click on the person to replace — face, body, legs — and on anyone else SAM should leave out, or drag a box around all of them. Either beats the description and rule when several people are in shot. Check who SAM picks before you swap: it takes seconds, the swap takes many minutes.",
     group: "Prompt",
     revealedBy: VIDEO_PARAM,
     readBy: "finalize",
@@ -868,19 +922,22 @@ const params: ParamDef[] = [
     targets: [],
   },
   {
-    id: "track_drop",
+    // Was "track_drop", defaulting to Find them again. Renamed with the new
+    // default (2026-11-09) because stored form values outvote a default, and
+    // re-picking by the rule was what swapped strangers in for a few frames.
+    id: "lost_frames",
     label: "If SAM loses them",
     type: "select",
-    default: "recover",
+    default: "leave",
     options: [
-      { value: "recover", label: "Find them again" },
       { value: "leave", label: "Leave those frames as they are" },
+      { value: "recover", label: "Find them again" },
       { value: "stop", label: "Stop with an error" },
     ],
-    help: "When the track drops — a cut to a shot without them, someone walking in front — Find them again looks on each lost frame alone, by the rule above and with no memory of where they were, so a cut-away swaps whoever matches there instead. Leave those frames as they are keeps the clip's own footage wherever they are lost, and picks them up again when they come back; a brief drop shows the original person for a moment. Stop fails the run, naming the frames.",
+    help: "When the track drops — a cut to a shot without them, someone walking in front — Leave those frames as they are keeps the clip's own footage wherever they are lost, and picks them up again when they come back; a brief drop shows the original person for a moment. Find them again looks on each lost frame alone, by the description and rule, with no memory of who you pointed out — in a crowd that swaps someone else for those frames. Stop fails the run, naming the frames.",
     group: "Prompt",
     advanced: true,
-    targets: [{ node: "recover", input: "recover_empty_frames", transform: (value) => value === "recover" || value === undefined }],
+    targets: [{ node: "recover", input: "recover_empty_frames", transform: (value) => value === "recover" }],
   },
   {
     id: "sam_threshold",
@@ -1028,7 +1085,7 @@ export const minimaxH3Swap: WorkflowDef = {
   estimatedSeconds: 600,
   hasAudio: true,
   graph,
-  params,
+  params: swapParams,
   /**
    * Swap on a finished video loads it as the clip. Nothing is carried: the
    * prompt that made the source describes a scene, and this one's prompt names
@@ -1077,8 +1134,8 @@ export const minimaxH3Swap: WorkflowDef = {
         }
       }
     }
-    pickSubject(graph, values);
-    if (values.track_drop === "leave") leaveLostFrames(graph, values);
+    pickSubject(graph, values, frameMegapixels(values));
+    if ((values.lost_frames ?? "leave") === "leave") leaveLostFrames(graph, values);
     if (segment && segment.frames > 0) saveMaskForNext(graph, segment);
     // At either of Prepare Source's own budgets the frames are already that
     // size, and scaling them again would only nudge the shape off by a few
@@ -1140,9 +1197,22 @@ export const minimaxH3Swap: WorkflowDef = {
         character: "a knight",
         [SUBJECT_BOX_PARAM]: '{"x":0.4,"y":0.1,"w":0.25,"h":0.85,"sw":1280,"sh":720}',
         [MEGAPIXELS_PARAM]: 0.7,
-        track_drop: "stop",
+        lost_frames: "stop",
         sam_threshold: 0.5,
       },
+    },
+    {
+      name: "points clicked on who to replace, and on someone to leave out",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [SUBJECT_BOX_PARAM]: '{"in":[[0.5,0.3],[0.52,0.62]],"out":[[0.2,0.5]],"sw":1920,"sh":1080}',
+      },
+    },
+    {
+      name: "lost frames found again by the rule",
+      values: { [VIDEO_PARAM]: "clip.mp4", [IMAGE_PARAM]: "c.png", character: "a knight", lost_frames: "recover" },
     },
     {
       name: "lost frames left as they are, in a carried-on segment",
@@ -1152,7 +1222,7 @@ export const minimaxH3Swap: WorkflowDef = {
         character: "a knight",
         [SEGMENT_PARAM]: "247:123:18",
         [HISTORY_CLIP_PARAM]: "video/MiniMax_H3_swap_00002_.mp4 [output]",
-        track_drop: "leave",
+        lost_frames: "leave",
         mask_grow: 48,
       },
     },

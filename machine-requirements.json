@@ -1,5 +1,5 @@
 {
-  "fingerprint": "2e10519c8923eb66",
+  "fingerprint": "d5804625e5cc7a3f",
   "classes": {
     "AudioConcatenate": {
       "inputs": [
@@ -218,7 +218,8 @@
       "optional": false,
       "workflows": [
         "image-edit",
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     },
     "CheckpointLoaderSimple": {
@@ -227,7 +228,8 @@
       ],
       "optional": false,
       "workflows": [
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     },
     "ComfyMathExpression": {
@@ -351,7 +353,8 @@
         "minimax-h3-ref2v (spectrum)",
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-ref2v (turbo)",
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     },
     "DualCLIPLoader": {
@@ -380,6 +383,18 @@
         "minimax-h3-extend (style, vhs tape)",
         "minimax-h3-extend (style, vhs tape, lighter base)",
         "minimax-h3-extend (turbo)"
+      ]
+    },
+    "EmptyImage": {
+      "inputs": [
+        "batch_size",
+        "color",
+        "height",
+        "width"
+      ],
+      "optional": false,
+      "workflows": [
+        "swap-mask-check"
       ]
     },
     "EmptyMiniMaxH3LatentAV": {
@@ -470,7 +485,8 @@
         "minimax-h3-i2v (style, vhs tape)",
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     },
     "GetImageSizeAndCount": {
@@ -575,7 +591,8 @@
       ],
       "optional": false,
       "workflows": [
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     },
     "H3RelayRecoverMasks": {
@@ -590,7 +607,8 @@
       ],
       "optional": false,
       "workflows": [
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     },
     "H3RelaySamplingMemory": {
@@ -613,7 +631,8 @@
       ],
       "optional": false,
       "workflows": [
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     },
     "H3RelayTextMemory": {
@@ -668,6 +687,20 @@
         "upscale"
       ]
     },
+    "ImageCompositeMasked": {
+      "inputs": [
+        "destination",
+        "mask",
+        "resize_source",
+        "source",
+        "x",
+        "y"
+      ],
+      "optional": false,
+      "workflows": [
+        "swap-mask-check"
+      ]
+    },
     "ImageFromBatch": {
       "inputs": [
         "batch_index",
@@ -690,6 +723,7 @@
         "minimax-h3-image (style, vhs tape, lighter base)",
         "minimax-h3-image (turbo)",
         "minimax-h3-swap",
+        "swap-mask-check",
         "upscale"
       ]
     },
@@ -1002,7 +1036,8 @@
       ],
       "optional": false,
       "workflows": [
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     },
     "LoraLoaderModelOnly": {
@@ -1024,6 +1059,19 @@
         "minimax-h3-ref (style, vhs tape)",
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-swap"
+      ]
+    },
+    "MaskComposite": {
+      "inputs": [
+        "destination",
+        "operation",
+        "source",
+        "x",
+        "y"
+      ],
+      "optional": false,
+      "workflows": [
+        "swap-mask-check"
       ]
     },
     "MiniMaxH3AddGuide": {
@@ -1460,7 +1508,8 @@
       ],
       "optional": false,
       "workflows": [
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     },
     "SAM3_TrackToMask": {
@@ -1470,7 +1519,8 @@
       ],
       "optional": false,
       "workflows": [
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     },
     "SAM3_VideoTrack": {
@@ -1485,7 +1535,8 @@
       ],
       "optional": false,
       "workflows": [
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     },
     "SamplerCustomAdvanced": {
@@ -1661,7 +1712,8 @@
         "minimax-h3-ref2v (turbo)",
         "minimax-h3-swap",
         "multi-scene-stitch",
-        "music-video-stitch"
+        "music-video-stitch",
+        "swap-mask-check"
       ]
     },
     "SeedNode": {
@@ -1733,6 +1785,17 @@
       "optional": false,
       "workflows": [
         "minimax-h3-swap"
+      ]
+    },
+    "SolidMask": {
+      "inputs": [
+        "height",
+        "value",
+        "width"
+      ],
+      "optional": false,
+      "workflows": [
+        "swap-mask-check"
       ]
     },
     "SpectrumApplyMiniMaxH3": {
@@ -2275,7 +2338,8 @@
       ],
       "optional": false,
       "workflows": [
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     }
   },
@@ -2591,7 +2655,8 @@
       "input": "ckpt_name",
       "optional": false,
       "workflows": [
-        "minimax-h3-swap"
+        "minimax-h3-swap",
+        "swap-mask-check"
       ]
     },
     "seedvr2_7b_sharp_int8_convrot.safetensors": {

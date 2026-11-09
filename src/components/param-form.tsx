@@ -4,6 +4,7 @@ import { ChevronRight, Dices, Pin } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AudioUpload } from "@/components/ui/audio-upload";
 import { BoxPicker, inputVideoUrl } from "@/components/ui/box-picker";
+import { MaskCheck } from "@/components/ui/mask-check";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { ImageUpload } from "@/components/ui/image-upload";
@@ -509,6 +510,9 @@ export function Control({
             disabled={readOnly}
             label={`${param.label}: the clip's first frame`}
           />
+          <div className="mt-2">
+            <MaskCheck values={values ?? {}} disabled={readOnly} />
+          </div>
         </Field>
       );
     }

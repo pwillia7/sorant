@@ -6,6 +6,7 @@ import { minimaxH3ImageToVideo } from "./minimax-h3-i2v";
 import { minimaxH3Reference } from "./minimax-h3-ref";
 import { minimaxH3ReferenceVideo } from "./minimax-h3-ref2v";
 import { minimaxH3Swap } from "./minimax-h3-swap";
+import { swapMaskCheck } from "./swap-mask-check";
 import { minimaxMusic3 } from "./minimax-music3";
 import { multiScene } from "./multi-scene";
 import { musicVideo } from "./music-video";
@@ -42,6 +43,8 @@ export const WORKFLOWS: WorkflowDef[] = [
   minimaxMusic3,
   // Not in the picker: the Edit button on a picture runs it. See `tool`.
   imageEdit,
+  // Not in the picker: the Character swap's "Check who SAM picks" runs it.
+  swapMaskCheck,
   // Not in the picker either: the planned videos' panel runs them to join scenes.
   musicVideoStitch,
   multiSceneStitch,

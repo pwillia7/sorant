@@ -6,7 +6,7 @@ import {
   promptConsumer,
 } from "@/lib/workflows/director";
 import { attachBriefPreviews } from "@/lib/workflows/brief";
-import { BOX_MAX_LENGTH, parseBox } from "@/lib/workflows/subject-box";
+import { BOX_MAX_LENGTH, parsePick } from "@/lib/workflows/subject-box";
 import { modelLoaderIn } from "@/lib/workflows/model-chain";
 import {
   applyLocalRewrite,
@@ -202,8 +202,8 @@ function coerce(
     // not a usable box is refused rather than sent to SAM.
     case "box": {
       if (raw == null || raw === "") return "";
-      if (typeof raw !== "string" || raw.length > BOX_MAX_LENGTH || !parseBox(raw)) {
-        throw new ParamError(`${param.label} is not a usable box. Draw it again.`, param.id);
+      if (typeof raw !== "string" || raw.length > BOX_MAX_LENGTH || !parsePick(raw)) {
+        throw new ParamError(`${param.label} is not a usable box or set of points. Point them out again.`, param.id);
       }
       return raw;
     }
