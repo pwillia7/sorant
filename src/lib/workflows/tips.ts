@@ -319,6 +319,7 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
         heading: "Sound and settings",
         items: [
           "The result keeps the clip's own soundtrack. Turn Keep the clip's sound off to hear the audio H3 makes instead.",
+          "A known limit: in a close-up where they only listen while others talk, the swapped-in character can move their lips as if speaking. Neither the wording nor the sound changes it — it is the swap model. Set that shot to Leave as it is in the shot planner, or choose shots where they talk or their mouth is small in frame.",
           "The recipe is the LoRA author's: their Turbo LoRA at 8 steps on er_sde, the swap LoRA at strength 1. Swap strength 0 runs the plain model on the same inputs — the quickest way to see what the LoRA is doing.",
           "Mask margin is how far past the person the edit may reach. More gives a bigger costume (a hat, a cape) room; less keeps the background closer to the clip.",
         ],
