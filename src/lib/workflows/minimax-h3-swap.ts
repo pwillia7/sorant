@@ -116,12 +116,31 @@ const LONG_CLIP_SECONDS = 60;
  */
 export function segmentOf(
   values: Record<string, ParamValue>,
-): { start: number; frames: number; history: number } | null {
-  const match = /^(\d+):(\d+):(\d+)$/.exec(String(values[SEGMENT_PARAM] ?? ""));
+): { start: number; frames: number; history: number; startTime?: number; endTime?: number } | null {
+  const match = /^(\d+):(\d+):(\d+)(?::(\d+(?:\.\d+)?)?:(\d+(?:\.\d+)?)?)?$/.exec(
+    String(values[SEGMENT_PARAM] ?? ""),
+  );
   if (!match) return null;
-  const [start, frames, history] = match.slice(1).map(Number);
-  return history <= start ? { start, frames, history } : null;
+  const [start, frames, history] = match.slice(1, 4).map(Number);
+  if (history > start) return null;
+  // Exact cut times (ChainSegment.startTime/endTime): only where they are
+  // within a frame of the grid time they stand in for.
+  const near = (time: string | undefined, frame: number) =>
+    time !== undefined && Math.abs(Number(time) - frame / SLICE_FPS) <= 1 / SLICE_FPS ? Number(time) : undefined;
+  const startTime = history === 0 ? near(match[4], start) : undefined;
+  const endTime = frames ? near(match[5], start + frames) : undefined;
+  return {
+    start,
+    frames,
+    history,
+    ...(startTime !== undefined ? { startTime } : {}),
+    ...(endTime !== undefined ? { endTime } : {}),
+  };
 }
+
+/** Where a segment run's slice of the clip starts, in seconds. */
+const segmentStart = (segment: { start: number; history: number; startTime?: number }) =>
+  segment.startTime ?? (segment.start - segment.history) / SLICE_FPS;
 
 /** Seconds of source a segment run loads, history included; 0 for "to the end". */
 const segmentSeconds = (segment: { frames: number; history: number }) =>
@@ -788,7 +807,7 @@ export const swapParams: ParamDef[] = [
     label: "Segment",
     type: "written",
     default: "",
-    maxLength: 32,
+    maxLength: 64,
     group: "Source",
     targets: [
       {
@@ -796,7 +815,7 @@ export const swapParams: ParamDef[] = [
         input: "start_time",
         transform: (_v, values) => {
           const segment = segmentOf(values);
-          return segment ? (segment.start - segment.history) / SLICE_FPS : 0;
+          return segment ? segmentStart(segment) : 0;
         },
       },
       {
@@ -804,7 +823,11 @@ export const swapParams: ParamDef[] = [
         input: "duration",
         transform: (_v, values) => {
           const segment = segmentOf(values);
-          return segment ? segmentSeconds(segment) : 0;
+          if (!segment) return 0;
+          // Up to the next shot's first frame and no further: the half
+          // frame over would reach into it.
+          if (segment.endTime !== undefined) return Math.max(1 / SLICE_FPS, segment.endTime - segmentStart(segment));
+          return segmentSeconds(segment);
         },
       },
     ],
@@ -1169,6 +1192,25 @@ export const minimaxH3Swap: WorkflowDef = {
     {
       name: "the first segment of a chain",
       values: { [VIDEO_PARAM]: "clip.mp4", [IMAGE_PARAM]: "c.png", character: "a knight", [SEGMENT_PARAM]: "0:124:0" },
+    },
+    {
+      name: "a shot's first segment, starting exactly at its cut",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [SEGMENT_PARAM]: "325:124:0:13.58014:",
+      },
+    },
+    {
+      name: "a shot's last segment, ending exactly at the next cut",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [SEGMENT_PARAM]: "247:78:18::13.58014",
+        [HISTORY_CLIP_PARAM]: "video/MiniMax_H3_swap_00002_.mp4 [output]",
+      },
     },
     {
       name: "a middle segment, carrying on from the one before",

@@ -200,7 +200,7 @@ export interface LongSwapController {
    * and start sending. A clip short enough for one run with no cuts in it is
    * sent as that one run instead, and the project closes.
    */
-  plan: (cuts: number[], shots: ShotChoice[]) => Promise<void>;
+  plan: (cuts: number[], shots: ShotChoice[], cutTimes?: Record<number, number>) => Promise<void>;
   clear: () => void;
 }
 
@@ -376,8 +376,17 @@ async function carriesNoOne(
   return file ? maskIsEmpty(file) : false;
 }
 
-/** A segment as the swap workflow's `segment` param takes it. */
-const segmentValue = (segment: ChainSegment, history: number) => `${segment.start}:${segment.frames}:${history}`;
+/**
+ * A segment as the swap workflow's `segment` param takes it: start, frames and
+ * history on the 24 fps grid, then the exact times of the cuts either side
+ * where it has them (`segmentOf` in minimax-h3-swap.ts).
+ */
+const segmentValue = (segment: ChainSegment, history: number) => {
+  const grid = `${segment.start}:${segment.frames}:${history}`;
+  const startTime = history === 0 ? segment.startTime : undefined;
+  if (startTime === undefined && segment.endTime === undefined) return grid;
+  return `${grid}:${startTime ?? ""}:${segment.endTime ?? ""}`;
+};
 
 export function useLongSwap({
   workflow,
@@ -812,7 +821,7 @@ export function useLongSwap({
   );
 
   const plan = useCallback(
-    async (cuts: number[], shots: ShotChoice[]) => {
+    async (cuts: number[], shots: ShotChoice[], cutTimes: Record<number, number> = {}) => {
       if (!project || !workflow) return;
       setError(null);
       if (cuts.length === 0 && project.seconds <= CHAIN_OVER_SECONDS) {
@@ -837,7 +846,7 @@ export function useLongSwap({
         }
         return;
       }
-      const segments = shotSegments(project.seconds, cuts);
+      const segments = shotSegments(project.seconds, cuts, cutTimes);
       const firsts = segments.flatMap((segment, index) => (index === 0 || segment.cut ? [index] : []));
       const shotChoices: Record<number, ShotChoice> = {};
       const originals: number[] = [];

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { LongSwapController, ShotChoice } from "@/hooks/use-long-swap";
 import {
   CUT_FPS,
+  frameSeekTime,
   findCuts,
   MIN_SHOT_FRAMES,
   THUMB_HEIGHT,
@@ -33,6 +34,8 @@ import { Select } from "./ui/inputs";
 interface OpenClip {
   /** The frame at `frame` on the 24 fps grid, drawn at width × height. */
   draw: (frame: number, width: number, height: number) => Promise<HTMLCanvasElement>;
+  /** The frame the browser shows at `seconds`, drawn at width × height. */
+  drawAt: (seconds: number, width: number, height: number) => Promise<HTMLCanvasElement>;
   close: () => void;
 }
 
@@ -63,16 +66,18 @@ async function openClip(url: string): Promise<OpenClip> {
       );
       video.currentTime = time;
     });
+  const drawAt = async (seconds: number, width: number, height: number) => {
+    await seek(Math.min(seconds, Math.max(0, video.duration - 0.001)));
+    canvas.width = width;
+    canvas.height = height;
+    context.drawImage(video, 0, 0, width, height);
+    return canvas;
+  };
   return {
-    async draw(frame, width, height) {
-      // Just past the frame's time, as the box picker seeks, so both show
-      // the frame the swap reads there.
-      await seek(Math.min(frame / CUT_FPS + 0.001, Math.max(0, video.duration - 0.001)));
-      canvas.width = width;
-      canvas.height = height;
-      context.drawImage(video, 0, 0, width, height);
-      return canvas;
-    },
+    // The latest source frame on that grid frame (frameSeekTime), so a cut's
+    // first grid frame shows the new shot.
+    draw: (frame, width, height) => drawAt(frameSeekTime(frame), width, height),
+    drawAt,
     close() {
       video.removeAttribute("src");
       video.load();
@@ -91,6 +96,8 @@ const RULE_LABELS: Record<string, string> = {
 interface Shot {
   /** Its first frame, at 24 fps. */
   start: number;
+  /** Exactly when it starts, in seconds, where the cut was found in the clip (`Cut.time`). */
+  time?: number;
   who: Who;
   box: string;
 }
@@ -132,16 +139,20 @@ export function ShotPlanner({ swap }: { swap: LongSwapController }) {
       try {
         opened = await openClip(url);
         clipRef.current = opened;
-        const grab = async (frame: number): Promise<Thumb> => {
-          const canvas = await opened!.draw(frame, THUMB_WIDTH, THUMB_HEIGHT);
+        const grab = async (seconds: number): Promise<Thumb> => {
+          const canvas = await opened!.drawAt(seconds, THUMB_WIDTH, THUMB_HEIGHT);
           return canvas.getContext("2d")!.getImageData(0, 0, THUMB_WIDTH, THUMB_HEIGHT).data;
         };
         const found = await findCuts(frames, grab, {
           signal: controller.signal,
           onProgress: ({ fraction }) => setProgress(fraction),
         });
-        const cuts = tidyCuts(found, frames);
-        setShots([0, ...cuts].map((start) => ({ start, who: "form", box: "" })));
+        const cuts = tidyCuts(
+          found.map((cut) => cut.frame),
+          frames,
+        );
+        const times = new Map(found.map((cut) => [cut.frame, cut.time]));
+        setShots([0, ...cuts].map((start) => ({ start, time: times.get(start), who: "form", box: "" })));
       } catch (cause) {
         if (controller.signal.aborted) return;
         setFailure(cause instanceof Error ? cause.message : "The clip's cuts could not be found.");
@@ -180,7 +191,14 @@ export function ShotPlanner({ swap }: { swap: LongSwapController }) {
   }, [starts]);
 
   const cuts = useMemo(() => (shots ?? []).slice(1).map((shot) => shot.start), [shots]);
-  const segments = useMemo(() => shotSegments(project.seconds, cuts), [project.seconds, cuts]);
+  const cutTimes = useMemo(() => {
+    const times: Record<number, number> = {};
+    for (const shot of shots?.slice(1) ?? []) if (shot.time !== undefined) times[shot.start] = shot.time;
+    return times;
+  }, [shots]);
+  const segments = useMemo(() => shotSegments(project.seconds, cuts, cutTimes), [project.seconds, cuts, cutTimes]);
+  /** Where a shot starts, in seconds: exactly, where that is known. */
+  const startOf = (shot: Shot) => shot.time ?? shot.start / CUT_FPS;
   const ends = (index: number) => shots?.[index + 1]?.start ?? frames;
   const swapped = shots
     ? segments.filter((segment) => {
@@ -296,7 +314,7 @@ export function ShotPlanner({ swap }: { swap: LongSwapController }) {
             {shot.who === "box" && url ? (
               <BoxPicker
                 src={url}
-                time={shot.start / CUT_FPS}
+                time={startOf(shot)}
                 value={shot.box}
                 onChange={(box) => update(index, { box })}
                 label={`The first frame of shot ${index + 1}`}
@@ -317,7 +335,7 @@ export function ShotPlanner({ swap }: { swap: LongSwapController }) {
                         : { [SUBJECT_BOX_PARAM]: "" }
                       : { [PICK_PARAM]: shot.who, [SUBJECT_BOX_PARAM]: "" }),
                 }}
-                start={shot.start / CUT_FPS}
+                start={startOf(shot)}
                 seconds={Math.min(MAX_CHECK_SECONDS, (ends(index) - shot.start) / CUT_FPS)}
                 disabled={shot.who === "box" && !shot.box}
               />
@@ -362,7 +380,7 @@ export function ShotPlanner({ swap }: { swap: LongSwapController }) {
           variant="primary"
           disabled={unready || swapped === 0}
           loading={swap.sending}
-          onClick={() => void swap.plan(cuts, shots.map(choiceOf))}
+          onClick={() => void swap.plan(cuts, shots.map(choiceOf), cutTimes)}
         >
           Start the swap
         </Button>

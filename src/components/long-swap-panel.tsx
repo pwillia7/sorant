@@ -131,7 +131,7 @@ function RedoEditor({
   const clip = String(project.values.source_video ?? "");
   // The frame SAM looks at first in this segment's run: its own start, or the
   // history before it when it carries on.
-  const time = (segment.start - carried) / SLICE_FPS;
+  const time = carried === 0 && segment.startTime !== undefined ? segment.startTime : (segment.start - carried) / SLICE_FPS;
 
   const choice: SegmentChoice | undefined =
     mode === "box" ? { box } : mode === "carry" || mode === "form" ? undefined : { pick: mode };

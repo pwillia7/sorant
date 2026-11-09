@@ -106,6 +106,18 @@ export interface ChainSegment {
    * history and no mask from the segment before, which showed another shot.
    */
   cut?: boolean;
+  /**
+   * Seconds: exactly where a shot after a camera cut starts, when the cut was
+   * found in the clip rather than typed in. Set on the shot's first segment;
+   * its slice starts here rather than at `start / 24`.
+   */
+  startTime?: number;
+  /**
+   * Seconds: exactly where the next shot starts, on a shot's last segment;
+   * its slice ends here rather than half a frame past its last grid frame.
+   * See `Cut.time` in scene-cuts.ts for why both are needed.
+   */
+  endTime?: number;
 }
 
 /** A tail shorter than this is folded into the segment before it. */
@@ -147,7 +159,12 @@ export function segmentFrames(segment: ChainSegment, seconds: number): number {
  * short tail takes frames from the segment before it rather than being added
  * to it, so no window is ever longer than the 124 frames Relay's tested at.
  */
-export function shotSegments(seconds: number, cuts: number[]): ChainSegment[] {
+export function shotSegments(
+  seconds: number,
+  cuts: number[],
+  /** Exactly when each cut happens, by its frame, where that is known. */
+  cutTimes: Record<number, number> = {},
+): ChainSegment[] {
   const total = Math.round(seconds * SLICE_FPS);
   const bounds = [0, ...cuts.filter((cut) => cut > 0 && cut < total), total];
   const segments: ChainSegment[] = [];
@@ -168,6 +185,10 @@ export function shotSegments(seconds: number, cuts: number[]): ChainSegment[] {
       tail.start -= short;
       tail.frames += short;
     }
+    const startTime = s > 0 ? cutTimes[bounds[s]] : undefined;
+    if (startTime !== undefined) shot[0].startTime = startTime;
+    const endTime = s + 2 < bounds.length ? cutTimes[end] : undefined;
+    if (endTime !== undefined) shot[shot.length - 1].endTime = endTime;
     segments.push(...shot);
   }
   const last = segments.at(-1);
