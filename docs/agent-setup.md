@@ -127,7 +127,7 @@ On Linux, `git clone https://github.com/comfyanonymous/ComfyUI`, a venv, and its
 `requirements.txt` with the PyTorch build for their CUDA. Run it once to prove it
 starts, then carry on.
 
-**Hardware.** Tested on Windows, ComfyUI 0.38 and later, an RTX 3090 (24 GB) and
+**Hardware.** Tested on Windows, ComfyUI 0.38 through 0.44, an RTX 3090 (24 GB) and
 64 GB of RAM. ComfyUI's Dynamic VRAM (NVIDIA, Windows and Linux, not WSL)
 streams weights from RAM, so VRAM limits speed and frame size rather than
 whether a model loads: 16 GB should run the default 0.5 MP frame size. 12 GB
