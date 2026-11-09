@@ -150,10 +150,11 @@ export function ClipPlayer({
           className={`block cursor-pointer ${videoClassName}`}
         />
 
-        {/* Big play mark while stopped, so it reads as a video at a glance. */}
-        {!chosen || !playing ? (
+        {/* Big play mark while stopped, so it reads as a video at a glance;
+            gone while it plays, the hover preview included. */}
+        {!playing ? (
           <span className="pointer-events-none absolute inset-0 grid place-items-center">
-            <span className="grid size-10 place-items-center rounded-full bg-black/55 text-white opacity-90 transition-opacity group-hover:opacity-100">
+            <span className="grid size-10 place-items-center rounded-full bg-black/55 text-white opacity-90">
               <Play className="ml-0.5 size-5 fill-current" aria-hidden="true" />
             </span>
           </span>
