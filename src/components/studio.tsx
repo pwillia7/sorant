@@ -71,7 +71,7 @@ import {
 import { workflowLabel } from "@/lib/workflows/modes";
 import { QualityFold, runSummary } from "./run-bar";
 import { formatEstimate, runEstimate } from "@/lib/workflows/estimate";
-import { CHAIN_OVER_SECONDS, estimateScale } from "@/lib/workflows/slices";
+import { CHAIN_OVER_SECONDS, estimateScale, SPLIT_OVER_SECONDS, SPLIT_SHOTS_PARAM } from "@/lib/workflows/slices";
 import type { DirectorEngine } from "@/lib/workflows/local-director";
 import { REWRITE_MODEL } from "@/lib/workflows/rewrite-model";
 import {
@@ -1059,7 +1059,13 @@ function Workbench({
     }
     setSubmittedFor(selected.id);
     // Too long for one run: a chain of segment runs, joined at the end.
-    if (selected.slicedBy && Number(values[selected.slicedBy]) > CHAIN_OVER_SECONDS) {
+    // Split at its camera cuts, which the chain's panel finds first; with
+    // none, a short clip still goes as one run.
+    const clipSeconds = selected.slicedBy ? Number(values[selected.slicedBy]) : 0;
+    if (
+      selected.slicedBy &&
+      (clipSeconds > CHAIN_OVER_SECONDS || (values[SPLIT_SHOTS_PARAM] !== false && clipSeconds >= SPLIT_OVER_SECONDS))
+    ) {
       void longSwap.start(values, { ...modes, lowVram, localDirector: runDirector, rewriteModel });
       setClipNotice(null);
       showTab("result");

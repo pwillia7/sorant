@@ -4,6 +4,7 @@ import {
   CHAIN_HISTORY,
   CHAIN_OVER_SECONDS,
   FRESH_EVERY_PARAM,
+  SPLIT_SHOTS_PARAM,
   MAX_SWAP_SECONDS,
   PASS_THROUGH_PARAM,
   SLICE_FPS,
@@ -704,7 +705,7 @@ const params: ParamDef[] = [
     type: "video",
     default: "",
     required: true,
-    help: `One continuous shot, up to ${MAX_SWAP_SECONDS / 60} minutes, with the person in it from the first frame. Over ${CHAIN_OVER_SECONDS} seconds it is swapped as a chain of runs, about 5 seconds each, each carrying on from the one before, and joined at the end — keep this tab open while they run. A cut to a shot without them confuses the tracking — trim those out first.`,
+    help: `Up to ${MAX_SWAP_SECONDS / 60} minutes. Over ${CHAIN_OVER_SECONDS} seconds, or with camera cuts in it, it is swapped as a chain of runs, about 5 seconds each, and joined at the end — keep this tab open while they run. With “Split at camera cuts” on, each shot starts fresh and you choose who to replace in each.`,
     group: "Source",
     // Not H3's 768×1344: Prepare Source fits the clip to the pixel budget
     // itself, so a phone's 1080p clip is fine.
@@ -778,6 +779,16 @@ const params: ParamDef[] = [
         transform: (value) => (value === "1" ? "video/swap_original" : "video/MiniMax_H3_swap"),
       },
     ],
+  },
+  {
+    id: SPLIT_SHOTS_PARAM,
+    label: "Split at camera cuts",
+    type: "toggle",
+    default: true,
+    help: "Finds the cuts in the clip before anything runs, and swaps each shot fresh: tracking and the last frames are not carried across a cut, where they would show another shot. You then choose who to replace in each shot — or no one, for a shot without them.",
+    group: "Source",
+    scope: "browser",
+    targets: [],
   },
   {
     id: FRESH_EVERY_PARAM,

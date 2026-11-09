@@ -7,6 +7,7 @@ import { withToken } from "@/lib/client";
 import type { Job } from "@/lib/jobs";
 import { MUSIC_VIDEO_FRAME_RATES, MUSIC_VIDEO_UPSCALE_SIZES } from "@/lib/music-video/project";
 import { segmentFrames, SLICE_FPS } from "@/lib/workflows/slices";
+import { ShotPlanner } from "./shot-planner";
 import { BoxPicker, inputVideoUrl } from "./ui/box-picker";
 import { Badge, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
@@ -19,10 +20,27 @@ import { Segmented } from "./ui/inputs";
 
 const icon = { className: "size-3 shrink-0 stroke-2", "aria-hidden": true } as const;
 
-function SegmentBadge({ state, job, original }: { state: SegmentState; job: Job | undefined; original: boolean }) {
+function SegmentBadge({
+  state,
+  job,
+  original,
+  chosen,
+}: {
+  state: SegmentState;
+  job: Job | undefined;
+  original: boolean;
+  /** Left as it is because its shot was set to no one, rather than SAM finding no one. */
+  chosen?: boolean;
+}) {
   if (original && state !== "failed") {
     return state === "done" ? (
-      <span title="SAM found no one to replace here, so this stretch is the clip's own footage.">
+      <span
+        title={
+          chosen
+            ? "Its shot was set to no one, so this stretch is the clip's own footage."
+            : "SAM found no one to replace here, so this stretch is the clip's own footage."
+        }
+      >
         <Badge tone="warning">original footage</Badge>
       </span>
     ) : (
@@ -89,7 +107,7 @@ function RedoEditor({
   const total = project.segments.length;
   const segment = project.segments[index];
   const carried = startsFresh(project, index) ? 0 : segment.history;
-  const canCarry = index > 0 && savedMask(swap.segmentJobs[index - 1], carried > 0) !== null;
+  const canCarry = index > 0 && !segment.cut && savedMask(swap.segmentJobs[index - 1], carried > 0) !== null;
   const [mode, setMode] = useState<RedoMode>(index === 0 ? "form" : canCarry ? "carry" : "form");
   const [box, setBox] = useState("");
   const clip = String(project.values.source_video ?? "");
@@ -114,9 +132,10 @@ function RedoEditor({
         }
       : {
           value: "form",
-          label: "As in the form",
-          title:
-            index === 0
+          label: segment.cut ? "As planned" : "As in the form",
+          title: segment.cut
+            ? "As this shot was set before the swap started: its box or rule, or the form's."
+            : index === 0
               ? "The form's box, or its description and rule."
               : "The form's description and rule. The segment before saved no mask to carry on from.",
         },
@@ -226,6 +245,23 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
   const [shorterSides, setShorterSides] = useState<Record<string, number>>({});
   if (!project) return null;
 
+  if (project.planning) {
+    return (
+      <Panel padded>
+        <PanelHeader
+          title={`Character swap · ${clock(project.seconds)} · shots`}
+          hint="Nothing has been sent yet."
+        />
+        <ShotPlanner swap={swap} />
+        {swap.error ? (
+          <p className="mt-3 rounded-lg border border-danger/40 bg-danger/5 p-3 text-[13px] text-danger" role="alert">
+            {swap.error}
+          </p>
+        ) : null}
+      </Panel>
+    );
+  }
+
   const total = project.segments.length;
   const done = states.filter((state) => state === "done").length;
   const failed = states.some((state) => state === "failed");
@@ -234,7 +270,10 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
   const joining = joinJob !== undefined && (joinJob.phase === "queued" || joinJob.phase === "running");
   const joinFailed = joinJob !== undefined && ["error", "cancelled", "unknown"].includes(joinJob.phase);
   const stopped = Boolean(project.paused) || failed;
-  const passed = (project.passedThrough ?? []).map((index) => index + 1);
+  const passed = (project.passedThrough ?? [])
+    .filter((index) => !project.shotChoices?.[index]?.original)
+    .map((index) => index + 1);
+  const shots = project.cuts ? project.cuts.length + 1 : 0;
 
   // The upscale: offered once the swap is joined, at a size that would make
   // the smallest segment bigger — Upscale scales a larger source down.
@@ -272,7 +311,7 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
   return (
     <Panel padded>
       <PanelHeader
-        title={`Character swap · ${clock(project.seconds)} in ${total} segments`}
+        title={`Character swap · ${clock(project.seconds)} in ${shots > 1 ? `${shots} shots, ` : ""}${total} segments`}
         hint={hint}
         action={
           <Button
@@ -460,6 +499,7 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
                   state={states[index]}
                   job={job}
                   original={project.passedThrough?.includes(index) ?? false}
+                  chosen={project.shotChoices?.[index]?.original}
                 />
                 {states[index] === "done" && canRedo ? (
                   <Button
@@ -474,7 +514,11 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
                     <RotateCcw {...icon} /> Redo
                   </Button>
                 ) : null}
-                {index > 0 && startsFresh(project, index) && !project.passedThrough?.includes(index) ? (
+                {segment.cut && !project.passedThrough?.includes(index) ? (
+                  <span className="text-[11px] text-fg-subtle" title="The first segment after a camera cut: swapped fresh.">
+                    new shot
+                  </span>
+                ) : index > 0 && startsFresh(project, index) && !project.passedThrough?.includes(index) ? (
                   <span
                     className="text-[11px] text-fg-subtle"
                     title="Swapped from the clip and the picture alone, without carrying on from the segment before, to reset drift."

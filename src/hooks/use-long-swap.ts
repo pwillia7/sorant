@@ -6,11 +6,14 @@ import { api, ApiError, withToken } from "@/lib/client";
 import type { Job, JobOutput, MusicVideoPart, MusicVideoTag } from "@/lib/jobs";
 import type { RunModes } from "@/lib/workflows/modes";
 import {
+  CHAIN_OVER_SECONDS,
   chainSegments,
   FRESH_EVERY_PARAM,
   PASS_THROUGH_PARAM,
   segmentFrames,
+  shotSegments,
   SLICE_FPS,
+  SPLIT_SHOTS_PARAM,
   SLICE_FRAMES,
   type ChainSegment,
 } from "@/lib/workflows/slices";
@@ -75,6 +78,14 @@ import { defaultValuesFor, type ParamValue, type WorkflowSummary } from "@/lib/w
  * box is drawn on the clip's first frame, so it applies to the first segment
  * only. A redo can choose for itself (`choices`): a rule, or a box drawn on
  * that segment's own first frame, in place of carrying on from the one before.
+ *
+ * **Shots.** A clip cut together from several shots is split at its camera
+ * cuts before anything is sent (`planning`; the cuts are found in the browser,
+ * scene-cuts.ts). Each shot's first segment starts fresh — the frames and the
+ * mask before a cut show another shot, so carrying them over only misleads —
+ * and each shot says for itself who to replace (`shotChoices`): the form's
+ * rule, another rule, a box drawn on its first frame, or no one, which sends
+ * it as the clip's own footage.
  */
 
 /** How a redone segment picks who to replace, in place of the carried mask. */
@@ -83,6 +94,12 @@ export interface SegmentChoice {
   pick?: string;
   /** A box drawn on the segment's first frame (subject-box.ts). */
   box?: string;
+}
+
+/** Who a shot replaces: the form's rule when neither is set. */
+export interface ShotChoice extends SegmentChoice {
+  /** No one: the shot is sent as the clip's own footage. */
+  original?: boolean;
 }
 
 const STORAGE_KEY = "sorant-long-swap";
@@ -129,6 +146,18 @@ export interface LongSwapProject {
   seeds?: Record<number, number>;
   /** How a redone segment picks who to replace, where it was told. */
   choices?: Record<number, SegmentChoice>;
+  /**
+   * Set while the clip's shots are being found and chosen for: nothing is
+   * sent until `plan` clears it.
+   */
+  planning?: boolean;
+  /** Where each shot after the first starts, in frames at 24 fps, once planned. */
+  cuts?: number[];
+  /**
+   * Who each shot replaces, by the index of its first segment; `original` on
+   * every segment of a shot sent as the clip's own footage.
+   */
+  shotChoices?: Record<number, ShotChoice>;
 }
 
 type SubmitModes = RunModes & { lowVram?: boolean; localDirector?: string; rewriteModel?: string };
@@ -166,6 +195,12 @@ export interface LongSwapController {
    * segment after it (`onward`) so each still carries on from the one before.
    */
   redo: (index: number, onward: boolean, choice?: SegmentChoice) => void;
+  /**
+   * End planning: split the clip at these cuts, with who each shot replaces,
+   * and start sending. A clip short enough for one run with no cuts in it is
+   * sent as that one run instead, and the project closes.
+   */
+  plan: (cuts: number[], shots: ShotChoice[]) => Promise<void>;
   clear: () => void;
 }
 
@@ -211,7 +246,7 @@ function freshEveryOf(values: Record<string, ParamValue>): number {
  * pass-through, and every `freshEvery`th.
  */
 export function startsFresh(project: LongSwapProject, index: number): boolean {
-  if (index === 0) return true;
+  if (index === 0 || project.segments[index]?.cut) return true;
   if (project.passedThrough?.includes(index - 1)) return true;
   return Boolean(project.freshEvery && index % project.freshEvery === 0);
 }
@@ -314,7 +349,14 @@ function subjectValues(
   const choice = project.choices?.[index];
   if (choice?.box) return { [SUBJECT_BOX_PARAM]: choice.box, [SUBJECT_MASK_PARAM]: "" };
   if (choice?.pick) return { [PICK_PARAM]: choice.pick, [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: "" };
-  if (index === 0) return { [SUBJECT_MASK_PARAM]: "" };
+  if (index === 0 || project.segments[index]?.cut) {
+    // A shot's own choice, or the form's rule. The form's box was drawn on the
+    // clip's first frame, so it is the first shot's alone.
+    const shot = project.shotChoices?.[index];
+    if (shot?.box) return { [SUBJECT_BOX_PARAM]: shot.box, [SUBJECT_MASK_PARAM]: "" };
+    if (shot?.pick) return { [PICK_PARAM]: shot.pick, [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: "" };
+    return index === 0 ? { [SUBJECT_MASK_PARAM]: "" } : { [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: "" };
+  }
   // The form's box was drawn on the clip's first frame, which is not this one.
   // With no saved mask (the segment before was the clip's own footage, or ran
   // before masks were saved), the form's rule picks.
@@ -328,7 +370,8 @@ async function carriesNoOne(
   carriesOn: boolean,
   previous: Job | undefined,
 ): Promise<boolean> {
-  if (index === 0 || project.choices?.[index]?.box || project.choices?.[index]?.pick) return false;
+  if (index === 0 || project.segments[index]?.cut) return false;
+  if (project.choices?.[index]?.box || project.choices?.[index]?.pick) return false;
   const file = savedMaskFile(previous, carriesOn);
   return file ? maskIsEmpty(file) : false;
 }
@@ -468,7 +511,7 @@ export function useLongSwap({
   // sent, so a re-render while a submit is pending does not send it twice.
   const inFlight = useRef<number | null>(null);
   useEffect(() => {
-    if (!project || project.paused || !workflow || inFlight.current !== null) return;
+    if (!project || project.paused || project.planning || !workflow || inFlight.current !== null) return;
     const next = states.findIndex((state) => state !== "done");
     if (next === -1) return;
     // No one to swap in this stretch: send it as the clip's own footage, once.
@@ -492,16 +535,19 @@ export function useLongSwap({
       return;
     }
     if (states[next] !== "waiting") return; // queued, running, or failed (Resume)
+    // A shot chosen to be left as it is, or a stretch already found to have
+    // no one in it.
+    const original = project.passedThrough?.includes(next) ?? false;
     const fresh = startsFresh(project, next);
-    const history = fresh ? null : clipRef(segmentJobs[next - 1]);
-    if (!fresh && !history) {
+    const history = fresh || original ? null : clipRef(segmentJobs[next - 1]);
+    if (!fresh && !original && !history) {
       setError(`Segment ${next} finished without a saved video to carry on from. Press Resume to swap it again.`);
       return;
     }
     inFlight.current = next;
     setSending(true);
     setError(null);
-    void submitSegment(project, next, history, false, segmentJobs[next - 1])
+    void submitSegment(project, next, history, original, segmentJobs[next - 1])
       .then((promptId) => {
         if (!promptId) {
           setError(`Segment ${next + 1} was refused. See the message above, then press Resume.`);
@@ -526,8 +572,12 @@ export function useLongSwap({
     const who = String(values.prompt ?? "").trim();
     const character = String(values.character ?? "").trim();
     setError(null);
+    // Split at the camera cuts unless the form says not to: the panel finds
+    // them and the chain waits for `plan`.
+    const split = values[SPLIT_SHOTS_PARAM] !== false;
     setProject({
       id: crypto.randomUUID(),
+      planning: split || undefined,
       freshEvery: freshEveryOf(values),
       values: {
         ...values,
@@ -740,6 +790,9 @@ export function useLongSwap({
         delete choices[i];
       }
       if (choice && (choice.box || choice.pick)) choices[index] = choice;
+      // A shot left as it is, redone: swapped after all, by the form's rule
+      // unless told otherwise.
+      else if (project.shotChoices?.[index]?.original) choices[index] = { pick: String(project.values[PICK_PARAM] ?? "largest") };
       setError(null);
       setProject({
         ...project,
@@ -747,11 +800,73 @@ export function useLongSwap({
         redoneAt,
         seeds,
         choices,
-        // Tried for a swap again: if SAM still finds no one, it passes through again.
-        passedThrough: project.passedThrough?.filter((i) => !redone.includes(i)),
+        // Tried for a swap again: if SAM still finds no one, it passes through
+        // again. A shot chosen to be left as it is stays so, unless it is the
+        // one being redone.
+        passedThrough: project.passedThrough?.filter(
+          (i) => !redone.includes(i) || (i !== index && project.shotChoices?.[i]?.original),
+        ),
       });
     },
     [project],
+  );
+
+  const plan = useCallback(
+    async (cuts: number[], shots: ShotChoice[]) => {
+      if (!project || !workflow) return;
+      setError(null);
+      if (cuts.length === 0 && project.seconds <= CHAIN_OVER_SECONDS) {
+        // One shot, short enough for one run: an ordinary run, as it would
+        // have been without the split.
+        const shot = shots[0] ?? {};
+        setSending(true);
+        try {
+          const promptId = await jobs.submit(
+            workflow,
+            {
+              ...project.values,
+              ...(shot.box ? { [SUBJECT_BOX_PARAM]: shot.box } : {}),
+              ...(shot.pick ? { [PICK_PARAM]: shot.pick, [SUBJECT_BOX_PARAM]: "" } : {}),
+            },
+            project.modes,
+          );
+          if (promptId) setProject(null);
+          else setError("The swap was refused. See the message above.");
+        } finally {
+          setSending(false);
+        }
+        return;
+      }
+      const segments = shotSegments(project.seconds, cuts);
+      const firsts = segments.flatMap((segment, index) => (index === 0 || segment.cut ? [index] : []));
+      const shotChoices: Record<number, ShotChoice> = {};
+      const originals: number[] = [];
+      firsts.forEach((first, shot) => {
+        const choice = shots[shot] ?? {};
+        const end = firsts[shot + 1] ?? segments.length;
+        if (choice.original) {
+          for (let index = first; index < end; index += 1) {
+            shotChoices[index] = { original: true };
+            originals.push(index);
+          }
+        } else if (choice.box || choice.pick) {
+          shotChoices[first] = choice.box ? { box: choice.box } : { pick: choice.pick };
+        }
+      });
+      if (originals.length === segments.length) {
+        setError("Every shot is set to be left as it is, so there is no one to swap.");
+        return;
+      }
+      setProject({
+        ...project,
+        planning: undefined,
+        cuts,
+        segments,
+        shotChoices,
+        passedThrough: originals,
+      });
+    },
+    [project, workflow, jobs],
   );
 
   const clear = useCallback(() => {
@@ -777,6 +892,7 @@ export function useLongSwap({
     upscaleAll,
     joinUpscaled,
     redo,
+    plan,
     clear,
   };
 }

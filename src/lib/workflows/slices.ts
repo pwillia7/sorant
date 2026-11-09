@@ -76,6 +76,14 @@ export const PASS_THROUGH_PARAM = "pass_through";
  * never. Read by the page (use-long-swap.ts); it changes no graph.
  */
 export const FRESH_EVERY_PARAM = "fresh_every";
+/**
+ * Whether a Character swap is split at the clip's camera cuts, each shot
+ * swapped fresh: a toggle, read by the page (use-long-swap.ts); it changes no
+ * graph.
+ */
+export const SPLIT_SHOTS_PARAM = "split_shots";
+/** Clips shorter than this cannot hold two shots worth splitting: two seconds. */
+export const SPLIT_OVER_SECONDS = 2;
 
 /** Frames of the previous segment's output each segment carries on from: Relay's 18. */
 export const CHAIN_HISTORY = 18;
@@ -93,6 +101,11 @@ export interface ChainSegment {
   start: number;
   frames: number;
   history: number;
+  /**
+   * The first segment of a shot after a camera cut: it starts fresh, with no
+   * history and no mask from the segment before, which showed another shot.
+   */
+  cut?: boolean;
 }
 
 /** A tail shorter than this is folded into the segment before it. */
@@ -124,4 +137,40 @@ export function chainSegments(seconds: number): ChainSegment[] {
 /** How many frames a segment delivers, the last one included. */
 export function segmentFrames(segment: ChainSegment, seconds: number): number {
   return segment.frames || Math.max(1, Math.round(seconds * SLICE_FPS) - segment.start);
+}
+
+/**
+ * A clip as a chain of single-window runs, cut at the camera cuts (frames on
+ * the 24 fps grid where a new shot starts; see scene-cuts.ts). Each shot is
+ * chained as `chainSegments` chains a clip, and its first segment starts
+ * fresh. A shot's last segment is never shorter than MIN_LAST_SEGMENT: a
+ * short tail takes frames from the segment before it rather than being added
+ * to it, so no window is ever longer than the 124 frames Relay's tested at.
+ */
+export function shotSegments(seconds: number, cuts: number[]): ChainSegment[] {
+  const total = Math.round(seconds * SLICE_FPS);
+  const bounds = [0, ...cuts.filter((cut) => cut > 0 && cut < total), total];
+  const segments: ChainSegment[] = [];
+  for (let s = 0; s + 1 < bounds.length; s += 1) {
+    const shot: ChainSegment[] = [];
+    const end = bounds[s + 1];
+    let start = bounds[s];
+    while (start < end) {
+      const first = shot.length === 0;
+      const frames = Math.min(first ? SLICE_FRAMES : SLICE_FRAMES - 1, end - start);
+      shot.push({ start, frames, history: first ? 0 : CHAIN_HISTORY, ...(first && s > 0 ? { cut: true } : {}) });
+      start += frames;
+    }
+    const tail = shot.at(-1)!;
+    if (shot.length > 1 && tail.frames < MIN_LAST_SEGMENT) {
+      const short = MIN_LAST_SEGMENT - tail.frames;
+      shot[shot.length - 2].frames -= short;
+      tail.start -= short;
+      tail.frames += short;
+    }
+    segments.push(...shot);
+  }
+  const last = segments.at(-1);
+  if (last) last.frames = 0;
+  return segments;
 }

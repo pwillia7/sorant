@@ -37,7 +37,9 @@ soundtrack:
   in a clip you have. SAM finds and tracks them — by a description, or a box
   you draw around them — so everyone and everything else stays, and long
   clips are made in windows that carry on from each other and follow the same
-  person. Any segment of a long swap can be redone, and the whole swap
+  person. A clip with camera cuts is split at them, and you choose who to
+  replace in each shot (a rule, a box, or no one), so nobody is carried
+  across a cut. Any segment of a long swap can be redone, and the whole swap
   upscaled to 1080 px or 4K once it is joined.
 - **Extend** — carries a clip on from where it stopped.
 - **Music video** — a whole song and one idea: the song is cut into scenes on

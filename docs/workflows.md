@@ -262,6 +262,30 @@ swap.
   the clip's sound. A chained swap always keeps the clip's sound: H3's own
   audio would need the history's generated audio, which a saved segment
   does not keep.
+- **Split at camera cuts** (`split_shots`, on by default, read by the page
+  only). Before anything is sent, the panel finds the clip's cuts in the
+  browser (scene-cuts.ts, `ShotPlanner`): a hidden `<video>` of the clip in
+  ComfyUI's input folder, seeked on the 24 fps grid and drawn at 64×36. A
+  coarse pass compares frames 8 apart; where they differ enough, bisection
+  finds the new shot's first frame, which is kept only if it differs from the
+  frame before it the way a cut does. The measure is the larger of a colour
+  histogram distance and a blended block-brightness one (`frameDistance`).
+  Tuned on a 45 s film scene with 12 cuts: within a shot, frames 8 apart
+  differed by at most 0.08 and neighbours by 0.03; across a cut, 0.16 and
+  0.17 at least; the thresholds are 0.12 and 0.1. A 45 s clip takes about
+  175 seeks, ~10 s. Fades and dissolves are not found. Shots under 1 s are
+  folded into the one before (`tidyCuts`). The panel then lists the shots
+  with their first frames: each can follow the form's rule, another rule, a
+  box drawn on its own first frame, or no one (**leave it as it is**); a
+  wrong cut can be undone (**Not a cut**) and a missed one added by time.
+  **Start the swap** cuts each shot into segments as `chainSegments` cuts a
+  clip (`shotSegments`), its first marked `cut`: that one starts fresh, with
+  no history and no carried mask, since both would show another shot. A
+  shot's last segment is never under 24 frames: it takes frames from the one
+  before it, so no window exceeds 124. A shot left as it is is sent as
+  pass-throughs (`passedThrough`, with `shotChoices[i].original`), the clip's
+  own footage. A clip of 2–20 s goes through the planner too, and with no
+  cuts in it is sent as the one ordinary run it would have been.
 - **Up to 8 minutes** (`MAX_SWAP_SECONDS`): the join is one
   `ConcatenateVideo`, which takes at most 100 clips. Past a minute the clip
   control warns about the wait (`warnOverSeconds`, `longClipWarning`) rather
@@ -282,7 +306,9 @@ swap.
   person exactly as tracked rather than picking. The form's box is drawn on
   the clip's first frame and so applies to the first segment only; a segment
   after one that passed through as the clip's own footage has no mask to
-  carry and picks by the rule.
+  carry and picks by the rule. The first segment of a shot after a cut takes
+  its shot's own choice instead (`shotChoices`); its Redo offers **As
+  planned** in place of carrying on.
 - **Redoing a segment.** Each finished segment on the panel has **Redo**,
   which opens a choice of who it follows: the same person as the segment
   before (its carried mask, the default), the biggest, leftmost or rightmost,
@@ -330,6 +356,19 @@ selfie video (854×478, black and white), the character a colour photo, seed
 - **0.75 MP Frame size, 5 s of the same clip:** one window, 637 s, 1184×672
   (ImageScaleToTotalPixels lands a little over 0.75 MP on its 32-pixel grid).
   Clean, with the likeness held.
+- **Split at camera cuts (2026-11-08):** the last 26.8 s of a film scene
+  (640×480, 29.97 fps, 643 frames on the 24 fps grid), driven through the
+  app in Chrome. The browser found its 5 shots (cuts at frames 149, 211, 418
+  and 510) in a few seconds. Shot 1 by the largest person, shots 2 and 4 left
+  as they are, shot 3 (a wide shot with three people) by a box drawn on its
+  first frame, shot 5 by the largest: 8 runs, 6 swapped and 2 copied, joined
+  in 55 minutes at 0.7 MP. Every shot showed the right result. The box shot
+  swapped the man in the box and only him, across both of its segments. The
+  shots left alone matched the source. No segment held a frame of the
+  neighbouring shot, so the browser's cut frames are the ones ComfyUI reads. A
+  box drawn over only half the person and a neighbour's arm gave SAM an empty
+  mask, and the shot was copied as it is. Draw the box around the whole
+  person.
 
 The previous version (v0.10.0–0.10.1) had no mask and cut long clips into
 fresh five-second passes. Its joins were cold restarts, and on a clip with

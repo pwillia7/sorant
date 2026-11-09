@@ -109,7 +109,7 @@ export function BoxPicker({
     <div className="flex flex-col gap-2">
       <div className="flex justify-center rounded-lg bg-black">
         <div
-          className="relative"
+          className="relative overflow-hidden"
           // As wide as it can be, but never taller than 22rem: the width is
           // what is capped, so the wrapper keeps the frame's shape.
           style={{ aspectRatio: String(ratio), width: `min(100%, calc(22rem * ${ratio}))` }}
