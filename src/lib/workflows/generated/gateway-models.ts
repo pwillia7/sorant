@@ -3,7 +3,7 @@
  * Do not edit: run the script. The curation, and why it is these, is in
  * ../rewrite-catalog.ts.
  *
- * Synced 2026-10-30: 500 models in the catalog,
+ * Synced 2026-11-09: 498 models in the catalog,
  * 15 families declared, 28 offered.
  */
 import type { OfferedModel } from "../rewrite-catalog";
@@ -52,8 +52,8 @@ export const REWRITE_MODELS: OfferedModel[] = [
     pricePerMillion: 1.2,
   },
   {
-    id: "zai/glm-5.3-flashx",
-    label: "GLM 5.3 FlashX — $1.25/M",
+    id: "zai/glm-5.3-flashx-legal",
+    label: "GLM 5.3 FlashX Legal — $1.25/M",
     vision: true,
     free: false,
     pricePerMillion: 1.25,
@@ -80,11 +80,11 @@ export const REWRITE_MODELS: OfferedModel[] = [
     pricePerMillion: 7.5,
   },
   {
-    id: "deepseek/deepseek-v4.1-flash",
-    label: "DeepSeek V4.1 Flash — $1.20/M",
+    id: "deepseek/deepseek-v4.1-flash-1017-ultrafast",
+    label: "DeepSeek V4.1 Flash 1017 Ultrafast — $9.60/M",
     vision: true,
     free: false,
-    pricePerMillion: 1.2,
+    pricePerMillion: 9.6,
   },
   {
     id: "deepseek/deepseek-v4-flash",
@@ -150,15 +150,15 @@ export const REWRITE_MODELS: OfferedModel[] = [
     pricePerMillion: 0.28,
   },
   {
-    id: "xiaomi/mimo-v2.5-pro",
-    label: "MiMo V2.5 Pro — $0.61/M",
-    vision: false,
+    id: "tencent/hy4",
+    label: "Tencent Hy4 — $1.25/M",
+    vision: true,
     free: false,
-    pricePerMillion: 0.609,
+    pricePerMillion: 1.2505,
   },
   {
     id: "tencent/hy3",
-    label: "Hy3 — $0.58/M",
+    label: "Tencent Hy3 — $0.58/M",
     vision: false,
     free: false,
     pricePerMillion: 0.58,
@@ -192,11 +192,11 @@ export const REWRITE_MODELS: OfferedModel[] = [
     pricePerMillion: 0.5,
   },
   {
-    id: "google/gemini-4-argon",
-    label: "Gemini 4 Argon — $10/M",
+    id: "google/gemini-omni-1.2-flash",
+    label: "Gemini Omni 1.2 Flash — $9/M",
     vision: true,
     free: false,
-    pricePerMillion: 10,
+    pricePerMillion: 9,
   },
   {
     id: "anthropic/claude-sonnet-5.5",
