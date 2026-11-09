@@ -4,13 +4,14 @@ import { Check, Clock3, LoaderCircle, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
 import { savedMask, shotEndOf, startsFresh, type LongSwapController, type SegmentChoice, type SegmentState } from "@/hooks/use-long-swap";
 import { withToken } from "@/lib/client";
-import type { Job } from "@/lib/jobs";
+import { formatDuration, totalRenderMs, type Job } from "@/lib/jobs";
 import { MUSIC_VIDEO_FRAME_RATES, MUSIC_VIDEO_UPSCALE_SIZES } from "@/lib/music-video/project";
 import { segmentFrames, SLICE_FPS } from "@/lib/workflows/slices";
 import { ShotPlanner } from "./shot-planner";
 import { MAX_CHECK_SECONDS, PICK_PARAM, SUBJECT_BOX_PARAM } from "@/lib/workflows/subject-box";
 import { BoxPicker, inputVideoUrl } from "./ui/box-picker";
 import { ClipPlayer, type ClipItem } from "./ui/clip-player";
+import { JobRunTime, RunTime } from "./ui/run-time";
 import { MaskCheck } from "./ui/mask-check";
 import { Badge, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
@@ -254,7 +255,18 @@ function upscaleTime(seconds: number, px: number, multiplier: number): string {
   return hours < 1 ? `${Math.max(1, Math.round(hours * 60))} min` : `${hours.toFixed(1)} h`;
 }
 
-function JoinedVideo({ url, label, download }: { url: string; label?: string; download: string }) {
+function JoinedVideo({
+  url,
+  label,
+  download,
+  took,
+}: {
+  url: string;
+  label?: string;
+  download: string;
+  /** Render time of every take in it and the join, when all are known. */
+  took?: number | null;
+}) {
   return (
     <div className="mb-5">
       {label ? <p className="label-caps mb-1.5 text-fg-muted">{label}</p> : null}
@@ -265,10 +277,19 @@ function JoinedVideo({ url, label, download }: { url: string; label?: string; do
         preload="metadata"
         className="mx-auto block max-h-[75vh] w-full rounded-lg border border-border-default bg-black object-contain"
       />
-      <div className="mt-2 flex gap-2">
+      <div className="mt-2 flex items-center gap-2">
         <a href={withToken(url)} download={download} className={buttonClasses({ variant: "secondary", size: "sm" })}>
           Download
         </a>
+        {took != null ? (
+          <span className="ml-auto">
+            <RunTime
+              ms={took}
+              suffix="in all"
+              title={`${formatDuration(took)}: the render time of every run that made this video, added up. Waiting in the queue is not counted.`}
+            />
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -436,10 +457,20 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
       ) : null}
 
       {upscaled ? (
-        <JoinedVideo url={upscaled} label="Upscaled" download="character-swap-upscaled.mp4" />
+        <JoinedVideo
+          url={upscaled}
+          label="Upscaled"
+          download="character-swap-upscaled.mp4"
+          took={totalRenderMs([...segmentJobs, joinJob, ...upscaleJobs, upscaledJoinJob])}
+        />
       ) : null}
       {joined ? (
-        <JoinedVideo url={joined} label={upscaled ? "Original" : undefined} download="character-swap.mp4" />
+        <JoinedVideo
+          url={joined}
+          label={upscaled ? "Original" : undefined}
+          download="character-swap.mp4"
+          took={totalRenderMs([...segmentJobs, joinJob])}
+        />
       ) : null}
 
       {showUpscale ? (
@@ -551,6 +582,7 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
                   original={project.passedThrough?.includes(index) ?? false}
                   chosen={project.shotChoices?.[index]?.original}
                 />
+                {states[index] === "done" ? <JobRunTime job={job} /> : null}
                 {states[index] === "done" && canRedo ? (
                   <Button
                     variant="quiet"

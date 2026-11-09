@@ -515,6 +515,26 @@ export function renderMs(job: Job): number | null {
   return job.completedAt - job.startedAt;
 }
 
+/** How long a job waited in the queue before it rendered; null when never seen starting. */
+export function queueMs(job: Job): number | null {
+  return job.startedAt === undefined ? null : Math.max(0, job.startedAt - job.submittedAt);
+}
+
+/**
+ * The render time of everything that went into one result — a chain's takes
+ * and its join. Null when any part is missing or was never seen running: a
+ * total short of a part would read as the whole.
+ */
+export function totalRenderMs(jobs: Array<Job | undefined>): number | null {
+  let total = 0;
+  for (const job of jobs) {
+    const ms = job ? renderMs(job) : null;
+    if (ms === null) return null;
+    total += ms;
+  }
+  return total;
+}
+
 /**
  * The number to put on the clock, whatever state the job is in.
  *
@@ -600,8 +620,10 @@ function modeKey(job: Job): string {
 
 export function formatDuration(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(total / 60);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor(total / 60) % 60;
   const seconds = total % 60;
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   return minutes === 0
     ? `${seconds}s`
     : `${minutes}:${String(seconds).padStart(2, "0")}`;

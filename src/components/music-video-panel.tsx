@@ -16,7 +16,7 @@ import {
 import { useState, type ReactNode } from "react";
 import type { MusicVideoController } from "@/hooks/use-music-video";
 import { withToken } from "@/lib/client";
-import type { Job } from "@/lib/jobs";
+import { formatDuration, totalRenderMs, type Job } from "@/lib/jobs";
 import {
   keepsVideoLook,
   MUSIC_VIDEO_FRAME_RATES,
@@ -34,6 +34,7 @@ import { REFERENCE_KEEP_OPTIONS } from "@/lib/workflows/minimax-common";
 import { Badge, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
 import { ClipPlayer, type ClipItem } from "./ui/clip-player";
+import { JobRunTime, RunTime } from "./ui/run-time";
 import { AudioUpload } from "./ui/audio-upload";
 import { ImageUpload } from "./ui/image-upload";
 import { NumberInput, Segmented, Select, TextArea, TextInput, Toggle } from "./ui/inputs";
@@ -195,6 +196,11 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
           url={upscaledUrl}
           label="Upscaled"
           download={`${story ? "multi_scene" : "music_video"}_${project?.id ?? ""}_upscaled.mp4`}
+          took={totalRenderMs([
+            ...scenes.map(video.jobFor),
+            ...scenes.map(video.upscaleFor),
+            video.upscaledFinal,
+          ])}
         />
       ) : null}
       {finalUrl ? (
@@ -203,6 +209,7 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
           label={upscaledUrl ? "Original" : undefined}
           download={`${story ? "multi_scene" : "music_video"}_${project?.id ?? ""}.mp4`}
           compact={Boolean(upscaledUrl)}
+          took={totalRenderMs([...scenes.map(video.jobFor), video.final])}
         />
       ) : null}
 
@@ -534,11 +541,14 @@ function FinishedVideo({
   label,
   download,
   compact = false,
+  took,
 }: {
   url: string;
   label?: string;
   download: string;
   compact?: boolean;
+  /** Render time of every scene take in it and the join, when all are known. */
+  took?: number | null;
 }) {
   return (
     <div className="mb-5">
@@ -560,6 +570,15 @@ function FinishedVideo({
         >
           Download
         </a>
+        {took != null ? (
+          <span className="ml-auto self-center">
+            <RunTime
+              ms={took}
+              suffix="in all"
+              title={`${formatDuration(took)}: the render time of every run that made this video, added up. Waiting in the queue is not counted.`}
+            />
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -1018,6 +1037,7 @@ function SceneCard({
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-fg-muted">
           <SceneStatus job={job} />
+          <JobRunTime job={job} />
           {story ? (
             <label
               className="flex items-center gap-1"

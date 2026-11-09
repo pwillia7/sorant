@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { StarIcon } from "@/components/ui/star-icon";
+import { runTimeTitle } from "@/components/ui/run-time";
 import { withToken } from "@/lib/client";
 import {
   clockMs,
@@ -26,6 +27,7 @@ import {
   isFavorite,
   isImageOnly,
   partitionFavorites,
+  renderMs,
   type Job,
   type MusicVideoGroup,
 } from "@/lib/jobs";
@@ -344,6 +346,7 @@ function Tile({
   const favorite = isFavorite(job);
   const done = job.phase === "done" && job.outputs.length > 0;
   const elapsed = clockMs(job, now);
+  const rendered = renderMs(job);
   const Icon = workflowIcon(job.workflowId);
   const rendering = job.startedAt ? (now - job.startedAt) / 1000 : 0;
   const fraction =
@@ -431,7 +434,9 @@ function Tile({
           </p>
           <p className="mt-1 flex items-center gap-1.5 font-mono text-[11px] tabular-nums text-fg-subtle">
             <span>{formatWhen(job.submittedAt, now)}</span>
-            {done && job.completedAt ? <span>· {formatDuration(job.completedAt - job.submittedAt)}</span> : null}
+            {done && rendered !== null ? (
+              <span title={runTimeTitle(job, rendered)}>· took {formatDuration(rendered)}</span>
+            ) : null}
           </p>
         </div>
 

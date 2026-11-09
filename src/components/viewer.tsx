@@ -2,7 +2,8 @@
 
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
-import { formatWhen, type Job } from "@/lib/jobs";
+import { formatDuration, formatWhen, renderMs, type Job } from "@/lib/jobs";
+import { runTimeTitle } from "./ui/run-time";
 import { workflowIcon } from "./workflow-icons";
 
 /**
@@ -52,6 +53,7 @@ export function Viewer({
   }, [open, onStep]);
 
   const Icon = job ? workflowIcon(job.workflowId) : null;
+  const rendered = job?.phase === "done" ? renderMs(job) : null;
 
   return (
     <dialog
@@ -74,7 +76,10 @@ export function Viewer({
           <div className="mb-3 flex items-center gap-2">
             {Icon ? <Icon className="size-4 text-white/70" aria-hidden="true" /> : null}
             <span className="text-[13px] font-medium text-white">{job.workflowName}</span>
-            <span className="font-mono text-[12px] text-white/50">{formatWhen(job.submittedAt, now)}</span>
+            <span className="font-mono text-[12px] text-white/50">
+              {formatWhen(job.submittedAt, now)}
+              {rendered !== null ? <span title={runTimeTitle(job, rendered)}> · took {formatDuration(rendered)}</span> : null}
+            </span>
             <div className="ml-auto flex items-center gap-1">
               {onStep ? (
                 <>
