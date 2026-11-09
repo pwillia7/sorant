@@ -192,8 +192,19 @@ swap.
   nothing on a frame detected afresh.
 - **Tuning, in the Prompt group's advanced controls.** *If SAM loses them*
   (`recover_empty_frames`): *Find them again* re-detects that frame alone by
-  the rule, with no memory of where they were, which can land on someone else
-  for a moment; *Stop with an error* lets `H3RelayExpandMask` fail the run
+  the rule, with no memory of where they were — at a cut to a shot without
+  them, that swaps whoever matches there instead (seen on the test clip: 92
+  frames of the wrong man after a cut-away). *Leave those frames as they are*
+  turns the re-detection off and grows the mask with core `GrowMask` in place
+  of `H3RelayExpandMask` (`leaveLostFrames`), because Relay's node refuses a
+  timeline with an empty frame; downstream an empty frame is an edit mask of
+  zeros, so the source latent, the clip's own footage, is kept there. SAM
+  Video Track still re-detects by the description each frame, so the person
+  is picked up again when the shot returns. GrowMask grows by a repeated 3×3
+  step (an octagon, not Relay's circle), on the CPU. A segment whose saved
+  mask is empty (the hand-off frame fell in such a stretch) is not tracked
+  from it: the page checks the PNG and lets the rule pick instead
+  (`carriesNoOne`). *Stop with an error* lets `H3RelayExpandMask` fail the run
   naming the frames. *Match threshold* is SAM3_Detect's `threshold` on the
   first frame (0.35 by default): lower finds a small or half-hidden person and
   more false matches, higher ignores weak ones. Recover Masks keeps its own

@@ -612,6 +612,27 @@ function pickSubject(graph: ComfyGraph, values: Record<string, ParamValue>) {
 }
 
 /**
+ * Keep the clip's own footage wherever the track is lost. Relay's Expand Mask
+ * refuses a timeline with an empty frame, by design; downstream an empty frame
+ * is only an edit mask of zeros, which keeps the source latent there
+ * (`pool_edit_mask`, `H3RelayApplyEditMask`). So the mask is grown by core
+ * Grow Mask instead, which leaves an empty frame empty. Its growth is a 3×3
+ * step repeated, an octagon rather than Relay's circle, and about half a
+ * minute a segment on the CPU. The track's masks already cover every prepared
+ * frame, so nothing needs padding.
+ */
+function leaveLostFrames(graph: ComfyGraph, values: Record<string, ParamValue>) {
+  const grow = Number(values.mask_grow ?? 64);
+  graph.grow_mask = {
+    class_type: "GrowMask",
+    inputs: { mask: ["recover", 0], expand: Number.isFinite(grow) ? Math.round(grow) : 64, tapered_corners: true },
+    _meta: { title: "Grow Mask (lost frames left empty)" },
+  };
+  graph.window.inputs.mask = ["grow_mask", 0];
+  delete graph.expand_mask;
+}
+
+/**
  * Save the person's mask where the next segment will need it: on the frame its
  * source starts when it carries on (CHAIN_HISTORY before this segment's end),
  * and on this segment's last frame, one before where a fresh start begins.
@@ -842,12 +863,13 @@ const params: ParamDef[] = [
     default: "recover",
     options: [
       { value: "recover", label: "Find them again" },
+      { value: "leave", label: "Leave those frames as they are" },
       { value: "stop", label: "Stop with an error" },
     ],
-    help: "When the track drops for a frame — they turn away, someone walks in front — SAM can look again on that frame alone, using the rule above with no memory of where they were, which can land on someone else for a moment. Stop fails the run instead, naming the frames, so nobody else is swapped quietly.",
+    help: "When the track drops — a cut to a shot without them, someone walking in front — Find them again looks on each lost frame alone, by the rule above and with no memory of where they were, so a cut-away swaps whoever matches there instead. Leave those frames as they are keeps the clip's own footage wherever they are lost, and picks them up again when they come back; a brief drop shows the original person for a moment. Stop fails the run, naming the frames.",
     group: "Prompt",
     advanced: true,
-    targets: [{ node: "recover", input: "recover_empty_frames", transform: (value) => value !== "stop" }],
+    targets: [{ node: "recover", input: "recover_empty_frames", transform: (value) => value === "recover" || value === undefined }],
   },
   {
     id: "sam_threshold",
@@ -1045,6 +1067,7 @@ export const minimaxH3Swap: WorkflowDef = {
       }
     }
     pickSubject(graph, values);
+    if (values.track_drop === "leave") leaveLostFrames(graph, values);
     if (segment && segment.frames > 0) saveMaskForNext(graph, segment);
     // At either of Prepare Source's own budgets the frames are already that
     // size, and scaling them again would only nudge the shape off by a few
@@ -1108,6 +1131,18 @@ export const minimaxH3Swap: WorkflowDef = {
         [MEGAPIXELS_PARAM]: 0.7,
         track_drop: "stop",
         sam_threshold: 0.5,
+      },
+    },
+    {
+      name: "lost frames left as they are, in a carried-on segment",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [SEGMENT_PARAM]: "247:123:18",
+        [HISTORY_CLIP_PARAM]: "video/MiniMax_H3_swap_00002_.mp4 [output]",
+        track_drop: "leave",
+        mask_grow: 48,
       },
     },
     {

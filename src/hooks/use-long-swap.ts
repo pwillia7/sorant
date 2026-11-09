@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JobsController } from "@/hooks/use-jobs";
-import { api, ApiError } from "@/lib/client";
+import { api, ApiError, withToken } from "@/lib/client";
 import type { Job, JobOutput, MusicVideoPart, MusicVideoTag } from "@/lib/jobs";
 import type { RunModes } from "@/lib/workflows/modes";
 import {
@@ -258,17 +258,46 @@ function soundtrackedRef(job: Job | undefined): string | null {
  * or its own last frame when the next starts fresh.
  */
 export function savedMask(job: Job | undefined, carriesOn: boolean): string | null {
-  if (job?.phase !== "done") return null;
+  const saved = savedMaskFile(job, carriesOn);
+  return saved ? `${saved.subfolder}/${saved.filename} [output]` : null;
+}
+
+function savedMaskFile(job: Job | undefined, carriesOn: boolean): JobOutput | undefined {
+  if (job?.phase !== "done") return undefined;
   const prefix = carriesOn ? CARRY_MASK_PREFIX : END_MASK_PREFIX;
   const [folder, name] = prefix.split("/");
-  const saved = job.outputs.find(
+  return job.outputs.find(
     (file) =>
       (file.type || "output") === "output" &&
       file.subfolder === folder &&
       file.filename.startsWith(`${name}_`) &&
       file.filename.endsWith(".png"),
   );
-  return saved ? `${folder}/${saved.filename} [output]` : null;
+}
+
+/**
+ * Whether a saved mask has no one in it: the hand-off frame fell where the
+ * person was lost and left so ("Leave those frames as they are"). Tracking
+ * from it would follow no one, so the next segment picks by the rule instead.
+ * Unreadable counts as not empty — the run then says what is wrong itself.
+ */
+async function maskIsEmpty(file: JobOutput): Promise<boolean> {
+  try {
+    const image = new Image();
+    image.src = withToken(file.url);
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth / 4));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight / 4));
+    const context = canvas.getContext("2d");
+    if (!context) return false;
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < data.length; i += 4) if (data[i] > 127) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -290,6 +319,18 @@ function subjectValues(
   // With no saved mask (the segment before was the clip's own footage, or ran
   // before masks were saved), the form's rule picks.
   return { [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: savedMask(previous, carriesOn) ?? "" };
+}
+
+/** Whether the mask `subjectValues` would carry into this segment is empty. */
+async function carriesNoOne(
+  project: LongSwapProject,
+  index: number,
+  carriesOn: boolean,
+  previous: Job | undefined,
+): Promise<boolean> {
+  if (index === 0 || project.choices?.[index]?.box || project.choices?.[index]?.pick) return false;
+  const file = savedMaskFile(previous, carriesOn);
+  return file ? maskIsEmpty(file) : false;
 }
 
 /** A segment as the swap workflow's `segment` param takes it. */
@@ -405,6 +446,9 @@ export function useLongSwap({
       const values: Record<string, ParamValue> = {
         ...current.values,
         ...(passThrough ? {} : subjectValues(current, index, carried > 0, previous)),
+        ...(!passThrough && (await carriesNoOne(current, index, carried > 0, previous))
+          ? { [SUBJECT_MASK_PARAM]: "" }
+          : {}),
         seed: current.seeds?.[index] ?? current.values.seed,
         segment: segmentValue(segment, carried),
         history_clip: carried ? history! : "",
