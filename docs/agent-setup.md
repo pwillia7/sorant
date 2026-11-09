@@ -812,7 +812,13 @@ On the ComfyUI machine:
 3. Models: `pnpm models:download` for the workflows the person uses — it fetches
    only what is missing, and says how much before it starts. Ask before a large
    download.
-4. ComfyUI itself, if the release notes say so.
+4. ComfyUI itself, if the release notes say so, or if `pnpm check:nodes` reports
+   the version as OLDER: the new version's `machine-requirements.json` names the
+   oldest ComfyUI it is tested on (`comfyui.min`, from src/lib/comfy-version.ts),
+   and the app's status panel warns below it. Portable: `git -C ComfyUI fetch
+   --tags` and `git -C ComfyUI checkout v<version>` in the install folder, then
+   `python_embeded\python.exe -m pip install -r ComfyUI\requirements.txt`; note
+   the commit it was on first (`git -C ComfyUI rev-parse HEAD`) so it can go back.
 5. Restart ComfyUI from its launch script (ask first — it may be rendering).
    Gate: `pnpm check:nodes` exits 0 (with `--workflows` for the set the
    person uses), and `pnpm smoke` passes against a local `pnpm dev`.

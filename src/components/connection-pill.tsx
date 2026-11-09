@@ -4,6 +4,7 @@ import { LockOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
 import { Dot } from "@/components/ui/panel";
+import { COMFY_TESTED, comfyVersionStatus } from "@/lib/comfy-version";
 
 export interface Health {
   reachable: boolean;
@@ -16,6 +17,7 @@ export interface Health {
   device?: string;
   vramTotalMb?: number;
   vramFreeMb?: number;
+  comfyuiVersion?: string;
 }
 
 /**
@@ -81,10 +83,15 @@ export function ConnectionPill({
           : "Ready";
 
   const insecure = health?.secure === false;
+  // Below the tested range: said on the pill, since the panel is only seen
+  // when someone opens it.
+  const outdated = Boolean(health?.reachable && !unauthorized && comfyVersionStatus(health.comfyuiVersion) === "older");
 
   const title = health?.reachable && !unauthorized
     ? [
         insecure ? "Connected over plain HTTP — traffic is not encrypted" : null,
+        outdated ? `ComfyUI ${health.comfyuiVersion} is older than tested (${COMFY_TESTED.min}+) — open to see` : null,
+        health.comfyuiVersion ? `ComfyUI ${health.comfyuiVersion}` : null,
         health.device,
         health.vramFreeMb && health.vramTotalMb
           ? `${(health.vramFreeMb / 1024).toFixed(1)} / ${(health.vramTotalMb / 1024).toFixed(1)} GB VRAM free`
@@ -100,7 +107,7 @@ export function ConnectionPill({
       type="button"
       onClick={onOpen}
       title={update ? `${title}\nSoran’t ${update} is out — open to update` : title}
-      aria-label={`ComfyUI: ${label}.${update ? ` Soran’t ${update} is out.` : ""} Open status`}
+      aria-label={`ComfyUI: ${label}.${outdated ? " ComfyUI is older than tested." : ""}${update ? ` Soran’t ${update} is out.` : ""} Open status`}
       className="relative inline-flex items-center gap-2 rounded-md border border-border-default
         bg-surface h-8 px-2.5 text-[12px] text-fg-muted transition-colors duration-150
         hover:border-border-strong hover:bg-surface-hover"
@@ -133,10 +140,10 @@ export function ConnectionPill({
           <span className="hidden sm:inline">· {health.queuePending} queued</span>
         </span>
       ) : null}
-      {update ? (
+      {outdated || update ? (
         <span
           aria-hidden="true"
-          className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-accent ring-2 ring-bg"
+          className={`absolute -right-0.5 -top-0.5 size-2.5 rounded-full ring-2 ring-bg ${outdated ? "bg-warning" : "bg-accent"}`}
         />
       ) : null}
     </button>

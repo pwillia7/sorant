@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { COMFY_TESTED } from "../comfy-version";
 import { collect } from "./needs";
 
 /**
@@ -26,6 +27,11 @@ export interface MachineRequirements {
    * read as a change the machine has to make.
    */
   fingerprint: string;
+  /**
+   * The oldest ComfyUI the workflows are known to work on (comfy-version.ts).
+   * In the fingerprint, so raising it reads as a change to the machine.
+   */
+  comfyui: { min: string };
   classes: Record<
     string,
     { inputs: string[]; optional: boolean; workflows: string[] }
@@ -70,7 +76,8 @@ export function buildRequirements(): MachineRequirements {
   );
 
   return {
-    fingerprint: fingerprintOf(classEntries, modelEntries),
+    fingerprint: fingerprintOf(classEntries, modelEntries, COMFY_TESTED.min),
+    comfyui: { min: COMFY_TESTED.min },
     classes: classEntries,
     models: modelEntries,
   };
@@ -79,10 +86,12 @@ export function buildRequirements(): MachineRequirements {
 function fingerprintOf(
   classes: MachineRequirements["classes"],
   models: MachineRequirements["models"],
+  minComfy: string,
 ): string {
   const essence = {
     classes: Object.entries(classes).map(([name, c]) => [name, c.inputs, c.optional]),
     models: Object.entries(models).map(([file, m]) => [file, m.loader, m.input, m.optional]),
+    comfyui: minComfy,
   };
   return createHash("sha256")
     .update(JSON.stringify(essence))

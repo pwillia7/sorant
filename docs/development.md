@@ -453,6 +453,14 @@ straight to the release page. So keep a short **How to update** section in the
 notes too, before the machine changes: the agent prompt from the README, and
 the steps by hand.
 
+**The ComfyUI versions a release is tested on** are `COMFY_TESTED` in
+`src/lib/comfy-version.ts`. After running the app on a newer ComfyUI and finding
+it fine, move `testedThrough` (and the "Tested on" line in docs/agent-setup.md):
+that asks nothing of anyone's machine. Raise `min` only when a workflow starts to
+depend on something a newer ComfyUI has; it is in the machine-requirements
+fingerprint, so `pnpm requirements:write` and the release becomes one that needs
+the ComfyUI machine first, and the status panel and `check:nodes` warn below it.
+
 Cut a release whenever a tested, user-visible change lands on `main`: a minor
 version for features or machine changes, a patch for fixes. Nobody else gets
 anything until there is one.

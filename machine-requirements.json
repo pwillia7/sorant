@@ -1,5 +1,8 @@
 {
-  "fingerprint": "0ef65d8055d3bb12",
+  "fingerprint": "4d7dba2a4d56b2e0",
+  "comfyui": {
+    "min": "0.38.0"
+  },
   "classes": {
     "AudioConcatenate": {
       "inputs": [

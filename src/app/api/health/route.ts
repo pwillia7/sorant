@@ -26,6 +26,8 @@ interface HealthPayload {
   device?: string;
   vramTotalMb?: number;
   vramFreeMb?: number;
+  /** ComfyUI's own version, from system_stats; see comfy-version.ts. */
+  comfyuiVersion?: string;
 }
 
 /**
@@ -52,6 +54,7 @@ export async function GET(request: Request) {
 
     const typed = stats as {
       devices?: Array<{ name?: string; vram_total?: number; vram_free?: number }>;
+      system?: { comfyui_version?: string };
     };
     const device = typed.devices?.[0];
 
@@ -68,6 +71,7 @@ export async function GET(request: Request) {
       vramFreeMb: device?.vram_free
         ? Math.round(device.vram_free / 1024 / 1024)
         : undefined,
+      comfyuiVersion: typed.system?.comfyui_version,
     } satisfies HealthPayload);
   } catch (error) {
     // An auth failure means the box is up and talking — it just refused us.

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Dot } from "@/components/ui/panel";
 import type { CompatReport } from "@/lib/compat";
+import { COMFY_TESTED, comfyVersionStatus, olderComfyMessage } from "@/lib/comfy-version";
 import type { WorkflowSummary } from "@/lib/workflows/types";
 
 const UPDATING =
@@ -80,7 +81,9 @@ function ComfyStatus({ health }: { health: Health | null }) {
   if (health.authorized === false) return <Row tone="danger">ComfyUI refused this app’s token.</Row>;
 
   const busy = (health.queueRunning ?? 0) > 0;
+  const versionStatus = comfyVersionStatus(health.comfyuiVersion);
   const details = [
+    health.comfyuiVersion ? `ComfyUI ${health.comfyuiVersion}` : null,
     health.device,
     health.vramFreeMb && health.vramTotalMb
       ? `${(health.vramFreeMb / 1024).toFixed(1)} of ${(health.vramTotalMb / 1024).toFixed(1)} GB VRAM free`
@@ -93,6 +96,14 @@ function ComfyStatus({ health }: { health: Health | null }) {
     <>
       <Row tone={busy ? "warning" : "success"}>{busy ? "Busy" : "Ready"}</Row>
       <p className="mt-1 pl-4">{details.join(" · ")}</p>
+      {versionStatus === "older" ? (
+        <p className="mt-1 pl-4 text-warning">{olderComfyMessage(health.comfyuiVersion!)}</p>
+      ) : versionStatus === "newer" ? (
+        <p className="mt-1 pl-4">
+          Newer than Soran’t has been tested on (through {COMFY_TESTED.testedThrough}). It should be fine; say so if
+          something looks wrong.
+        </p>
+      ) : null}
       {health.secure === false ? (
         <p className="mt-1 pl-4 text-warning">
           Connected over plain HTTP, so traffic to ComfyUI is not encrypted.

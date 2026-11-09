@@ -28,6 +28,7 @@ import {
 import { WORKFLOWS } from "../src/lib/workflows";
 import { collect } from "../src/lib/workflows/needs";
 import { loadEnvFiles } from "./lib/env";
+import { COMFY_TESTED, comfyVersionStatus, olderComfyMessage } from "../src/lib/comfy-version";
 import {
   REWRITE_MODELS,
   TEXT_CLASS,
@@ -90,13 +91,25 @@ async function main() {
   // Prove we can talk to ComfyUI before asking it thirty questions. Without
   // this, a refused connection or a stale token reports every class as missing,
   // which sends people hunting for node packs they already have.
-  await systemStats();
+  const stats = (await systemStats()) as { system?: { comfyui_version?: string } };
 
   const { classes, models } = collect(only);
   console.log(
     `Checking ${classes.size} node classes and ${models.size} model files ` +
       `${only ? `for ${only.join(", ")} ` : ""}against ${process.env.COMFY_URL}\n`,
   );
+
+  // Every class can be there and the version still too old for a fix a
+  // workflow relies on: see comfy-version.ts.
+  const comfyVersion = stats.system?.comfyui_version ?? "";
+  const versionStatus = comfyVersionStatus(comfyVersion);
+  console.log("ComfyUI version");
+  if (versionStatus === "older") console.log(`  OLDER    ${comfyVersion}  — ${olderComfyMessage(comfyVersion)}`);
+  else if (versionStatus === "newer")
+    console.log(`  ok       ${comfyVersion}  (newer than tested, through ${COMFY_TESTED.testedThrough})`);
+  else if (versionStatus === "unknown") console.log("  unknown  ComfyUI did not say its version");
+  else console.log(`  ok       ${comfyVersion}  (tested ${COMFY_TESTED.min} through ${COMFY_TESTED.testedThrough})`);
+  console.log("");
 
   // Sequential on purpose: a cold ComfyUI answers /object_info slowly, and
   // thirty parallel requests is a rude way to greet it.
@@ -328,6 +341,10 @@ async function main() {
   }
 
   if (missingClasses.length === 0 && missingModels.length === 0) {
+    if (versionStatus === "older") {
+      console.error(`\n${olderComfyMessage(comfyVersion)}`);
+      process.exit(1);
+    }
     console.log(
       absentOptional.length === 0
         ? "\nEverything the workflows reference is present."
@@ -345,6 +362,7 @@ async function main() {
         "src/lib/workflows/ to stop using them.",
     );
   }
+  if (versionStatus === "older") console.error(olderComfyMessage(comfyVersion));
   if (missingModels.length > 0) {
     console.error(
       `${missingModels.length} model file(s) missing. Download them, or change the filename in\n` +
