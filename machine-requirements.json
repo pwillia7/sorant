@@ -1,5 +1,5 @@
 {
-  "fingerprint": "d5804625e5cc7a3f",
+  "fingerprint": "0ef65d8055d3bb12",
   "classes": {
     "AudioConcatenate": {
       "inputs": [
@@ -124,7 +124,8 @@
         "images.image0",
         "images.image1",
         "images.image2",
-        "images.image3"
+        "images.image3",
+        "images.image4"
       ],
       "optional": false,
       "workflows": [
@@ -292,7 +293,10 @@
     "ConcatenateVideo": {
       "inputs": [
         "codec",
-        "complete_audio"
+        "complete_audio",
+        "videos.video0",
+        "videos.video1",
+        "videos.video2"
       ],
       "optional": false,
       "workflows": [
@@ -519,10 +523,22 @@
         "minimax-h3-swap"
       ]
     },
+    "GrowMask": {
+      "inputs": [
+        "expand",
+        "mask",
+        "tapered_corners"
+      ],
+      "optional": true,
+      "workflows": [
+        "minimax-h3-swap"
+      ]
+    },
     "H3RelayAppendWindow": {
       "inputs": [
         "audio",
         "frames",
+        "initial_history",
         "previous",
         "window"
       ],
@@ -611,6 +627,21 @@
         "swap-mask-check"
       ]
     },
+    "H3RelayRefineMask": {
+      "inputs": [
+        "frame",
+        "image",
+        "model",
+        "negative_coords",
+        "positive_coords",
+        "prior_file"
+      ],
+      "optional": true,
+      "workflows": [
+        "minimax-h3-swap",
+        "swap-mask-check"
+      ]
+    },
     "H3RelaySamplingMemory": {
       "inputs": [
         "activation_memory_gib",
@@ -648,6 +679,7 @@
       "inputs": [
         "fps",
         "history_audio_mode",
+        "initial_history",
         "iteration_index",
         "mask",
         "previous",
@@ -665,6 +697,7 @@
     "H3RelayWindowPlan": {
       "inputs": [
         "history_frames",
+        "initial_history",
         "schedule",
         "seed",
         "seed_mode",
@@ -751,6 +784,16 @@
         "minimax-h3-ref (spectrum)",
         "minimax-h3-ref (style, vhs tape)",
         "minimax-h3-ref (turbo)",
+        "minimax-h3-swap"
+      ]
+    },
+    "ImageToMask": {
+      "inputs": [
+        "channel",
+        "image"
+      ],
+      "optional": true,
+      "workflows": [
         "minimax-h3-swap"
       ]
     },
@@ -1037,6 +1080,8 @@
       "optional": false,
       "workflows": [
         "minimax-h3-swap",
+        "multi-scene-stitch",
+        "music-video-stitch",
         "swap-mask-check"
       ]
     },
@@ -1072,6 +1117,15 @@
       "optional": false,
       "workflows": [
         "swap-mask-check"
+      ]
+    },
+    "MaskToImage": {
+      "inputs": [
+        "mask"
+      ],
+      "optional": true,
+      "workflows": [
+        "minimax-h3-swap"
       ]
     },
     "MiniMaxH3AddGuide": {
@@ -1187,10 +1241,13 @@
       "optional": false,
       "workflows": [
         "minimax-h3 (turbo)",
+        "minimax-h3-extend",
         "minimax-h3-extend (turbo)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image (turbo)",
+        "minimax-h3-ref",
         "minimax-h3-ref (turbo)",
+        "minimax-h3-ref2v",
         "minimax-h3-ref2v (turbo)"
       ]
     },
@@ -1201,7 +1258,9 @@
         "minimax-h3 (4-step)",
         "minimax-h3-extend (4-step)",
         "minimax-h3-i2v (4-step)",
+        "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
+        "minimax-h3-ref2v",
         "minimax-h3-ref2v (4-step)"
       ]
     },
@@ -1244,6 +1303,19 @@
         "minimax-h3-image (sage)",
         "minimax-h3-ref (sage)",
         "minimax-h3-ref2v (sage)"
+      ]
+    },
+    "PreviewAny": {
+      "inputs": [
+        "source"
+      ],
+      "optional": true,
+      "workflows": [
+        "minimax-h3-extend",
+        "minimax-h3-ref",
+        "minimax-h3-ref2v",
+        "multi-scene",
+        "music-video"
       ]
     },
     "PrimitiveFloat": {
@@ -1499,6 +1571,7 @@
     },
     "SAM3_Detect": {
       "inputs": [
+        "bboxes",
         "conditioning",
         "image",
         "individual_masks",
@@ -1617,7 +1690,8 @@
         "minimax-h3-image (spectrum)",
         "minimax-h3-image (style, vhs tape)",
         "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)"
+        "minimax-h3-image (turbo)",
+        "minimax-h3-swap"
       ]
     },
     "SaveLatent": {
@@ -2326,7 +2400,10 @@
         "minimax-h3-image (style, vhs tape)",
         "minimax-h3-image (style, vhs tape, lighter base)",
         "minimax-h3-image (turbo)",
-        "minimax-music3"
+        "minimax-h3-ref",
+        "minimax-music3",
+        "multi-scene",
+        "music-video"
       ]
     },
     "Video Slice": {
@@ -2340,6 +2417,17 @@
       "workflows": [
         "minimax-h3-swap",
         "swap-mask-check"
+      ]
+    },
+    "VideoTrim": {
+      "inputs": [
+        "strict_duration",
+        "trim",
+        "video"
+      ],
+      "optional": true,
+      "workflows": [
+        "music-video-stitch"
       ]
     }
   },
@@ -2358,6 +2446,14 @@
       "optional": false,
       "workflows": [
         "image-edit"
+      ]
+    },
+    "film_net_fp16.safetensors": {
+      "loader": "FrameInterpolationModelLoader",
+      "input": "model_name",
+      "optional": true,
+      "workflows": [
+        "upscale"
       ]
     },
     "flux1-kontext-dev.safetensors": {
@@ -2479,8 +2575,10 @@
       "input": "unet_name",
       "optional": false,
       "workflows": [
+        "minimax-h3-ref",
         "minimax-h3-ref (reference weights)",
         "minimax-h3-ref (style, vhs tape)",
+        "minimax-h3-ref2v",
         "minimax-h3-ref2v (4-step)",
         "minimax-h3-ref2v (style, vhs tape)"
       ]
@@ -2508,10 +2606,13 @@
       "optional": false,
       "workflows": [
         "minimax-h3 (turbo)",
+        "minimax-h3-extend",
         "minimax-h3-extend (turbo)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image (turbo)",
+        "minimax-h3-ref",
         "minimax-h3-ref (turbo)",
+        "minimax-h3-ref2v",
         "minimax-h3-ref2v (turbo)"
       ]
     },
@@ -2592,7 +2693,9 @@
       "input": "clip_name",
       "optional": false,
       "workflows": [
+        "minimax-h3-ref",
         "minimax-h3-ref (reference weights)",
+        "minimax-h3-ref2v",
         "minimax-h3-ref2v (4-step)"
       ]
     },

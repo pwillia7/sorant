@@ -10,6 +10,7 @@
  * about what a workflow needs.
  */
 import type { ComfyGraph } from "@/lib/comfy";
+import { applyParams } from "@/lib/params";
 import { WORKFLOWS } from "./index";
 import { patchVariants } from "./patches";
 import { promptConsumer } from "./director";
@@ -133,6 +134,25 @@ export function collect(ids?: readonly string[]) {
         label: `${workflow.id} (reference weights)`,
         graph: modelSwapGraph(workflow.graph, workflow.modelSwap),
       });
+    }
+    // And each combination `finalize` declares it builds. It is the one part
+    // that adds nodes per run — a mask loaded from the segment before, points
+    // refined by Relay — which appear in no stored graph, so a missing pack
+    // would otherwise only show when someone clicked on a person. A case meant
+    // to be refused builds nothing; check:workflows holds that one.
+    //
+    // Optional, because a case is one combination of choices — clicking on a
+    // person, one of Upscale's interpolation models — and an install without
+    // what it adds still runs everything else. Anything the stored graph has
+    // is already required above, and stays so.
+    for (const testCase of workflow.finalizeCases ?? []) {
+      if (testCase.rejects) continue;
+      try {
+        const { graph } = applyParams(workflow, testCase.values, undefined, testCase.mode);
+        graphs.push({ label: workflow.id, graph, optional: true });
+      } catch {
+        // check:workflows reports it; nothing here to ask a machine about.
+      }
     }
     for (const { label: used, graph, optional: optionalGraph = false } of graphs) {
       for (const [id, node] of Object.entries(graph)) {
