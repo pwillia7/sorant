@@ -214,6 +214,7 @@ const params: ParamDef[] = [
   planned.ideaParam({
     placeholder: "The singer walks home through a city at night, from an empty train platform to a packed rooftop party.",
     help: "One idea for the whole video. A director turns it into a scene for every cut in the song, which you can edit before anything renders.",
+    hint: "One idea for the whole song — a director writes every scene, and you edit them before rendering.",
   }),
   ...planned.plumbing,
   ...planned.pictureParams,

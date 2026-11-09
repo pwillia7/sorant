@@ -338,6 +338,7 @@ const params: ParamDef[] = [
     placeholder: "Genre, mood, the voice, what it should sound like.",
     maxLength: 8000,
     help: "One line is enough. A director expands it into the model's caption format.",
+    hint: "Genre, mood and the voice, in a line. Lyrics go in Settings.",
     group: "Song",
     targets: [{ node: PROMPT_NODE, input: "value" }],
   },

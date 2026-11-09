@@ -3,7 +3,7 @@ import type { ComfyGraph } from "@/lib/comfy";
 import { hideDirectorOnly } from "./director";
 import { latentTailNodes } from "./latent-tail";
 import { rewriteModelParam, rewriteNode } from "./rewrite-model";
-import type { ParamDef, ParamValue, WorkflowDef } from "./types";
+import type { ParamDef, ParamValue, WorkflowDef, TextParam } from "./types";
 import {
   CLIP_WORDS,
   directorBypassFor,
@@ -440,13 +440,18 @@ const params: ParamDef[] = [
     targets: [promptText, director],
   }),
 
-  promptParam(
-    ids,
-    "Make it snow, and dress the man in a heavy winter coat.",
-    "Say only what should change. Everything you leave out is held to the clip.",
-    6,
-    promptText,
-  ),
+  {
+    ...(promptParam(
+      ids,
+      "Make it snow, and dress the man in a heavy winter coat.",
+      "Say only what should change. Everything you leave out is held to the clip.",
+      6,
+      promptText,
+    ) as TextParam),
+    label: "What should change",
+    hint: "Only the change. Everything you leave out is held to the clip.",
+    placeholder: "Make it night, dress him as a pirate…",
+  },
   literalPromptParam(),
   rewriteModelParam(graph, [ids.director]),
 

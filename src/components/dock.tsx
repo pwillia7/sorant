@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowUp, AudioLines, Film, ImageIcon, Plus, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUp, AudioLines, BookOpen, Film, ImageIcon, Plus, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Spinner } from "@/components/ui/button";
+import { splitHelp } from "@/components/ui/field";
 import type { ClientParam, ParamValue } from "@/lib/workflows/types";
 
 export interface Attachment {
@@ -40,6 +41,7 @@ export function Dock({
   busy,
   disabled,
   description,
+  onOpenGuide,
 }: {
   /** The workflow menu button. */
   menu: ReactNode;
@@ -62,6 +64,8 @@ export function Dock({
   disabled: boolean;
   /** Shown in place of a prompt box on a workflow that takes none. */
   description?: string;
+  /** Opens the workflow's guide, where it has one. */
+  onOpenGuide?: () => void;
 }) {
   const box = useRef<HTMLTextAreaElement>(null);
 
@@ -82,6 +86,24 @@ export function Dock({
   const placeholder =
     prompt && "placeholder" in prompt && prompt.placeholder ? prompt.placeholder : "Describe the shot…";
   const maxLength = prompt && "maxLength" in prompt ? prompt.maxLength : undefined;
+  // What the box is for, said where it is typed into. The field moved here
+  // from the settings panel, and its help with it — on Character swap the box
+  // is who to find in the clip, not a description of the result, and nothing
+  // on screen said so.
+  const hint = prompt ? splitHelp(prompt.help, prompt.hint).short : "";
+
+  const guide = onOpenGuide ? (
+    <button
+      type="button"
+      onClick={onOpenGuide}
+      title="How to use this workflow"
+      className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-fg-subtle
+        transition-colors hover:bg-surface-hover hover:text-fg"
+    >
+      <BookOpen aria-hidden="true" className="size-3.5" />
+      Guide
+    </button>
+  ) : null;
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-3 pb-3 sm:px-6 sm:pb-5"
@@ -96,9 +118,15 @@ export function Dock({
         >
           {prompt ? (
             <>
-              <label htmlFor="dock-prompt" className="sr-only">
-                {prompt.label}
-              </label>
+              <div className="flex items-center gap-2 px-4 pt-2.5">
+                <p className="min-w-0 flex-1 truncate text-[11px] leading-6 text-fg-subtle" title={hint || undefined}>
+                  <label htmlFor="dock-prompt" className="font-semibold text-fg-muted">
+                    {prompt.label}
+                  </label>
+                  {hint ? <span id="dock-prompt-hint"> · {hint}</span> : null}
+                </p>
+                {guide}
+              </div>
               <textarea
                 ref={box}
                 id="dock-prompt"
@@ -108,8 +136,8 @@ export function Dock({
                 maxLength={maxLength}
                 rows={1}
                 aria-invalid={promptError ? true : undefined}
-                aria-describedby={promptError ? "dock-prompt-error" : undefined}
-                className="block max-h-[34vh] min-h-[3.25rem] w-full resize-none overflow-y-auto bg-transparent px-4 pb-1 pt-3.5
+                aria-describedby={promptError ? "dock-prompt-error" : hint ? "dock-prompt-hint" : undefined}
+                className="block max-h-[34vh] min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-4 pb-1 pt-0.5
                   text-[15px] leading-relaxed text-fg placeholder:text-fg-subtle focus:outline-none [field-sizing:content]"
               />
               {promptError ? (
@@ -119,7 +147,10 @@ export function Dock({
               ) : null}
             </>
           ) : description ? (
-            <p className="px-4 pb-1 pt-3.5 text-[14px] leading-relaxed text-fg-muted">{description}</p>
+            <div className="flex items-start gap-2 px-4 pb-1 pt-3">
+              <p className="min-w-0 flex-1 pt-0.5 text-[14px] leading-relaxed text-fg-muted">{description}</p>
+              {guide}
+            </div>
           ) : null}
 
           <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5 pt-1.5">

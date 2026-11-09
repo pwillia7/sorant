@@ -2,7 +2,7 @@ import type { ComfyGraph } from "@/lib/comfy";
 import { hideDirectorOnly } from "./director";
 import { latentTailNodes } from "./latent-tail";
 import { rewriteModelParam, rewriteNode } from "./rewrite-model";
-import type { ParamDef, WorkflowDef } from "./types";
+import type { ParamDef, WorkflowDef, TextParam } from "./types";
 import {
   directorBypassFor,
   directorTarget,
@@ -225,12 +225,16 @@ const director = directorTarget(ids, TEXT_DIRECTOR, [lookBlock]);
 const bypass = directorBypassFor(ids);
 
 const params: ParamDef[] = [
-  promptParam(
-    ids,
-    DEFAULT_PROMPT,
-    "One line is enough. A director model fills in the shots, camera and sound, and keeps whatever you do specify.",
-    6,
-  ),
+  {
+    ...(promptParam(
+      ids,
+      DEFAULT_PROMPT,
+      "One line is enough. A director model fills in the shots, camera and sound, and keeps whatever you do specify.",
+      6,
+    ) as TextParam),
+    label: "What happens",
+    hint: "One line is enough — a director writes the shots, camera and sound from it.",
+  },
   literalPromptParam(),
   rewriteModelParam(graph, [ids.director]),
 

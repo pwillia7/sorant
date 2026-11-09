@@ -245,6 +245,8 @@ const params: ParamDef[] = [
       "One line is enough. A director model fills in the framing, light and detail, and keeps whatever you do specify.",
       6,
     ) as TextParam),
+    label: "The picture",
+    hint: "One line is enough — a director fills in the framing, light and detail.",
     placeholder: "Describe the picture: the subject, where they are, the light.",
   },
   literalPromptParam(),

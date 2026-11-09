@@ -2,7 +2,7 @@ import type { ComfyGraph } from "@/lib/comfy";
 import { hideDirectorOnly } from "./director";
 import { latentTailNodes } from "./latent-tail";
 import { rewriteModelParam, rewriteNode } from "./rewrite-model";
-import type { ParamDef, WorkflowDef } from "./types";
+import type { ParamDef, WorkflowDef, TextParam } from "./types";
 import {
   directorBypassFor,
   directorTarget,
@@ -258,12 +258,16 @@ const params: ParamDef[] = [
     targets: [{ node: "119", input: "megapixels" }],
   },
 
-  promptParam(
-    ids,
-    "The subject stands up and starts dancing.",
-    "Say what happens next, not what the image already shows. One line is enough.",
-    6,
-  ),
+  {
+    ...(promptParam(
+      ids,
+      "The subject stands up and starts dancing.",
+      "Say what happens next, not what the image already shows. One line is enough.",
+      6,
+    ) as TextParam),
+    label: "What happens next",
+    hint: "Not what the picture already shows — it can see it. One line is enough.",
+  },
   literalPromptParam(),
   rewriteModelParam(graph, [ids.director]),
 

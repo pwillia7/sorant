@@ -9,7 +9,7 @@ import {
   rewriteNode,
 } from "./rewrite-model";
 import { isSet } from "./types";
-import type { ParamDef, ParamValue, WorkflowDef } from "./types";
+import type { ParamDef, ParamValue, WorkflowDef, TextParam } from "./types";
 import {
   FRAME_EXPRESSION,
   directorBypassFor,
@@ -1596,13 +1596,17 @@ const params: ParamDef[] = [
     targets: [{ node: REFERENCE_NODE, input: "ref_image_size" }],
   },
 
-  promptParam(
-    ids,
-    "<Picture 1> is a superhero, mid-fight, in the ruins of a city.",
-    "One line is enough. Name your references as <Picture 1>, <Picture 2> and so on, in upload order.",
-    6,
-    promptText,
-  ),
+  {
+    ...(promptParam(
+      ids,
+      "<Picture 1> is a superhero, mid-fight, in the ruins of a city.",
+      "One line is enough. Name your references as <Picture 1>, <Picture 2> and so on, in upload order.",
+      6,
+      promptText,
+    ) as TextParam),
+    label: "What happens",
+    hint: "Name your pictures as <Picture 1>, <Picture 2>… in the order you added them.",
+  },
   literalPromptParam(),
   rewriteModelParam(graph, [ids.director]),
 

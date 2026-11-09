@@ -245,6 +245,7 @@ const params: ParamDef[] = [
     placeholder:
       "Two kids find a lost robot dog in a junkyard, sneak it home past their mother, and lose it again to the men who come looking for it.",
     help: "The story, in a sentence or a paragraph. A director splits it into scenes and writes each one, which you can edit before anything renders.",
+    hint: "The story, in a sentence or a paragraph — a director splits it into scenes you can edit.",
   }),
   {
     id: "scene_count",

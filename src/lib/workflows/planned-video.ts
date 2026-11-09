@@ -262,7 +262,7 @@ export function plannedVideo(spec: PlannedVideoSpec) {
   /** Written by every reference control, from the whole submission. */
   const cast = directorTarget({ director: CAST_NODE }, describer, [castBlock], () => "");
 
-  const ideaParam = (fields: Pick<ParamDef, "help"> & { placeholder: string }): ParamDef => ({
+  const ideaParam = (fields: Pick<ParamDef, "help" | "hint"> & { placeholder: string }): ParamDef => ({
     id: "prompt",
     label: "What the video is",
     type: "textarea",
@@ -271,6 +271,7 @@ export function plannedVideo(spec: PlannedVideoSpec) {
     placeholder: fields.placeholder,
     maxLength: 4000,
     help: fields.help,
+    hint: fields.hint,
     group: "Video",
     targets: [{ node: PROMPT_NODE, input: "value" }],
   });

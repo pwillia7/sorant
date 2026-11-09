@@ -1491,7 +1491,7 @@ function Workbench({
               )}
               {tips ? (
                 <Button variant="quiet" size="xs" onClick={() => setTipsOpen(true)}>
-                  Tips
+                  Guide
                 </Button>
               ) : null}
               <Button
@@ -1575,6 +1575,7 @@ function Workbench({
           busy={jobs.submitting || (Boolean(selected?.scenes) && planning)}
           disabled={!selected}
           description={selected?.description}
+          onOpenGuide={tips ? () => setTipsOpen(true) : undefined}
         />
       </div>
 
@@ -1609,7 +1610,8 @@ function Workbench({
         <TipsModal
           open={tipsOpen}
           onClose={() => setTipsOpen(false)}
-          title={workflowLabel(selected.name, runModes, selected.patches)}
+          title={selected.name}
+          subtitle={workflowLabel(selected.name, runModes, selected.patches)}
           tips={tips}
         />
       ) : null}

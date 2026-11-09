@@ -15,15 +15,26 @@ export interface TipSection {
 }
 
 export interface WorkflowTips {
+  /**
+   * How to use it, in order: what to put where, and the one or two things
+   * that most decide how it comes out. Shown first and numbered; the sections
+   * after it are reference.
+   */
+  quickStart?: string[];
   sections: TipSection[];
   /**
-   * Where this advice comes from, when it is not ComfyUI's H3 guide — which is
-   * what the modal credits by default and what every video workflow here is
-   * drawn from. The music workflow is a different model with a different
-   * source, and crediting the H3 tutorial for it would be a false citation.
+   * Where the advice comes from, credited under it. Only where there is one:
+   * the H3 workflows draw on ComfyUI's H3 guide, Music on MiniMax's, Character
+   * swap on its LoRA's card; the rest is this app's own, and crediting someone
+   * else for it would be a false citation.
    */
   source?: { href: string; label: string };
 }
+
+const H3_GUIDE = {
+  href: "https://docs.comfy.org/tutorials/video/minimax/minimax-h3",
+  label: "Drawn from ComfyUI’s MiniMax H3 guide ↗",
+};
 
 const PROMPT_STRUCTURE: TipSection = {
   heading: "Structure the prompt",
@@ -133,6 +144,12 @@ const REFERENCE_LENGTH: TipSection = {
 
 export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
   "minimax-h3": {
+    source: H3_GUIDE,
+    quickStart: [
+      "Say what happens in one line in the prompt bar: who, where, what they do. The director writes the shots, camera and sound from it.",
+      "Spell out anything you care about — dialogue in quotes, a style, a camera move. What you say is kept; what you leave out is decided for you.",
+      "Try ideas at the default 0.4 MP, then raise Frame size to about 1 MP for the take you keep.",
+    ],
     sections: [
       {
         heading: "Your prompt gets expanded first",
@@ -159,6 +176,12 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
   },
 
   "minimax-h3-i2v": {
+    source: H3_GUIDE,
+    quickStart: [
+      "Add your picture: it becomes the first frame.",
+      "In the prompt bar, say what happens next — not what the picture already shows.",
+      "Generate. Same picture, new seed is the quickest way to get a different take.",
+    ],
     sections: [
       {
         heading: "Working from a first frame",
@@ -182,6 +205,13 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
   },
 
   "minimax-h3-ref": {
+    source: H3_GUIDE,
+    quickStart: [
+      "Add one or more pictures of who or what should be in it, and set What to keep for each: Everything for one consistent character.",
+      "In the prompt bar, say what happens, naming each picture as <Picture 1>, <Picture 2>… in the order you added them.",
+      "Optionally add a voice recording or a music track for the sound to follow.",
+      "Generate at a low Frame size first; raise it for the take you keep.",
+    ],
     sections: [
       REFERENCE_REWRITE,
       REFERENCE_IMAGES,
@@ -193,6 +223,12 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
   },
 
   "minimax-h3-ref2v": {
+    source: H3_GUIDE,
+    quickStart: [
+      "Press Remix on a finished video, or add a clip of your own.",
+      "In the prompt bar, say only what should change — “make it night”, “dress him as a pirate”. Everything you leave out is held to the clip.",
+      "Ask small for small changes; a big ask (“claymation”) lets it re-render nearly everything but the performance.",
+    ],
     sections: [
       {
         heading: "Working from a clip",
@@ -246,48 +282,165 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
   },
 
   "minimax-h3-swap": {
+    quickStart: [
+      "Add the clip, and a picture of who they should become — cropped to the person, on a plain background if you can. Whatever they wear in the picture is what they will wear: to change the outfit, use Edit on the picture first.",
+      "In the prompt bar, name who to replace in the clip in a few words: “man in a red cap”. With several people in shot, click on them in Settings instead.",
+      "In Settings, Describe the person in your picture — face, hair, clothes — not the person in the clip.",
+      "Press Check who SAM picks. Seconds later the clip comes back with them painted green: check it is the right person all the way through before the long run.",
+    ],
     sections: [
       {
-        heading: "What goes in",
+        heading: "The two descriptions",
         items: [
-          "A clip and a picture. The clip supplies the performance, camera, scene and sound; the picture supplies who the person becomes — face, hair and outfit.",
-          "Press Swap on a finished video to load it as the clip, or drop in one of your own, up to 8 minutes and 1080p. Over a minute it warns you about the wait: about 13 minutes per 5 seconds of clip at 1 MP. Use one continuous shot with the person in it from the first frame: they are found on that frame and tracked from there, and a cut to a shot without them loses the track.",
-          "Crop the picture to the person, on a plain background if you can. What is behind them can leak into the shot.",
+          "Who to replace in the clip (the prompt bar) is about the clip: a few words SAM can find them by. SAM reads short names of things — “man”, “woman in a red coat” — not sentences; a long description finds no one, or everyone.",
+          "Describe the person in your picture (Settings) is about your picture. Mixing them up is the commonest reason nothing changes: describe the clip's person there, and the model is told the character already looks like them.",
+          "The instruction the model gets is the LoRA author's own, filled from those two fields: replace this person with the character in the picture, keeping the character's face, hair and clothing. There is no prompt rewrite here, and Anything else adds to the end of it — more words do not make the swap hold better.",
         ],
       },
       {
-        heading: "Who to replace",
+        heading: "Pointing out the right person",
         items: [
-          "Who to replace is what SAM 3.1 looks for on the first frame: a short description like \"man in a cowboy hat\". The swap only touches the area it tracks, plus a margin, so other people and the rest of the shot stay as they were.",
-          "If several people match, If several match picks the biggest, the leftmost or the rightmost.",
-          "Describe the character every time: hair, headwear, clothes, colours, and the clip's look if it is unusual (\"in grainy black and white\"). Describe what the picture shows — when the two disagree, the description wins.",
-          "There is no prompt rewrite here. The LoRA was trained on one shape of instruction, and longer instructions do not make the swap hold better.",
+          "With one person in shot, Who to replace in the clip is enough. With several, the description and If several match (biggest, leftmost, rightmost) are a guess.",
+          "Click on them instead: one click on their body is usually enough, more if the mask misses part of them. Leave someone out, then a click on anyone the mask takes in by mistake. Or drag a box around them, head to feet.",
+          "Check who SAM picks runs only that step, at low resolution, on the stretch a run would start on. Green is who the swap changes. With If SAM loses them on Find them again, red is where it lost them and picked someone by the rule instead — that someone gets swapped for those frames.",
+          "If SAM loses them is Leave those frames as they are by default: where the track drops (a cut, someone walking in front) the clip's own footage stays, and the swap picks them up when they are back.",
         ],
       },
       {
-        heading: "Windows",
+        heading: "Clips with cuts, and long clips",
         items: [
-          "The clip is made a window at a time. Each window after the first starts from the last 18 frames of the one before, so it carries on instead of starting over, and the joins hold.",
-          "Over 20 seconds, the clip is swapped as a chain of runs, about 5 seconds each, each starting from the last frames of the one before, and joined at the end with the clip's sound. The next run is sent when this page sees the last one finish, so keep the tab open; closed, the chain waits, and Resume carries on.",
-          "Windows are 5 seconds, the length the LoRA's author tested. A 12-second clip at 1 MP took about 39 minutes on a 3090. Frame size works as it does elsewhere: 0.5 MP is about a third of the time.",
+          "Split at camera cuts (on by default) finds the cuts before anything runs and lets you choose who to replace in each shot — by rule, by clicking on them, or no one. Each shot starts fresh, and each has its own Check who SAM picks.",
+          "Clips are made 5 seconds at a time, each window carrying on from the last frames of the one before. Over 20 seconds the swap runs as a chain and is joined at the end, so keep the tab open; closed, it waits, and Resume carries on.",
+          "Clips can be up to 8 minutes. Time is the cost: about 13 minutes per 5 seconds at 1 MP on a 24 GB card, about a third of that at 0.5 MP. Try a short stretch at 0.5 MP first.",
+          "Any finished segment can be redone on its own — with a new seed, or following someone else.",
         ],
       },
       {
         heading: "Sound and settings",
         items: [
-          "By default the result carries the clip's own soundtrack, untouched. Turn Keep the clip's sound off to hear the audio H3 makes instead.",
-          "The recipe is the LoRA author's: their Turbo LoRA at 8 steps on er_sde, the swap LoRA at 1, and SAM to find the person. The app's own Turbo switch is not used here.",
-          "Swap strength 0 runs the plain model on the same inputs, which is the quickest way to see what the LoRA is doing.",
+          "The result keeps the clip's own soundtrack. Turn Keep the clip's sound off to hear the audio H3 makes instead.",
+          "The recipe is the LoRA author's: their Turbo LoRA at 8 steps on er_sde, the swap LoRA at strength 1. Swap strength 0 runs the plain model on the same inputs — the quickest way to see what the LoRA is doing.",
+          "Mask margin is how far past the person the edit may reach. More gives a bigger costume (a hat, a cape) room; less keeps the background closer to the clip.",
         ],
       },
     ],
     source: {
       href: "https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA",
-      label: "akatz-ai's Character Swap LoRA",
+      label: "Built on akatz-ai’s Character Swap LoRA ↗",
     },
   },
 
+  "minimax-h3-image": {
+    source: H3_GUIDE,
+    quickStart: [
+      "Describe the picture in one line in the prompt bar: the subject, where they are, the light. A director fills in framing and detail.",
+      "Choose an Aspect ratio. Image size 2.5 MP is where stills look best; 1 MP is quicker for trying ideas.",
+      "Generate. Reuse a seed to keep a composition while you change the words.",
+    ],
+    sections: [
+      {
+        heading: "How it works",
+        items: [
+          "It is the video model making a very short clip and keeping its first frame, so everything about writing a video prompt applies — minus the motion and sound.",
+          "Look: Natural asks for real-world light and muted colour, which avoids the over-contrasted AI look. Cinematic leaves the grade to the director.",
+          LITERAL_NOTE,
+        ],
+      },
+      {
+        heading: "Using the result",
+        items: [
+          "A still makes a good first frame for Image to Video, or a reference picture for Reference to Video or Character swap.",
+          "In any picture slot, Edit changes a picture by a sentence — “make it night”, “give him a red cap” — without starting over.",
+        ],
+      },
+    ],
+  },
+
+  upscale: {
+    quickStart: [
+      "Press Upscale on a finished video, or add a clip of your own (up to 1080×1920 and a minute).",
+      "Leave Upscaler on RTX Video and choose Output size: 1080 for HD, 2160 for 4K.",
+      "Optionally set Frame rate to Double it for smoother motion. The sound carries straight through.",
+    ],
+    sections: [
+      {
+        heading: "Choosing an upscaler",
+        items: [
+          "RTX Video is right for almost everything: fast, faithful to the clip, and it goes to 4K.",
+          "SeedVR2 makes up detail a soft clip does not have. It is very slow, tops out at 1080, and is for a clip that needs rescuing rather than enlarging.",
+          "Colour match re-matches the upscale's colour to the source frame by frame. LAB is the default; turn it off only if the colours look wrong after.",
+        ],
+      },
+      {
+        heading: "Long swaps",
+        items: [
+          "A long Character swap can be upscaled segment by segment from its panel, then joined again — and after a redo, only the segments that changed need it.",
+        ],
+      },
+    ],
+  },
+
+  "music-video": {
+    quickStart: [
+      "Add the whole song, and its lyrics if it has any (they shape the scenes; nothing places a line in one).",
+      "In the prompt bar, give one idea for the whole video: “the singer walks home through a city at night, from an empty platform to a rooftop party”.",
+      "Add a picture of the singer or star with What to keep on Everything, so they look the same in every scene.",
+      "Press Plan the video. The song is cut on its beats into scenes and a director writes each one — read and edit the outline, then render. Any scene can be redone.",
+    ],
+    sections: [
+      {
+        heading: "Keeping one look",
+        items: [
+          "Each scene is rendered separately, so anything not pinned by a picture can change at every cut. Everything keeps face, build and outfit; Identity only lets each scene re-dress them.",
+          "A picture set to Style only decides the look of the whole video instead of a subject in it.",
+          "Look: Natural avoids the over-contrasted AI look. Cinematic leaves the grade to the director.",
+        ],
+      },
+      {
+        heading: "Scenes and time",
+        items: [
+          "Cuts land on the song's beats between Shortest and Longest scene. The model is at its best between 5 and 10 seconds a scene.",
+          "A song is a dozen or more scenes, and Frame size and Steps are per scene: 1 MP takes about three times as long as 0.5 MP. Try at 0.5 MP.",
+          "Instrumental plans every scene with no one singing. With a vocal, scenes where someone sings are marked in the outline, and you can change any of them.",
+          "The seed carries through every scene, so a whole video can be made again exactly — or one scene redone.",
+        ],
+      },
+    ],
+  },
+
+  "multi-scene": {
+    quickStart: [
+      "In the prompt bar, tell the story in a sentence or a paragraph.",
+      "Choose how many Scenes (each 4–15 seconds), and whether anyone speaks (Dialogue).",
+      "Add a picture for each character who should look the same throughout, and a voice recording for anyone who should sound the same.",
+      "Press Plan the video, read and edit the scenes and lines, then render. Any scene can be redone; the scenes are joined into one video at the end.",
+    ],
+    sections: [
+      {
+        heading: "Keeping characters consistent",
+        items: [
+          "Each scene is rendered on its own, so a character only looks the same from scene to scene if a picture holds them. Keep What to keep on Everything for that.",
+          "A voice is 4–6 seconds of one person talking steadily, no music. Whose voice is the name the story uses for them, and only their lines get it.",
+          "With two voices, each scene gives the first line to whoever the lines say speaks first.",
+        ],
+      },
+      {
+        heading: "Time",
+        items: [
+          "Frame size and Steps are per scene: 1 MP takes about three times as long as 0.5 MP. Try at 0.5 MP, then remake the keeper.",
+          "The seed carries through every scene, so the whole video can be made again exactly — or one scene redone.",
+        ],
+      },
+    ],
+  },
+
   "minimax-h3-extend": {
+    source: H3_GUIDE,
+    quickStart: [
+      "Press Extend on a finished video, or add a clip of your own.",
+      "In the prompt bar, write the next beat — “then she opens the door”. Who, where and how it is shot carry over on their own.",
+      "Duration is the length added, not the total. Extend the result again to keep going.",
+    ],
     sections: [
       {
         heading: "Working from a clip",
@@ -329,6 +482,11 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
   },
 
   "minimax-music3": {
+    quickStart: [
+      "In the prompt bar, describe the music in one line: genre, mood, the voice.",
+      "Paste your lyrics in Settings, with sections tagged [Verse], [Chorus]… — or turn on Write the lyrics for me. Leave them empty for an instrumental.",
+      "Set Length, and Generate. If takes come back short, lower Top-k under Advanced to 20.",
+    ],
     source: {
       href: "https://github.com/MiniMax-AI/MiniMax-Music3#prompt-enhancement",
       label: "From MiniMax's Music 3 prompt guide ↗",

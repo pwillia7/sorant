@@ -8,7 +8,7 @@ import {
   tailFileFor,
 } from "./latent-tail";
 import { rewriteModelParam, rewriteNode } from "./rewrite-model";
-import type { ParamDef, ParamValue, WorkflowDef } from "./types";
+import type { ParamDef, ParamValue, WorkflowDef, TextParam } from "./types";
 import {
   directorBypassFor,
   directorTarget,
@@ -567,12 +567,17 @@ const params: ParamDef[] = [
     ],
   },
 
-  promptParam(
-    ids,
-    "He turns to her and says we need to leave.",
-    "Say what happens next, not what the clip already showed. It can see the last frame and the story so far.",
-    6,
-  ),
+  {
+    ...(promptParam(
+      ids,
+      "He turns to her and says we need to leave.",
+      "Say what happens next, not what the clip already showed. It can see the last frame and the story so far.",
+      6,
+    ) as TextParam),
+    label: "What happens next",
+    hint: "The next beat. The clip's people, place and camera carry over.",
+    placeholder: "Then she opens the door and steps out into the rain.",
+  },
   {
     id: STORY_PARAM,
     label: "Story so far",
