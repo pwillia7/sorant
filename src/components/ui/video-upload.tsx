@@ -5,6 +5,7 @@ import { Film } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button, Spinner } from "@/components/ui/button";
 import { CameraIcon } from "@/components/ui/camera-capture";
+import { ClipPlayer } from "@/components/ui/clip-player";
 import {
   VideoCapture,
   videoCaptureAvailable,
@@ -381,20 +382,17 @@ export function VideoUpload({
           {previewUrl ? (
             <div className="relative">
               {/*
-              Controls but no autoplay: this is here so you can check which clip
-              is loaded, and a source clip usually has a soundtrack that
-              autoplay would force to be muted anyway.
+              Our own small controls, and Open large for a proper look: this is
+              here so you can check which clip is loaded. Taller than before
+              (max-h-96) so a portrait clip is more than a strip.
 
               A remembered reference can outlive the file when ComfyUI's input
               directory is cleared, so a load failure clears the value rather
               than leaving a generation to fail on it later.
             */}
-              <video
+              <ClipPlayer
                 key={previewUrl}
-                src={previewUrl}
-                controls
-                playsInline
-                preload="metadata"
+                item={{ url: previewUrl, title: value || "Source clip" }}
                 // Same `Infinity` problem as `probe`, and it matters more here:
                 // this is what measures a clip restored from a previous session,
                 // and that measurement is what decides how many frames of it the
@@ -426,7 +424,7 @@ export function VideoUpload({
                     "That video is no longer on the ComfyUI server. Choose it again.",
                   );
                 }}
-                className="mx-auto block max-h-64 w-full bg-black"
+                videoClassName="mx-auto max-h-96 w-full object-contain"
               />
               <div className="flex items-center gap-2 border-t border-border-default px-3 py-2">
                 {/* min-w-0 is what actually lets `truncate` work: a flex item

@@ -33,6 +33,7 @@ import { clock, MUSIC_VIDEO_PICTURES, STORY_SCENE_SECONDS } from "@/lib/music-vi
 import { REFERENCE_KEEP_OPTIONS } from "@/lib/workflows/minimax-common";
 import { Badge, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
+import { ClipPlayer, type ClipItem } from "./ui/clip-player";
 import { AudioUpload } from "./ui/audio-upload";
 import { ImageUpload } from "./ui/image-upload";
 import { NumberInput, Segmented, Select, TextArea, TextInput, Toggle } from "./ui/inputs";
@@ -83,6 +84,13 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
     return !job || ["error", "cancelled", "unknown"].includes(job.phase);
   }).length;
   const jobs = scenes.map(video.jobFor);
+  /** Every scene with a clip, for the large viewer to step through. */
+  const sceneClips: ClipItem[] = scenes.flatMap((scene, index) => {
+    const clip = sceneClip(jobs[index]);
+    return clip
+      ? [{ url: withToken(clip.url), title: `Scene ${index + 1}`, subtitle: `${clock(scene.start)}–${clock(scene.end)}`, download: `scene-${index + 1}.mp4` }]
+      : [];
+  });
   const [chosenSize, setChosenSize] = useState<number>(
     MUSIC_VIDEO_UPSCALE_SIZES[0].px,
   );
@@ -241,6 +249,7 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                     story={story}
                     video={video}
                     onMeasure={measure}
+                    siblings={sceneClips}
                   />
                 </li>
               );
@@ -937,6 +946,7 @@ function SceneCard({
   story,
   video,
   onMeasure,
+  siblings,
 }: {
   index: number;
   job: Job | undefined;
@@ -945,6 +955,8 @@ function SceneCard({
   story: boolean;
   video: MusicVideoController;
   onMeasure: (url: string, element: HTMLVideoElement) => void;
+  /** Every scene with a clip, for the large viewer to step through. */
+  siblings: ClipItem[];
 }) {
   const [tab, setTab] = useState<SceneTab>("shot");
   const project = video.project;
@@ -974,18 +986,15 @@ function SceneCard({
   const finished = job && (job.phase === "done" || ["error", "cancelled", "unknown"].includes(job.phase));
 
   return (
-    <div className="grid gap-3 rounded-lg border border-border-default p-3 sm:grid-cols-[176px_minmax(0,1fr)]">
+    <div className="grid gap-3 rounded-lg border border-border-default p-3 sm:grid-cols-[240px_minmax(0,1fr)]">
       <div className="flex flex-col gap-1.5">
         {clip ? (
-          <video
-            src={withToken(clip.url)}
-            onLoadedMetadata={(event) => onMeasure(clip.url, event.currentTarget)}
-            muted
+          <ClipPlayer
+            item={siblings.find((entry) => entry.url === withToken(clip.url)) ?? { url: withToken(clip.url), title: `Scene ${index + 1}` }}
+            siblings={siblings}
             loop
-            playsInline
-            controls
-            preload="metadata"
-            className="aspect-video w-full rounded-md border border-border-default bg-black object-contain"
+            onLoadedMetadata={(event) => onMeasure(clip.url, event.currentTarget)}
+            className="aspect-video w-full rounded-md border border-border-default"
           />
         ) : (
           <div

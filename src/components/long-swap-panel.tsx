@@ -10,6 +10,7 @@ import { segmentFrames, SLICE_FPS } from "@/lib/workflows/slices";
 import { ShotPlanner } from "./shot-planner";
 import { MAX_CHECK_SECONDS, PICK_PARAM, SUBJECT_BOX_PARAM } from "@/lib/workflows/subject-box";
 import { BoxPicker, inputVideoUrl } from "./ui/box-picker";
+import { ClipPlayer, type ClipItem } from "./ui/clip-player";
 import { MaskCheck } from "./ui/mask-check";
 import { Badge, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
@@ -295,6 +296,20 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
   }
 
   const total = project.segments.length;
+  /** What the large viewer steps through: every segment with a clip. */
+  const segmentClips: ClipItem[] = project.segments.flatMap((segment, index) => {
+    const url = videoUrl(segmentJobs[index]);
+    if (!url) return [];
+    const end = segment.start + segmentFrames(segment, project.seconds);
+    return [
+      {
+        url: withToken(url),
+        title: `Segment ${index + 1}`,
+        subtitle: `${clock(segment.start / SLICE_FPS)}–${clock(end / SLICE_FPS)}`,
+        download: `segment-${index + 1}.mp4`,
+      },
+    ];
+  });
   const done = states.filter((state) => state === "done").length;
   const failed = states.some((state) => state === "failed");
   const active = states.some((state) => state === "queued" || state === "running");
@@ -499,7 +514,7 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
         </p>
       ) : null}
 
-      <ol className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2">
+      <ol className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2">
         {project.segments.map((segment, index) => {
           const job = segmentJobs[index];
           const url = videoUrl(job);
@@ -516,14 +531,11 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
                 </span>
               </div>
               {url ? (
-                <video
-                  src={withToken(url)}
-                  muted
-                  playsInline
-                  preload="metadata"
-                  controls
+                <ClipPlayer
+                  item={segmentClips.find((clip) => clip.url === withToken(url)) ?? { url: withToken(url), title: `Segment ${index + 1}` }}
+                  siblings={segmentClips}
                   onLoadedMetadata={(event) => measure(url, event.currentTarget)}
-                  className="aspect-video max-h-40 w-full rounded bg-black object-contain"
+                  className="aspect-video w-full rounded"
                 />
               ) : null}
               <div className="flex flex-wrap items-center gap-1">
