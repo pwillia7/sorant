@@ -18,6 +18,7 @@ workflow](docs/sizzle-reel.jpg)](https://www.youtube.com/watch?v=ncpg6Nl_Q0g)
 - [Updating](#updating)
 - [When something goes wrong](#when-something-goes-wrong)
 - [Documentation](#documentation)
+- [How-to videos](#how-to-videos)
 - [Scripts](#scripts)
 - [Known limits](#known-limits)
 - [License](#license)
@@ -248,6 +249,14 @@ The [full troubleshooting table](docs/setup.md#troubleshooting) has the rest.
 | [Turbo, SageAttention, Spectrum and the style switches](docs/modes.md) | a switch does something unexpected |
 | [Working on Soran’t](docs/development.md) | you are changing the code or adding a workflow |
 | [Agent runbook](docs/agent-setup.md) | you are an agent setting this up |
+
+## How-to videos
+
+Short walkthroughs, one per workflow.
+
+| Video | Shows |
+| --- | --- |
+| <a href="https://www.youtube.com/watch?v=05MyrTtRSeA"><img src="docs/howto-character-swap.jpg" width="320" alt="Character swap how-to video"></a> | **[Character swap](https://www.youtube.com/watch?v=05MyrTtRSeA)** (1 min): pick a clip and a character, point out who to replace, and check the shots of a clip with cuts |
 
 ## Scripts
 
