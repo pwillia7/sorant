@@ -109,6 +109,8 @@ export interface SegmentChoice {
   box?: string;
   /** "If SAM loses them" for this segment alone: leave, recover or stop. */
   lostFrames?: string;
+  /** No one: the segment is sent as the clip's own footage. */
+  original?: boolean;
 }
 
 /** A cut added on a redo, splitting the segment in two at `at`. */
@@ -124,10 +126,7 @@ export interface SegmentSplit {
 }
 
 /** Who a shot replaces: the form's rule when neither is set. */
-export interface ShotChoice extends SegmentChoice {
-  /** No one: the shot is sent as the clip's own footage. */
-  original?: boolean;
-}
+export type ShotChoice = SegmentChoice;
 
 const STORAGE_KEY = "sorant-long-swap";
 
@@ -889,11 +888,24 @@ export function useLongSwap({
         delete choices[i];
       }
       const formLost = String(base.values.lost_frames ?? "leave");
+      const shotChoices = { ...base.shotChoices };
+      /** Segments chosen to be the clip's own footage on this redo. */
+      const originals: number[] = [];
       const decide = (i: number, told: SegmentChoice | undefined) => {
+        if (told?.original) {
+          // Left as it is, the way a shot set to no one is: passed through,
+          // and the segment after it starts fresh.
+          shotChoices[i] = { original: true };
+          originals.push(i);
+          return;
+        }
+        // Swapped after all, if it was left as it is before.
+        const wasOriginal = shotChoices[i]?.original;
+        if (wasOriginal) delete shotChoices[i];
         if (told && (told.box || told.pick)) choices[i] = { box: told.box, pick: told.pick };
         // A shot left as it is, redone: swapped after all, by the form's rule
         // unless told otherwise.
-        else if (base.shotChoices?.[i]?.original) choices[i] = { pick: String(base.values[PICK_PARAM] ?? "largest") };
+        else if (wasOriginal) choices[i] = { pick: String(base.values[PICK_PARAM] ?? "largest") };
         if (told?.lostFrames && told.lostFrames !== formLost) lostFrames[i] = told.lostFrames;
         else if (told?.lostFrames) delete lostFrames[i];
       };
@@ -907,12 +919,13 @@ export function useLongSwap({
         seeds,
         choices,
         lostFrames,
-        // Tried for a swap again: if SAM still finds no one, it passes through
-        // again. A shot chosen to be left as it is stays so, unless it is the
-        // one being redone.
-        passedThrough: base.passedThrough?.filter(
-          (i) => !redone.includes(i) || (i !== first && base.shotChoices?.[i]?.original),
-        ),
+        shotChoices,
+        passedThrough: [
+          // A redone segment is tried for a swap again (if SAM still finds no
+          // one, it passes through again), unless it is left as it is.
+          ...(base.passedThrough ?? []).filter((i) => !redone.includes(i) || shotChoices[i]?.original),
+          ...originals,
+        ].filter((i, at, all) => all.indexOf(i) === at),
       });
     },
     [project],

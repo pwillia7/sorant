@@ -43,7 +43,7 @@ function SegmentBadge({
       <span
         title={
           chosen
-            ? "Its shot was set to no one, so this stretch is the clip's own footage."
+            ? "Set to no one, so this stretch is the clip's own footage."
             : "SAM found no one to replace here, so this stretch is the clip's own footage."
         }
       >
@@ -85,13 +85,18 @@ function SegmentBadge({
   }
 }
 
-type RedoMode = "carry" | "form" | "largest" | "leftmost" | "rightmost" | "box";
+type RedoMode = "carry" | "form" | "largest" | "leftmost" | "rightmost" | "box" | "original";
 
-const RULES: Array<{ value: RedoMode; label: string }> = [
+const RULES: Array<{ value: RedoMode; label: string; title?: string }> = [
   { value: "largest", label: "Biggest" },
   { value: "leftmost", label: "Leftmost" },
   { value: "rightmost", label: "Rightmost" },
   { value: "box", label: "Point them out" },
+  {
+    value: "original",
+    label: "No one",
+    title: "Swaps no one: this stretch is the clip's own footage, as with a shot set to no one. What comes after it starts fresh.",
+  },
 ];
 
 /** "If SAM loses them", short, for a segment of its own. Its help is the form's. */
@@ -135,10 +140,12 @@ interface PartState {
   lost: string;
 }
 
-const choiceOf = (part: PartState): SegmentChoice => ({
-  ...(part.mode === "box" ? { box: part.box } : part.mode === "carry" || part.mode === "form" ? {} : { pick: part.mode }),
-  lostFrames: part.lost,
-});
+const choiceOf = (part: PartState): SegmentChoice => {
+  if (part.mode === "original") return { original: true };
+  if (part.mode === "box") return { box: part.box, lostFrames: part.lost };
+  if (part.mode === "carry" || part.mode === "form") return { lostFrames: part.lost };
+  return { pick: part.mode, lostFrames: part.lost };
+};
 
 /**
  * One part of a redo: who it follows, drawn on the frame its run starts on,
@@ -182,7 +189,10 @@ function PartControls({
           <p className="text-[12px] text-danger">The clip this swap was made from is not known, so there is no frame to draw on.</p>
         )
       ) : null}
-      <div className="flex flex-wrap items-center gap-2">
+      {part.mode === "original" ? (
+        <p className="text-[12px] text-fg-subtle">Sent as the clip&rsquo;s own footage, with no one swapped.</p>
+      ) : null}
+      <div className={`flex flex-wrap items-center gap-2 ${part.mode === "original" ? "hidden" : ""}`}>
         <span className="text-[12px] text-fg-muted">If SAM loses them</span>
         <Segmented
           label={`If SAM loses them in ${name}`}
@@ -191,7 +201,7 @@ function PartControls({
           options={LOST_OPTIONS}
         />
       </div>
-      {part.mode !== "carry" && clip ? (
+      {part.mode !== "carry" && part.mode !== "original" && clip ? (
         <MaskCheck
           values={{
             ...values,
@@ -277,7 +287,8 @@ function RedoEditor({
   const [fresh, setFresh] = useState(false);
   // Pointing them out is what a cut is usually for.
   const [after, setAfter] = useState<PartState>({ mode: "box", box: "", lost });
-  const split = cutting && range ? { at, keep, fresh: fresh || keep } : null;
+  // Nothing to carry on from a part left as the clip's own footage.
+  const split = cutting && range ? { at, keep, fresh: fresh || keep || part.mode === "original" } : null;
   // "Same as before the cut" means nothing once nothing is carried across it,
   // and "As in the form" is what stands in for it there.
   const afterPart: PartState =
@@ -409,7 +420,7 @@ function RedoEditor({
                 },
               ]}
             />
-            {!keep ? (
+            {!keep && part.mode !== "original" ? (
               <Segmented
                 label="The part after the cut"
                 value={fresh}
