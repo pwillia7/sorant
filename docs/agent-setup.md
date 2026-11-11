@@ -362,6 +362,39 @@ run is the one most likely to reset the machine. Time it for when the downloads
 are done, or before them if there are none, and remind the person to start
 ComfyUI from its launch script afterwards.
 
+### If the machine still restarts at the start of a run
+
+Not a default step. Use it only if the machine restarts after the TDR fix. The
+signature is Kernel-Power 41 with BugcheckCode 0 in the System log, no Display
+event 4101, no crash dump, and the ComfyUI log ending on the first sampling
+step just after a model load. That is the power supply tripping, not a crash.
+On a 3090, idle or light load leaves the card at a boost clock near 1950 MHz,
+and the next step hits it at full load before the driver's power limiter can
+pull it back. The spike lasts under a millisecond, which is too short for a
+power limit (`nvidia-smi -pl`) to stop. Lowering the limit to 300 W alone still
+left the machine restarting every day or two.
+
+The fix is to cap the clock at what the card sustains under H3 anyway, so
+there is no spike to clamp. Measured on the 3090, the cost was about 1% of
+matmul throughput.
+
+```
+nvidia-smi -lgc 210,1650
+```
+
+This needs an elevated prompt and does not survive a reboot. To make it
+permanent, ask first, then create a startup task. Run this from an elevated
+PowerShell:
+
+```powershell
+Register-ScheduledTask -TaskName 'GPU clock cap' -User SYSTEM -RunLevel Highest -Trigger (New-ScheduledTaskTrigger -AtStartup) -Action (New-ScheduledTaskAction -Execute nvidia-smi -Argument '-lgc 210,1650')
+```
+
+1650 MHz fits a 3090 at a 300 W limit. For another card, take the clock it
+holds under sustained H3 load from `nvidia-smi --query-gpu=clocks.gr
+--format=csv -l 1`. `nvidia-smi -rgc` removes the cap. A bigger power supply
+is the real fix.
+
 ## Phase 5 — Lock ComfyUI with a password
 
 Do this even for local-only use if the machine is on a shared network, and
@@ -873,6 +906,7 @@ On the ComfyUI machine:
 | A job shows as **Lost** | ComfyUI restarted and dropped its history |
 | "Contact was lost" | The connection dropped, not the workflow. Check the pill and resubmit |
 | The Windows machine restarts during step 1 | The TDR values — Phase 4. Display event 4101 in the System log confirms it |
+| It still restarts at the start of a run, with TDR set: Kernel-Power 41, BugcheckCode 0, no 4101, no dump | The power supply tripping on the GPU's boost spike — [cap the clock](#if-the-machine-still-restarts-at-the-start-of-a-run) |
 | The deployed app goes Offline when you close your session | ComfyUI was started from your shell. Start it from its launch script in its own window — Phase 2 |
 | Windows: **Upscale freezes ComfyUI** — `got prompt` is the last log line, the GPU sits idle, and ComfyUI stops answering HTTP (even on `127.0.0.1`) until it is restarted | NVIDIA App's telemetry client blocking when RTX Video shuts down — [RTX Video freezes ComfyUI](#rtx-video-freezes-comfyui) |
 
