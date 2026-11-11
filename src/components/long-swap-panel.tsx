@@ -1,12 +1,14 @@
 "use client";
 
-import { Check, Clock3, LoaderCircle, RotateCcw, X } from "lucide-react";
-import { useState } from "react";
+import { Check, Clock3, LoaderCircle, RotateCcw, Scissors, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { savedMask, shotEndOf, startsFresh, type LongSwapController, type SegmentChoice, type SegmentState } from "@/hooks/use-long-swap";
 import { withToken } from "@/lib/client";
 import { formatDuration, totalRenderMs, type Job } from "@/lib/jobs";
 import { MUSIC_VIDEO_FRAME_RATES, MUSIC_VIDEO_UPSCALE_SIZES } from "@/lib/music-video/project";
-import { segmentFrames, SLICE_FPS } from "@/lib/workflows/slices";
+import { frameSeekTime } from "@/lib/scene-cuts";
+import { CHAIN_HISTORY, MAX_SEGMENTS, segmentFrames, SLICE_FPS, splitRange } from "@/lib/workflows/slices";
+import type { ParamValue } from "@/lib/workflows/types";
 import { ShotPlanner } from "./shot-planner";
 import { MAX_CHECK_SECONDS, PICK_PARAM, SUBJECT_BOX_PARAM } from "@/lib/workflows/subject-box";
 import { BoxPicker, inputVideoUrl } from "./ui/box-picker";
@@ -15,7 +17,7 @@ import { JobRunTime, RunTime } from "./ui/run-time";
 import { MaskCheck } from "./ui/mask-check";
 import { Badge, Panel, PanelHeader } from "./ui/panel";
 import { Button, buttonClasses, Spinner } from "./ui/button";
-import { Segmented } from "./ui/inputs";
+import { Segmented, Slider } from "./ui/inputs";
 
 /**
  * A long Character swap in progress: its segments, how far the chain has got,
@@ -92,6 +94,25 @@ const RULES: Array<{ value: RedoMode; label: string }> = [
   { value: "box", label: "Point them out" },
 ];
 
+/** "If SAM loses them", short, for a segment of its own. Its help is the form's. */
+const LOST_OPTIONS: Array<{ value: string; label: string; title: string }> = [
+  {
+    value: "leave",
+    label: "Leave as they are",
+    title: "Frames where the track drops keep the clip's own footage, and the swap picks them up again when they come back.",
+  },
+  {
+    value: "recover",
+    label: "Find them again",
+    title: "Each lost frame looks again by the description and rule, with no memory of who you pointed out. In a crowd that can swap someone else for those frames.",
+  },
+  {
+    value: "stop",
+    label: "Stop with an error",
+    title: "Fails the run, naming the frames where the track dropped.",
+  },
+];
+
 /**
  * Who a segment follows when nothing is chosen for it and nothing is carried,
  * as use-long-swap.ts's `subjectValues` works it out: a shot's own choice, or
@@ -107,11 +128,119 @@ function planned(project: LongSwapController["project"] & object, index: number)
   return { [SUBJECT_BOX_PARAM]: "" };
 }
 
+/** One part's choices in a redo: who it follows, and what happens where SAM loses them. */
+interface PartState {
+  mode: RedoMode;
+  box: string;
+  lost: string;
+}
+
+const choiceOf = (part: PartState): SegmentChoice => ({
+  ...(part.mode === "box" ? { box: part.box } : part.mode === "carry" || part.mode === "form" ? {} : { pick: part.mode }),
+  lostFrames: part.lost,
+});
+
 /**
- * Setting up a redo: who the segment follows, and how far the redo reaches.
- * By default it follows whoever the segment before tracked into it — the
- * carried mask — or, for the first, whatever the form says. A rule or a box,
- * drawn on the frame this segment's run starts on, replaces that for it.
+ * One part of a redo: who it follows, drawn on the frame its run starts on,
+ * what happens where SAM loses them, and the check of both.
+ */
+function PartControls({
+  name,
+  part,
+  onChange,
+  modes,
+  clip,
+  time,
+  values,
+  checkSeconds,
+}: {
+  /** "segment 4", "before the cut": what the box picker's frame is of. */
+  name: string;
+  part: PartState;
+  onChange: (next: PartState) => void;
+  modes: Array<{ value: RedoMode; label: string; title?: string }>;
+  clip: string;
+  /** The frame SAM looks at first in this part's run, in seconds. */
+  time: number;
+  /** The swap's values with what "As in the form"/"As planned" means here laid over them. */
+  values: Record<string, ParamValue>;
+  checkSeconds: number;
+}) {
+  return (
+    <>
+      <Segmented label={`Who ${name} follows`} value={part.mode} onChange={(mode) => onChange({ ...part, mode })} options={modes} />
+      {part.mode === "box" ? (
+        clip ? (
+          <BoxPicker
+            src={inputVideoUrl(clip)}
+            time={time}
+            value={part.box}
+            onChange={(box) => onChange({ ...part, box })}
+            label={`The frame ${name} starts from`}
+          />
+        ) : (
+          <p className="text-[12px] text-danger">The clip this swap was made from is not known, so there is no frame to draw on.</p>
+        )
+      ) : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[12px] text-fg-muted">If SAM loses them</span>
+        <Segmented
+          label={`If SAM loses them in ${name}`}
+          value={part.lost}
+          onChange={(lost) => onChange({ ...part, lost })}
+          options={LOST_OPTIONS}
+        />
+      </div>
+      {part.mode !== "carry" && clip ? (
+        <MaskCheck
+          values={{
+            ...values,
+            lost_frames: part.lost,
+            ...(part.mode === "box"
+              ? { [SUBJECT_BOX_PARAM]: part.box }
+              : part.mode === "form"
+                ? {}
+                : { [PICK_PARAM]: part.mode, [SUBJECT_BOX_PARAM]: "" }),
+          }}
+          start={time}
+          seconds={Math.min(MAX_CHECK_SECONDS, checkSeconds)}
+          disabled={part.mode === "box" && !part.box}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/** The clip's frame at `frame` on the 24 fps grid, small, to place a cut by. */
+function FramePreview({ src, frame }: { src: string; frame: number }) {
+  const video = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (video.current) video.current.currentTime = frameSeekTime(frame);
+  }, [frame]);
+  return (
+    <video
+      ref={video}
+      src={src}
+      muted
+      playsInline
+      preload="auto"
+      onLoadedMetadata={(event) => {
+        event.currentTarget.currentTime = frameSeekTime(frame);
+      }}
+      className="aspect-video w-full max-w-sm rounded border border-border-default bg-black object-contain"
+    />
+  );
+}
+
+/**
+ * Setting up a redo: who the segment follows, what happens where SAM loses
+ * them, and how far the redo reaches. By default it follows whoever the
+ * segment before tracked into it — the carried mask — or, for the first,
+ * whatever the form says. A rule or a box, drawn on the frame this segment's
+ * run starts on, replaces that for it.
+ *
+ * A cut splits the segment in two, each part with its own choices: for when
+ * SAM picks the wrong person, or loses them, part-way through.
  */
 function RedoEditor({
   swap,
@@ -126,22 +255,51 @@ function RedoEditor({
   const total = project.segments.length;
   const segment = project.segments[index];
   const carried = startsFresh(project, index) ? 0 : segment.history;
-  const canCarry = index > 0 && !segment.cut && savedMask(swap.segmentJobs[index - 1], carried > 0) !== null;
-  const [mode, setMode] = useState<RedoMode>(index === 0 ? "form" : canCarry ? "carry" : "form");
-  const [box, setBox] = useState("");
+  const canCarry =
+    index > 0 && !segment.cut && !segment.fresh && savedMask(swap.segmentJobs[index - 1], carried > 0) !== null;
+  const lost = project.lostFrames?.[index] ?? String(project.values.lost_frames ?? "leave");
+  const [part, setPart] = useState<PartState>({
+    mode: index === 0 ? "form" : canCarry ? "carry" : "form",
+    box: "",
+    lost,
+  });
   const clip = String(project.values.source_video ?? "");
   // The frame SAM looks at first in this segment's run: its own start, or the
   // history before it when it carries on.
   const time = carried === 0 && segment.startTime !== undefined ? segment.startTime : (segment.start - carried) / SLICE_FPS;
+  const frames = segmentFrames(segment, project.seconds);
 
-  const choice: SegmentChoice | undefined =
-    mode === "box" ? { box } : mode === "carry" || mode === "form" ? undefined : { pick: mode };
-  const ready = mode !== "box" || Boolean(box);
+  // The cut, when one is being added.
+  const range = total < MAX_SEGMENTS ? splitRange(segment, project.seconds) : null;
+  const [cutting, setCutting] = useState(false);
+  const [at, setAt] = useState(() => (range ? Math.round((range[0] + range[1]) / 2) : 0));
+  const [keep, setKeep] = useState(false);
+  const [fresh, setFresh] = useState(false);
+  // Pointing them out is what a cut is usually for.
+  const [after, setAfter] = useState<PartState>({ mode: "box", box: "", lost });
+  const split = cutting && range ? { at, keep, fresh: fresh || keep } : null;
+  // "Same as before the cut" means nothing once nothing is carried across it,
+  // and "As in the form" is what stands in for it there.
+  const afterPart: PartState =
+    split?.fresh && after.mode === "carry"
+      ? { ...after, mode: "form" }
+      : !split?.fresh && after.mode === "form"
+        ? { ...after, mode: "carry" }
+        : after;
+  const afterHistory = split?.fresh ? 0 : CHAIN_HISTORY;
+  const afterTime = (at - afterHistory) / SLICE_FPS;
+
+  const ready = (split?.keep || part.mode !== "box" || Boolean(part.box)) && (!split || afterPart.mode !== "box" || Boolean(afterPart.box));
   // How far a redo has to reach for no segment after it to carry on from
   // frames that are gone: to the next cut or fresh start.
   const end = shotEndOf(project, index);
   const send = (through: number) => {
-    swap.redo(index, through, choice);
+    swap.redo(
+      index,
+      through,
+      choiceOf(part),
+      split ? { ...split, after: choiceOf(afterPart) } : undefined,
+    );
     onDone();
   };
 
@@ -159,46 +317,144 @@ function RedoEditor({
             ? "As this shot was set before the swap started: its box or rule, or the form's."
             : index === 0
               ? "The form's box, or its description and rule."
-              : "The form's description and rule. The segment before saved no mask to carry on from.",
+              : segment.fresh
+                ? "The form's description and rule. This part starts at a cut added on a redo, so nothing is carried into it."
+                : "The form's description and rule. The segment before saved no mask to carry on from.",
+        },
+    ...RULES,
+  ];
+  const afterModes: Array<{ value: RedoMode; label: string; title?: string }> = [
+    split?.fresh
+      ? { value: "form", label: "As in the form", title: "The form's description and rule, on the first frame after the cut." }
+      : {
+          value: "carry",
+          label: "Same as before the cut",
+          title: "Starts from whoever the part before the cut tracked into this one: the same person, with no fresh pick.",
         },
     ...RULES,
   ];
 
+  const n = index + 1;
+  const primaryLabel = split
+    ? end === index + 1
+      ? split.keep
+        ? `Cut, and swap after it`
+        : `Cut, and redo both parts`
+      : `Cut, and redo to segment ${end}`
+    : end === index + 1
+      ? `Redo segment ${n}`
+      : `Redo segments ${n}–${end}`;
+
   return (
-    <section className="mt-4 flex flex-col gap-3 rounded-lg border border-border-default bg-bg-subtle p-3" aria-label={`Redo segment ${index + 1}`}>
+    <section className="mt-4 flex flex-col gap-3 rounded-lg border border-border-default bg-bg-subtle p-3" aria-label={`Redo segment ${n}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-[13px] font-medium text-fg">Redo segment {index + 1}</h3>
-        <span className="text-[12px] text-fg-subtle">A new seed; choose who it follows.</span>
+        <h3 className="text-[13px] font-medium text-fg">Redo segment {n}</h3>
+        <span className="text-[12px] text-fg-subtle">
+          A new seed; choose who it follows, or cut it in two where SAM goes wrong.
+        </span>
       </div>
-      <Segmented label="Who it follows" value={mode} onChange={setMode} options={modes} />
-      {mode === "box" ? (
-        clip ? (
-          <BoxPicker
-            src={inputVideoUrl(clip)}
-            time={time}
-            value={box}
-            onChange={setBox}
-            label={`The frame segment ${index + 1} starts from`}
-          />
+
+      {split ? <p className="label-caps text-fg-muted">Before the cut</p> : null}
+      {split?.keep ? (
+        <p className="text-[12px] text-fg-subtle">Kept as it is: its take is trimmed to end at the cut.</p>
+      ) : (
+        <PartControls
+          name={split ? "the part before the cut" : `segment ${n}`}
+          part={part}
+          onChange={setPart}
+          modes={modes}
+          clip={clip}
+          time={time}
+          values={{ ...project.values, ...(part.mode === "form" ? planned(project, index) : {}) }}
+          checkSeconds={((split ? at - segment.start : frames) + carried) / SLICE_FPS}
+        />
+      )}
+
+      {range ? (
+        cutting ? (
+          <div className="flex flex-col gap-3 border-t border-border-default pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor={`cut-${index}`} className="text-[13px] font-medium text-fg">
+                <Scissors {...icon} className="mr-1.5 inline size-3.5 stroke-2" />
+                Cut at {clock(at / SLICE_FPS)}
+                <span className="ml-1.5 font-mono text-[11px] font-normal tabular-nums text-fg-subtle">
+                  {((at - segment.start) / SLICE_FPS).toFixed(2)} s in
+                </span>
+              </label>
+              <Button size="xs" variant="quiet" onClick={() => setCutting(false)}>
+                No cut
+              </Button>
+            </div>
+            <Slider id={`cut-${index}`} value={at} onChange={setAt} min={range[0]} max={range[1]} />
+            {clip ? <FramePreview src={inputVideoUrl(clip)} frame={at} /> : null}
+            <p className="text-[12px] text-fg-subtle">
+              The first frame after the cut. Put it just before SAM goes wrong — where the person turns away, someone
+              walks in front, or the wrong person is picked up.
+            </p>
+            <Segmented
+              label="The part before the cut"
+              value={keep}
+              onChange={setKeep}
+              options={[
+                {
+                  value: false,
+                  label: "Swap it again",
+                  title: "Redoes the part before the cut too, with the choices above.",
+                },
+                {
+                  value: true,
+                  label: "Keep it as it is",
+                  title:
+                    "Keeps this segment's take up to the cut and swaps only after it. Saves a run, but the part after starts fresh, so the cut can show a jump.",
+                },
+              ]}
+            />
+            {!keep ? (
+              <Segmented
+                label="The part after the cut"
+                value={fresh}
+                onChange={setFresh}
+                options={[
+                  {
+                    value: false,
+                    label: "Carries on",
+                    title: "Continues from the last frames of the part before, so the cut does not show.",
+                  },
+                  {
+                    value: true,
+                    label: "Starts fresh",
+                    title:
+                      "Starts over from the clip and the picture, with nothing carried across. For a camera cut the finder missed.",
+                  },
+                ]}
+              />
+            ) : null}
+            <p className="label-caps text-fg-muted">After the cut</p>
+            <PartControls
+              name="the part after the cut"
+              part={afterPart}
+              onChange={setAfter}
+              modes={afterModes}
+              clip={clip}
+              time={afterTime}
+              values={{ ...project.values, [SUBJECT_BOX_PARAM]: "" }}
+              checkSeconds={(segment.start + frames - at + afterHistory) / SLICE_FPS}
+            />
+          </div>
         ) : (
-          <p className="text-[12px] text-danger">The clip this swap was made from is not known, so there is no frame to draw on.</p>
+          <div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setCutting(true)}
+              title="Cut this segment in two, and choose who each part follows and what happens where SAM loses them."
+            >
+              <Scissors {...icon} /> Add a cut
+            </Button>
+          </div>
         )
       ) : null}
-      {mode !== "carry" && clip ? (
-        <MaskCheck
-          values={{
-            ...project.values,
-            ...(mode === "box"
-              ? { [SUBJECT_BOX_PARAM]: box }
-              : mode === "form"
-                ? planned(project, index)
-                : { [PICK_PARAM]: mode, [SUBJECT_BOX_PARAM]: "" }),
-          }}
-          start={time}
-          seconds={segment.frames ? Math.min(MAX_CHECK_SECONDS, (segment.frames + carried) / SLICE_FPS) : MAX_CHECK_SECONDS}
-          disabled={mode === "box" && !box}
-        />
-      ) : null}
+
       <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
@@ -208,12 +464,12 @@ function RedoEditor({
           title={
             end === index + 1
               ? index < total - 1
-                ? `Swaps segment ${index + 1} again, then joins again. Segment ${index + 2} starts fresh, without carrying on from this one, so the join shows no jump.`
-                : `Swaps segment ${index + 1} again, then joins again.`
-              : `Swaps segments ${index + 1} to ${end} again, each carrying on from the one before, then joins again. ${end < total ? `Segment ${end + 1} starts fresh, so nothing is left carrying on from the old take and there is no jump.` : "They run to the end of the clip, so there is no jump."}`
+                ? `Swaps segment ${n} again, then joins again. Segment ${index + 2} starts fresh, without carrying on from this one, so the join shows no jump.`
+                : `Swaps segment ${n} again, then joins again.`
+              : `Swaps segments ${n} to ${end} again, each carrying on from the one before, then joins again. ${end < total ? `Segment ${end + 1} starts fresh, so nothing is left carrying on from the old take and there is no jump.` : "They run to the end of the clip, so there is no jump."}`
           }
         >
-          {end === index + 1 ? `Redo segment ${index + 1}` : `Redo segments ${index + 1}–${end}`}
+          {primaryLabel}
         </Button>
         {end > index + 1 ? (
           <Button
@@ -221,9 +477,9 @@ function RedoEditor({
             variant="quiet"
             disabled={!ready}
             onClick={() => send(index + 1)}
-            title={`Swaps only segment ${index + 1} again. Segment ${index + 2} still carries on from this one's old frames, so that join can show a jump.`}
+            title={`Swaps only segment ${n}${split ? ", cut in two," : ""} again. Segment ${index + 2} still carries on from this one's old frames, so that join can show a jump.`}
           >
-            Only segment {index + 1}
+            Only segment {n}
           </Button>
         ) : null}
         <Button size="sm" variant="quiet" onClick={onDone}>
@@ -599,6 +855,10 @@ export function LongSwapPanel({ swap }: { swap: LongSwapController }) {
                 {segment.cut && !project.passedThrough?.includes(index) ? (
                   <span className="text-[11px] text-fg-subtle" title="The first segment after a camera cut: swapped fresh.">
                     new shot
+                  </span>
+                ) : segment.fresh && !project.passedThrough?.includes(index) ? (
+                  <span className="text-[11px] text-fg-subtle" title="Starts at a cut added on a redo: swapped fresh, with its own pick.">
+                    added cut
                   </span>
                 ) : index > 0 && startsFresh(project, index) && !project.passedThrough?.includes(index) ? (
                   <span

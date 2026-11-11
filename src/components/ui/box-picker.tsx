@@ -76,10 +76,14 @@ export function BoxPicker({
 
   // A new clip or moment: measure again and seek. Just past the time, so the
   // browser paints that frame rather than the one before it.
+  // A new moment of a clip already loaded fires no loadedmetadata, so it is
+  // measured here; a new clip is measured when its metadata comes.
   useEffect(() => {
-    setSize(null);
     const element = video.current;
-    if (element && element.readyState >= 1) element.currentTime = time + 0.001;
+    if (element && element.readyState >= 1 && element.videoWidth && element.videoHeight) {
+      setSize({ w: element.videoWidth, h: element.videoHeight });
+      element.currentTime = time + 0.001;
+    } else setSize(null);
   }, [src, time]);
 
   // A box drawn on another clip, or another moment, is around nobody here.

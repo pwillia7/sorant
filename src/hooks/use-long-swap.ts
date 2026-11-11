@@ -13,6 +13,8 @@ import {
   segmentFrames,
   shotSegments,
   SLICE_FPS,
+  segmentTag,
+  splitSegment,
   SPLIT_SHOTS_PARAM,
   SLICE_FRAMES,
   type ChainSegment,
@@ -78,6 +80,17 @@ import { defaultValuesFor, type ParamValue, type WorkflowSummary } from "@/lib/w
  * box is drawn on the clip's first frame, so it applies to the first segment
  * only. A redo can choose for itself (`choices`): a rule, or a box drawn on
  * that segment's own first frame, in place of carrying on from the one before.
+ * A redo can also say what happens where SAM loses the person (`lostFrames`),
+ * for that segment alone, in place of the form's "If SAM loses them".
+ *
+ * **Cuts added on a redo.** Where SAM picks the wrong person or loses them
+ * part-way through a segment, a redo can cut it in two (`splitSegment`) and
+ * choose for each part. The second part carries on from the first, or starts
+ * fresh — for a camera cut the finder missed, or when the first part's take is
+ * kept as it is, which runs past the cut and so has nothing to carry on from.
+ * A kept take is trimmed to the shorter part by the join, which cuts every
+ * clip to its segment's length. Segments are found in the history by their
+ * `tag`, not their index, so those after a cut keep their takes.
  *
  * **Shots.** A clip cut together from several shots is split at its camera
  * cuts before anything is sent (`planning`; the cuts are found in the browser,
@@ -94,6 +107,20 @@ export interface SegmentChoice {
   pick?: string;
   /** A box drawn on the segment's first frame (subject-box.ts). */
   box?: string;
+  /** "If SAM loses them" for this segment alone: leave, recover or stop. */
+  lostFrames?: string;
+}
+
+/** A cut added on a redo, splitting the segment in two at `at`. */
+export interface SegmentSplit {
+  /** Where the second part starts, in frames at 24 fps. */
+  at: number;
+  /** The second part starts over rather than carrying on from the first. */
+  fresh: boolean;
+  /** The first part's take is kept as it is; only the second is swapped. */
+  keep: boolean;
+  /** Who the second part follows, and what it does where SAM loses them. */
+  after?: SegmentChoice;
 }
 
 /** Who a shot replaces: the form's rule when neither is set. */
@@ -147,6 +174,11 @@ export interface LongSwapProject {
   /** How a redone segment picks who to replace, where it was told. */
   choices?: Record<number, SegmentChoice>;
   /**
+   * "If SAM loses them" for a segment, set on a redo, in place of the form's.
+   * Kept when a later redo reaches the segment from one before it.
+   */
+  lostFrames?: Record<number, string>;
+  /**
    * Set while the clip's shots are being found and chosen for: nothing is
    * sent until `plan` clears it.
    */
@@ -195,7 +227,7 @@ export interface LongSwapController {
    * including, `through` — each after the first carrying on from the one
    * before. Up to `shotEndOf` leaves no seam a later segment carries on from.
    */
-  redo: (index: number, through: number, choice?: SegmentChoice) => void;
+  redo: (index: number, through: number, choice?: SegmentChoice, split?: SegmentSplit) => void;
   /**
    * End planning: split the clip at these cuts, with who each shot replaces,
    * and start sending. A clip short enough for one run with no cuts in it is
@@ -239,9 +271,33 @@ const NO_SUBJECT = /SAM found no subject/i;
  */
 export function shotEndOf(project: Pick<LongSwapProject, "segments" | "freshEvery">, index: number): number {
   for (let j = index + 1; j < project.segments.length; j += 1) {
-    if (project.segments[j].cut || (project.freshEvery && j % project.freshEvery === 0)) return j;
+    const segment = project.segments[j];
+    if (segment.cut || segment.fresh || (project.freshEvery && j % project.freshEvery === 0)) return j;
   }
   return project.segments.length;
+}
+
+/**
+ * The project's per-segment records with every segment after `index` moved on
+ * by one, for a cut that makes `index` two segments. The new one, `index + 1`,
+ * starts with none.
+ */
+function shiftedAfter(project: LongSwapProject, index: number): LongSwapProject {
+  const shift = <T,>(record: Record<number, T> | undefined) =>
+    record
+      ? Object.fromEntries(
+          Object.entries(record).map(([key, value]) => [Number(key) > index ? Number(key) + 1 : Number(key), value]),
+        )
+      : undefined;
+  return {
+    ...project,
+    redoneAt: shift(project.redoneAt),
+    seeds: shift(project.seeds),
+    choices: shift(project.choices),
+    lostFrames: shift(project.lostFrames),
+    shotChoices: shift(project.shotChoices),
+    passedThrough: project.passedThrough?.map((i) => (i > index ? i + 1 : i)),
+  };
 }
 
 /** Whether a segment's newest take failed because there was no one to swap. */
@@ -261,7 +317,7 @@ function freshEveryOf(values: Record<string, ParamValue>): number {
  * pass-through, and every `freshEvery`th.
  */
 export function startsFresh(project: LongSwapProject, index: number): boolean {
-  if (index === 0 || project.segments[index]?.cut) return true;
+  if (index === 0 || project.segments[index]?.cut || project.segments[index]?.fresh) return true;
   if (project.passedThrough?.includes(index - 1)) return true;
   return Boolean(project.freshEvery && index % project.freshEvery === 0);
 }
@@ -364,6 +420,8 @@ function subjectValues(
   const choice = project.choices?.[index];
   if (choice?.box) return { [SUBJECT_BOX_PARAM]: choice.box, [SUBJECT_MASK_PARAM]: "" };
   if (choice?.pick) return { [PICK_PARAM]: choice.pick, [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: "" };
+  // A cut added on a redo carries no mask: the take before it may run past it.
+  if (project.segments[index]?.fresh) return { [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: "" };
   if (index === 0 || project.segments[index]?.cut) {
     // A shot's own choice, or the form's rule. The form's box was drawn on the
     // clip's first frame, so it is the first shot's alone.
@@ -385,7 +443,7 @@ async function carriesNoOne(
   carriesOn: boolean,
   previous: Job | undefined,
 ): Promise<boolean> {
-  if (index === 0 || project.segments[index]?.cut) return false;
+  if (index === 0 || project.segments[index]?.cut || project.segments[index]?.fresh) return false;
   if (project.choices?.[index]?.box || project.choices?.[index]?.pick) return false;
   const file = savedMaskFile(previous, carriesOn);
   return file ? maskIsEmpty(file) : false;
@@ -421,10 +479,10 @@ export function useLongSwap({
   useEffect(() => writeProject(project), [project]);
 
   const tagFor = useCallback(
-    (current: LongSwapProject, part: MusicVideoPart, scene?: number): MusicVideoTag => ({
+    (current: LongSwapProject, part: MusicVideoPart, index?: number): MusicVideoTag => ({
       projectId: current.id,
       part,
-      scene,
+      scene: index === undefined ? undefined : segmentTag(current.segments, index),
       title: current.title,
       scenes: current.segments.length,
       kind: "swap",
@@ -464,7 +522,7 @@ export function useLongSwap({
     () =>
       project
         ? project.segments.map((_, index) => {
-            const take = runs.segments.get(index)?.[0];
+            const take = runs.segments.get(segmentTag(project.segments, index))?.[0];
             const redone = project.redoneAt?.[index];
             return take && redone !== undefined && take.submittedAt < redone ? undefined : take;
           })
@@ -481,9 +539,13 @@ export function useLongSwap({
   const upscaleJobs = useMemo(
     () =>
       segmentJobs.map((take, index) =>
-        take ? runs.upscales.get(index)?.find((job) => job.derivedFrom === take.promptId) : undefined,
+        take && project
+          ? runs.upscales
+              .get(segmentTag(project.segments, index))
+              ?.find((job) => job.derivedFrom === take.promptId)
+          : undefined,
       ),
-    [segmentJobs, runs],
+    [project, segmentJobs, runs],
   );
   // Likewise an upscaled join of upscales that no longer match the takes.
   const newestUpscale = upscaleJobs.every(Boolean)
@@ -516,6 +578,7 @@ export function useLongSwap({
         ...(!passThrough && (await carriesNoOne(current, index, carried > 0, previous))
           ? { [SUBJECT_MASK_PARAM]: "" }
           : {}),
+        ...(current.lostFrames?.[index] ? { lost_frames: current.lostFrames[index] } : {}),
         seed: current.seeds?.[index] ?? current.values.seed,
         segment: segmentValue(segment, carried),
         history_clip: carried ? history! : "",
@@ -798,37 +861,57 @@ export function useLongSwap({
   }, [sendUpscaledJoin]);
 
   const redo = useCallback(
-    (index: number, through: number, choice?: SegmentChoice) => {
+    (index: number, through: number, choice?: SegmentChoice, split?: SegmentSplit) => {
       if (!project) return;
+      let base = project;
+      // `through` counts the segments as they were; a cut adds one before it.
+      let last = Math.max(through, index + 1);
+      if (split) {
+        const segments = splitSegment(project.segments, index, split.at, split.fresh || split.keep, project.seconds);
+        if (!segments) {
+          setError(`Segment ${index + 1} cannot be cut there.`);
+          return;
+        }
+        base = { ...shiftedAfter(project, index), segments };
+        last += 1;
+      }
+      const first = split?.keep ? index + 1 : index;
       const at = Date.now();
-      const redone = project.segments
-        .map((_, i) => i)
-        .filter((i) => i >= index && i < Math.max(through, index + 1));
-      const redoneAt = { ...project.redoneAt };
-      const seeds = { ...project.seeds };
-      const choices = { ...project.choices };
+      const redone = base.segments.map((_, i) => i).filter((i) => i >= first && i < last);
+      const redoneAt = { ...base.redoneAt };
+      const seeds = { ...base.seeds };
+      const choices = { ...base.choices };
+      const lostFrames = { ...base.lostFrames };
       for (const i of redone) {
         redoneAt[i] = at;
         seeds[i] = Math.floor(Math.random() * 2 ** 31);
         // Those after the first carry on from it, whatever they were told before.
         delete choices[i];
       }
-      if (choice && (choice.box || choice.pick)) choices[index] = choice;
-      // A shot left as it is, redone: swapped after all, by the form's rule
-      // unless told otherwise.
-      else if (project.shotChoices?.[index]?.original) choices[index] = { pick: String(project.values[PICK_PARAM] ?? "largest") };
+      const formLost = String(base.values.lost_frames ?? "leave");
+      const decide = (i: number, told: SegmentChoice | undefined) => {
+        if (told && (told.box || told.pick)) choices[i] = { box: told.box, pick: told.pick };
+        // A shot left as it is, redone: swapped after all, by the form's rule
+        // unless told otherwise.
+        else if (base.shotChoices?.[i]?.original) choices[i] = { pick: String(base.values[PICK_PARAM] ?? "largest") };
+        if (told?.lostFrames && told.lostFrames !== formLost) lostFrames[i] = told.lostFrames;
+        else if (told?.lostFrames) delete lostFrames[i];
+      };
+      if (!split?.keep) decide(index, choice);
+      if (split) decide(index + 1, split.after);
       setError(null);
       setProject({
-        ...project,
+        ...base,
         paused: false,
         redoneAt,
         seeds,
         choices,
+        lostFrames,
         // Tried for a swap again: if SAM still finds no one, it passes through
         // again. A shot chosen to be left as it is stays so, unless it is the
         // one being redone.
-        passedThrough: project.passedThrough?.filter(
-          (i) => !redone.includes(i) || (i !== index && project.shotChoices?.[i]?.original),
+        passedThrough: base.passedThrough?.filter(
+          (i) => !redone.includes(i) || (i !== first && base.shotChoices?.[i]?.original),
         ),
       });
     },

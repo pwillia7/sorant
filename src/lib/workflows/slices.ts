@@ -59,7 +59,7 @@ export const CHAIN_OVER_SECONDS = 20;
 
 /**
  * As long as a clip may be, at all. The join is one `ConcatenateVideo`, which
- * takes at most 100 clips (MAX_SCENES in music-video-stitch.ts), and 100
+ * takes at most 100 clips (MAX_SEGMENTS, below), and 100
  * segments of about 123 frames is 8.5 minutes.
  */
 export const MAX_SWAP_SECONDS = 480;
@@ -118,10 +118,78 @@ export interface ChainSegment {
    * See `Cut.time` in scene-cuts.ts for why both are needed.
    */
   endTime?: number;
+  /**
+   * Starts fresh at a cut the user added on a redo (`splitSegment`), not at
+   * one found in the clip: no history, no mask carried from the segment
+   * before, and who to replace picked anew on its own first frame.
+   */
+  fresh?: boolean;
+  /**
+   * The history tag its runs carry (`MusicVideoTag.scene`); its index when
+   * unset. Set on every segment once one is split, so the segments after the
+   * split keep finding their own takes though their index moved on by one.
+   */
+  tag?: number;
 }
 
 /** A tail shorter than this is folded into the segment before it. */
 const MIN_LAST_SEGMENT = 24;
+
+/** The most segments a swap may have: the join's 100 clips (MAX_SCENES in music-video-stitch.ts). */
+export const MAX_SEGMENTS = 100;
+
+/** Neither side of a cut added on a redo may be shorter than this: a second. */
+export const MIN_SPLIT_FRAMES = MIN_LAST_SEGMENT;
+
+/** The history tag a segment's runs carry. See `ChainSegment.tag`. */
+export function segmentTag(segments: ChainSegment[], index: number): number {
+  return segments[index]?.tag ?? index;
+}
+
+/**
+ * The frames a cut may be added at in a segment, as [first, last] on the 24
+ * fps grid, or null when it is too short to make two of. The frame is where
+ * the second part starts.
+ */
+export function splitRange(segment: ChainSegment, seconds: number): [number, number] | null {
+  const first = segment.start + MIN_SPLIT_FRAMES;
+  const last = segment.start + segmentFrames(segment, seconds) - MIN_SPLIT_FRAMES;
+  return first <= last ? [first, last] : null;
+}
+
+/**
+ * The segments with one cut in two at frame `at`. The first part keeps the
+ * segment's start, history and tag, so its takes are still its own; the second
+ * starts at `at` with a new tag, between this one's and the next one's so the
+ * history lists it in order. It carries on from the first part's last frames,
+ * or with `fresh`, starts over — for a cut the finder missed, or a first part
+ * whose take is kept, which runs past `at` and has no frames to carry on from.
+ */
+export function splitSegment(
+  segments: ChainSegment[],
+  index: number,
+  at: number,
+  fresh: boolean,
+  seconds: number,
+): ChainSegment[] | null {
+  const segment = segments[index];
+  const range = segment ? splitRange(segment, seconds) : null;
+  if (!range || at < range[0] || at > range[1] || segments.length >= MAX_SEGMENTS) return null;
+  const tagged = segments.map((each, i) => ({ ...each, tag: segmentTag(segments, i) }));
+  const tag = tagged[index].tag;
+  const next = tagged[index + 1]?.tag ?? tag + 1;
+  const { endTime, ...head } = tagged[index];
+  const first: ChainSegment = { ...head, frames: at - segment.start };
+  const second: ChainSegment = {
+    start: at,
+    frames: segment.frames ? segment.start + segment.frames - at : 0,
+    history: fresh ? 0 : CHAIN_HISTORY,
+    ...(fresh ? { fresh: true } : {}),
+    ...(endTime !== undefined ? { endTime } : {}),
+    tag: (tag + next) / 2,
+  };
+  return [...tagged.slice(0, index), first, second, ...tagged.slice(index + 1)];
+}
 
 /**
  * A long clip as a chain of single-window runs. The first delivers 124 frames,
