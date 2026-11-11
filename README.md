@@ -60,9 +60,9 @@ Plus **Music** (MiniMax Music 3, a song from a description), **Upscale**
 in seconds, or SeedVR2 if you have the time) and an **Edit** button on every picture you attach, which changes it by a sentence with
 FLUX Kontext.
 
-![Reference to Video: the workflow picker and a reference photo on the left, the
-finished clip with its result actions and the generation history on the
-right](docs/screenshot.jpg)
+![Music video, finished: the joined video in the player, the idea it was planned
+from in the composer below with its song, picture and settings, and buttons to
+join or upscale it](docs/screenshot.jpg)
 
 A few things make it more than a form over a graph:
 
@@ -257,6 +257,7 @@ Short walkthroughs, one per workflow.
 | Video | Shows |
 | --- | --- |
 | <a href="https://www.youtube.com/watch?v=05MyrTtRSeA"><img src="docs/howto-character-swap.jpg" width="320" alt="Character swap how-to video"></a> | **[Character swap](https://www.youtube.com/watch?v=05MyrTtRSeA)** (1 min): pick a clip and a character, point out who to replace, and check the shots of a clip with cuts |
+| <a href="https://www.youtube.com/watch?v=-ZQhk0PRl00"><img src="docs/howto-music-video.jpg" width="320" alt="Music video how-to video"></a> | **[Music video](https://www.youtube.com/watch?v=-ZQhk0PRl00)** (1 min): one song and one picture become a music video, cut into scenes on the beats, rendered with the song under them and joined |
 
 ## Scripts
 
