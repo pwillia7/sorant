@@ -874,9 +874,58 @@ On the ComfyUI machine:
 | "Contact was lost" | The connection dropped, not the workflow. Check the pill and resubmit |
 | The Windows machine restarts during step 1 | The TDR values — Phase 4. Display event 4101 in the System log confirms it |
 | The deployed app goes Offline when you close your session | ComfyUI was started from your shell. Start it from its launch script in its own window — Phase 2 |
+| Windows: **Upscale freezes ComfyUI** — `got prompt` is the last log line, the GPU sits idle, and ComfyUI stops answering HTTP (even on `127.0.0.1`) until it is restarted | NVIDIA App's telemetry client blocking when RTX Video shuts down — [RTX Video freezes ComfyUI](#rtx-video-freezes-comfyui) |
 
 `/api/health` reports `reachable`, `authorized` and `secure` separately, so it
 tells "cannot connect" from "connected but refused".
+
+### RTX Video freezes ComfyUI
+
+Seen on Windows in November 2026: NVIDIA App 11.0.9.565, Telemetry Client 19.8.6.0,
+drivers 596.49 and 621.14. ComfyUI 0.44 and the node packs were not the cause.
+Upscale with RTX Video finishes its frames. Then releasing the effect calls
+NGX's shutdown, and that calls into the NVIDIA App's telemetry library
+(`NvTelemetryAPI64!UninitializeTelemetry`), which never returns. The node is
+still holding ComfyUI's execution lock at that point, so the whole server stops
+answering. Restarting ComfyUI or the PC, updating the driver,
+`--disable-dynamic-vram` and a shorter clip all left it the same. Telemetry's
+endpoints were reachable, so the network was not the cause either.
+
+**Confirm it before changing anything.** Run this with ComfyUI's own Python.
+On an affected machine the second line never prints:
+
+```python
+import time, torch, nvvfx
+eff = nvvfx.VideoSuperRes(quality=nvvfx.QualityLevel["ULTRA"], strength=1.0, device=0,
+                          image_encoding=nvvfx.ImageEncoding.RGB8)
+eff.output_width, eff.output_height = 1280, 720
+eff.load(); eff.run(torch.rand(3, 360, 640, device="cuda").contiguous())
+print("ran; closing", flush=True); t = time.time()
+eff.close(); print(f"closed in {time.time() - t:.1f}s")
+```
+
+To see where a frozen ComfyUI is stuck, run `py-spy dump --native --pid <pid>`.
+py-spy's Windows wheel holds a standalone `py-spy.exe`, so it needs no install
+into ComfyUI's Python. On this hang, the stack ends in
+`Effect.close` → `ShutdownNGX` → `NvTelemetryAPI64.dll`.
+
+**The fix: rename the telemetry DLL.** It changes a file the NVIDIA App
+installed, so ask the person first. It needs an elevated PowerShell:
+
+```powershell
+Rename-Item "C:\Program Files\NVIDIA Corporation\NvTelemetry\NvTelemetryAPI64.dll" NvTelemetryAPI64.dll.off
+```
+
+Then restart ComfyUI and rerun the check above, which should print
+`closed in 0.0s`. Then upscale a clip from the app.
+
+- **What it costs:** only the NVIDIA App's usage and diagnostic reporting from
+  the programs that load that DLL. The driver, the NVIDIA App, DLSS, RTX Video
+  and NVIDIA's own services keep working. The services use a separate telemetry
+  plugin (`NvTelemetry\plugin\`), which is untouched.
+- **To undo it:** rename the file back.
+- **An NVIDIA App update may put the file back.** If Upscale starts freezing
+  again after one, check for it first.
 
 ## Done when
 

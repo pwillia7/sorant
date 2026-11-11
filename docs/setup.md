@@ -591,6 +591,7 @@ README for the prompt to paste.
 | A job shows as **Lost** | ComfyUI restarted and forgot its history |
 | A long video sits on a grey box and never plays, short clips load | `COMFY_URL` is a Tailscale Funnel, whose bandwidth cannot carry a file that size within a Vercel function's five minutes. [Use HTTPS on your own connection](#https-on-your-own-connection-recommended) |
 | "Contact was lost" | The connection dropped, not the workflow. Check the pill and resubmit — the run may have finished anyway |
+| Windows: **Upscale freezes ComfyUI.** The job never finishes, the GPU is idle, and ComfyUI stops answering until you restart it | The NVIDIA App's telemetry library blocks when RTX Video shuts down. In an admin PowerShell, rename `C:\Program Files\NVIDIA Corporation\NvTelemetry\NvTelemetryAPI64.dll` to `NvTelemetryAPI64.dll.off`, then restart ComfyUI. The only loss is the NVIDIA App's usage reporting; rename the file back to undo it. An NVIDIA App update can put the file back. How to confirm the cause first: the [agent runbook](agent-setup.md#rtx-video-freezes-comfyui) |
 
 ---
 
