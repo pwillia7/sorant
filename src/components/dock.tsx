@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowUp, AudioLines, BookOpen, Film, ImageIcon, Plus, SlidersHorizontal, X } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { ArrowUp, AudioLines, BookOpen, ChevronDown, ChevronUp, Film, ImageIcon, Plus, SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Spinner } from "@/components/ui/button";
 import { splitHelp } from "@/components/ui/field";
 import type { ClientParam, ParamValue } from "@/lib/workflows/types";
@@ -68,6 +68,23 @@ export function Dock({
   onOpenGuide?: () => void;
 }) {
   const box = useRef<HTMLTextAreaElement>(null);
+  // A long prompt grows the box up to a third of the screen, over the gallery
+  // it floats on. Folded, it keeps two lines; typing into it unfolds it again.
+  const [folded, setFolded] = useState(false);
+  const [long, setLong] = useState(false);
+  const text = typeof promptValue === "string" ? promptValue : "";
+
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    // Measured unfolded: what the text would take, not what it is held to.
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 24;
+    setLong(el.scrollHeight > lineHeight * 3.5);
+  }, [text, prompt]);
+
+  useEffect(() => {
+    if (!long) setFolded(false);
+  }, [long]);
 
   // "/" from anywhere puts the cursor in the prompt, as a search box would.
   useEffect(() => {
@@ -125,20 +142,42 @@ export function Dock({
                   </label>
                   {hint ? <span id="dock-prompt-hint"> · {hint}</span> : null}
                 </p>
+                {long ? (
+                  <button
+                    type="button"
+                    onClick={() => setFolded((f) => !f)}
+                    aria-expanded={!folded}
+                    aria-controls="dock-prompt"
+                    title={folded ? "Show the whole prompt" : "Fold the prompt to two lines"}
+                    className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-fg-subtle
+                      transition-colors hover:bg-surface-hover hover:text-fg"
+                  >
+                    {folded ? (
+                      <ChevronUp aria-hidden="true" className="size-3.5" />
+                    ) : (
+                      <ChevronDown aria-hidden="true" className="size-3.5" />
+                    )}
+                    {folded ? "Expand" : "Fold"}
+                  </button>
+                ) : null}
                 {guide}
               </div>
               <textarea
                 ref={box}
                 id="dock-prompt"
-                value={typeof promptValue === "string" ? promptValue : ""}
-                onChange={(event) => onPromptChange(event.target.value)}
+                value={text}
+                onChange={(event) => {
+                  setFolded(false);
+                  onPromptChange(event.target.value);
+                }}
                 placeholder={placeholder}
                 maxLength={maxLength}
                 rows={1}
                 aria-invalid={promptError ? true : undefined}
                 aria-describedby={promptError ? "dock-prompt-error" : hint ? "dock-prompt-hint" : undefined}
-                className="block max-h-[34vh] min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-4 pb-1 pt-0.5
-                  text-[15px] leading-relaxed text-fg placeholder:text-fg-subtle focus:outline-none [field-sizing:content]"
+                className={`block min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-4 pb-1 pt-0.5
+                  ${folded ? "max-h-[3.5rem] [mask-image:linear-gradient(to_bottom,black_55%,transparent)]" : "max-h-[34vh]"}
+                  text-[15px] leading-relaxed text-fg placeholder:text-fg-subtle focus:outline-none [field-sizing:content]`}
               />
               {promptError ? (
                 <p id="dock-prompt-error" className="px-4 pb-1 text-[12px] text-danger">
