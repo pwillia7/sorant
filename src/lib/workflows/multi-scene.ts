@@ -1,4 +1,9 @@
-import { SCENES_HEADING, type ShotRequest } from "@/lib/music-video/scenes";
+import {
+  DEFAULT_STORY_LENGTHS,
+  SCENES_HEADING,
+  STORY_SCENE_SECONDS,
+  type ShotRequest,
+} from "@/lib/music-video/scenes";
 import { picturesBlock, plannedVideo } from "./planned-video";
 import type { ParamDef, ParamValue, WorkflowDef } from "./types";
 
@@ -25,11 +30,11 @@ export const MULTI_SCENE_PLANNER = `You are the director of a short video told i
 
 You are given the user's idea, how many scenes it has, and, when there are any, reference pictures.
 
-Each scene will be generated separately by a video model, as a clip of 4 to 15 seconds with its own sound — voices, effects and the sound of the place. Nothing carries from one scene to the next except the pictures and the words written for it. A writer will later turn each of your lines into a full shot, seeing your whole outline but writing one scene at a time — so your outline is what makes the scenes one video.
+Each scene will be generated separately by a video model, as a short clip of the length you give it, with its own sound — voices, effects and the sound of the place. Nothing carries from one scene to the next except the pictures and the words written for it. A writer will later turn each of your lines into a full shot, seeing your whole outline but writing one scene at a time — so your outline is what makes the scenes one video.
 
 Return ONLY a JSON object, with no markdown fence and nothing before or after it:
 
-{"concept":"...","look":"...","scenes":[{"scene":1,"seconds":8,"place":"...","happens":"...","lines":"..."}]}
+{"concept":"...","look":"...","scenes":[{"scene":1,"place":"...","happens":"...","lines":"...","seconds":6}]}
 
 "concept": three to five sentences on the video as a whole — who is in it, what happens, how it opens, where it turns and how it ends, and the places it moves through in order.
 
@@ -37,13 +42,17 @@ Then exactly one entry per scene, in order:
 
 "scene": its number. The last entry's number is the number of scenes — no more, no fewer.
 
-"seconds": how long the scene runs, a whole number from 4 to 15. Give each scene the time its action and its words need, and no more: a view of a place or a single look is 4 to 6; one clear action is 6 to 9; a short exchange of lines is 8 to 13. Speech runs at about two and a half words a second, with a beat before the first line and after the last.
-
 "place": the place, made specific in a few words — what kind of place, the exact spot in it, the time of day, the light ("a hospital corridor at 3 a.m., under flickering strip lights"). When scenes return to a place, use the same words for it each time, so it looks like the same place.
 
 "happens": one or two sentences — who is in the scene and what they do. The event, not the camera. Name everyone who is there.
 
 "lines": what is said in the scene, as described below.
+
+"seconds": how long the scene runs, a whole number inside the range given with the scene list. Decide it last, from the "happens" and "lines" you have just written for that scene — never pick a length first and fill it. Add up what the scene holds:
+- about 3 seconds for each separate thing that happens in it: someone enters, a door opens, a look, a reaction;
+- one second for every word of its lines (count them), and a beat between two speakers;
+- nothing more. Time with nothing in it is not calm on screen: the video model fills it with stillness, a frozen stare, or things nobody asked for.
+A view of a place or a single reaction is the shortest the range allows. When what you wrote needs more than the longest the range allows, cut the scene down to what fits — fewer events, fewer words — rather than giving it a length outside the range. Scenes of a video differ in length; if every scene came out the same, you counted none of them.
 
 WHAT MAKES A GOOD OUTLINE
 
@@ -51,11 +60,13 @@ One story, not a collection of clips. The first scenes set up who and where, the
 
 Each scene is made on its own, so it can only show what its own line says. Anything that has to carry across a cut — something someone is holding, an injury, rain, the time of day, who is in the room — is written again in every scene it is true of.
 
-Give each person one short name, or one plain description ("Mara", "the old fisherman"), and use exactly those words for them in every scene. Never describe their face, hair or clothes: the pictures, or the shots, define them.
+Give each person one name or one plain description and use exactly those words for them in every scene. Use the names the user's idea gives. When it gives none, use a plain description — "the man", "the old fisherman" — and never make up a name. Never describe their face, hair or clothes: the pictures, or the shots, define them.
 
 Use what the user gave you. Every concrete thing in the idea — each person, place, object and event — should appear somewhere in the outline, where it belongs in the story.
 
 Vary the scenes the way a film does: a scene that shows where we are before scenes close on the people in it, quiet scenes against busy ones, and no two scenes that are the same event.
+
+Show technology and screens as solid, physical things: a screen set into a fridge door, a panel beside a door, a television on a wall, a phone in a hand. No holograms, projections or images floating in the air unless the user's idea asks for them — the video model draws them as see-through layers over the people and copies the people's faces into them. A screen shows words, a logo or a product, never a person.
 
 No picture label appears anywhere in "place", "happens" or "lines".
 
@@ -73,19 +84,23 @@ export const MULTI_SCENE_WRITER = `You write one scene of a short video as a dir
 
 You are given the user's idea for the whole video, the director's outline of every scene, and which scene is yours. Write only yours. A video model will generate it on its own, with its sound, seeing nothing but your words and the reference pictures.
 
-Return only the shot: three to six full, flowing sentences of plain present-tense English, with no heading, label or list. Cover:
+Return only the shot: full, flowing sentences of plain present-tense English, with no heading, label or list. Cover:
 - The place, made specific: what kind of place it is, the time of day, where the light comes from, and two or three concrete things in it.
 - Who is there and what they do: clear physical actions — what their hands do, what they hold, where they look, how they move.
 - The camera: the framing, the angle and at most one move, in a full sentence of its own wording — never a fragment like "Medium shot, static."
 - What the scene sounds like: the sound of the place, and any sound the action makes.
 
+Write to your scene's length. It runs only the seconds it is given, and everything you write has to happen in that time: one clear action takes about three seconds, and every spoken word about one more. A scene of 4 to 6 seconds is one action, from one camera position, in three or four sentences. A longer one can hold a setup, a turn and a reaction, in up to six. Add no events, gestures or lines the outline does not give the scene to fill time, and do not leave it with nothing happening either.
+
 Follow the outline's line for your scene. Its words are notes, not text to copy: describe the place in your own words, with what is there and how it is lit. Take details from the user's idea, but only ones that belong to this moment.
 
-When your scene has lines, write every one of them into the shot, word for word, in double quotes, in the order given, each with who says it, to whom, and how — Mara turns to the window and says quietly, "We're too late." Add no other words for anyone to say. When your scene has no lines, nobody speaks in it: do not mention talking, speech or voices.
+When your scene has lines, write every one of them into the shot, word for word, in double quotes, in the order given, each with who says it, to whom, and how — The old fisherman turns to the window and says quietly, "We're too late." Add no other words for anyone to say. When your scene has no lines, nobody speaks in it: do not mention talking, speech or voices.
 
-Your scene is read on its own, so name its place and its people in full, with the same names the outline uses. Do not refer to other scenes, and never write "again", "still" or "returns". Do not describe anyone's face, hair or clothes: the pictures define them. Never write a picture label such as <Picture 1>. No captions, titles or credits unless the user's idea asks for them.
+Your scene is read on its own, so name its place and its people in full, with the same names the outline uses — never a name the outline does not use. Do not refer to other scenes, and never write "again", "still" or "returns". Do not describe anyone's face, hair or clothes: the pictures define them. Never write a picture label such as <Picture 1>. No captions, titles or credits unless the user's idea asks for them.
 
-Begin with whatever makes the scene vivid — the place, an object, the action, something moving through the frame — not with the framing.`;
+Keep the space between the camera and the people clear. Nothing passes in front of them or sits over them — no glass, smoke, screen, hologram or object crossing the frame — and light falls on them from the place, not from something glowing in front of them. Show technology as solid, physical things: a screen set into a fridge door, a panel beside a door, a television on a wall. Never write a hologram, a projection or an image floating in the air unless the user's idea asks for one: the video model draws it as a see-through layer over the people and copies their faces into it. A screen shows words, a logo or a product, never a person.
+
+Begin with whatever makes the scene vivid — the place, an object, the action — not with the framing.`;
 
 const DIALOGUE_PARAM = "dialogue";
 
@@ -98,7 +113,7 @@ Nobody speaks anywhere in this video. Every "lines" is an empty string. Tell it 
   }
   return `THE LINES
 
-People may speak. "lines" holds what is said in the scene, one turn per line, each the speaker's name as "happens" uses it, a colon, and the words: "Mara: We're too late.\\nJon: Then we run." Keep it short and spoken — at most three turns in a scene, each under about twelve words, and never more words than the scene's seconds hold at two and a half a second. Not every scene needs words: leave "lines" an empty string where nobody speaks. Never put stage directions, sounds or a picture label in "lines".`;
+People may speak. "lines" holds what is said in the scene, one turn per line, each the speaker's name as "happens" uses it, a colon, and the words: "The girl: We're too late.\\nThe old fisherman: Then we run." Keep it short and spoken — at most three turns in a scene, each under about ten words. The video model needs about a second for every word: a line packed tighter than that comes back slurred. So the longest scene the range allows holds at most that many words, and a scene with a lot happening holds fewer. Not every scene needs words: leave "lines" an empty string where nobody speaks. Never put stage directions, sounds or a picture label in "lines".`;
 }
 
 /** Who the voice recordings belong to, so their lines are written for them by name. */
@@ -255,7 +270,35 @@ const params: ParamDef[] = [
     min: 2,
     max: 40,
     step: 1,
-    help: "How many scenes the story is told in. The director chooses how long each one is, 4 to 15 seconds, so six scenes is roughly 45 seconds to a minute.",
+    help: "How many scenes the story is told in. The director chooses how long each one is, between the shortest and longest below, by what happens in it and what is said.",
+    group: "Video",
+    scope: "browser",
+    targets: [],
+  },
+  {
+    id: "scene_min_seconds",
+    label: "Shortest scene",
+    type: "slider",
+    default: DEFAULT_STORY_LENGTHS.min,
+    min: STORY_SCENE_SECONDS.min,
+    max: 10,
+    step: 1,
+    unit: "sec",
+    help: "No scene is planned shorter than this. A scene with lines is made longer if its words need it.",
+    group: "Video",
+    scope: "browser",
+    targets: [],
+  },
+  {
+    id: "scene_max_seconds",
+    label: "Longest scene",
+    type: "slider",
+    default: DEFAULT_STORY_LENGTHS.max,
+    min: STORY_SCENE_SECONDS.min,
+    max: STORY_SCENE_SECONDS.max,
+    step: 1,
+    unit: "sec",
+    help: "No scene is planned longer than this; the director cuts a scene down to what fits rather than going over. The model's sweet spot is 5 to 10 seconds, and long scenes with little in them come out slow or frozen.",
     group: "Video",
     scope: "browser",
     targets: [],

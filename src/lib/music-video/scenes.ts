@@ -101,6 +101,60 @@ export type PlannedKind = "music" | "story";
 /** How long a multi-scene video's scene may be: H3's trained range. */
 export const STORY_SCENE_SECONDS = { min: 4, max: 15, initial: 8 } as const;
 
+/** The range a multi-scene video's planner is held to unless the form says otherwise. */
+export const DEFAULT_STORY_LENGTHS: SceneLengths = { min: 4, max: 10 };
+
+/**
+ * How fast a scene's lines may be spoken: about twenty words in fifteen
+ * seconds. The scene's own director is held to the same budget (see
+ * LENGTH_RULES in minimax-common.ts) — the planner used to be told two and a
+ * half words a second, a natural speaking pace, and so handed scenes more
+ * lines than the director would let H3 say, which came back slurred or cut.
+ */
+export const SPOKEN_WORDS_PER_SECOND = 4 / 3;
+
+/** The words a scene's lines say, not counting who says them. */
+export function spokenWords(lines: string | undefined): number {
+  return (lines ?? "")
+    .split("\n")
+    .map((line) => line.replace(/^[^:]{1,60}:\s*/, ""))
+    .join(" ")
+    .split(/\s+/)
+    .filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
+}
+
+/**
+ * The range from the form's Shortest and Longest scene sliders, with the
+ * longest never below the shortest.
+ */
+export function sceneLengths(
+  values: Record<string, unknown>,
+  fallback: SceneLengths = DEFAULT_SCENE_LENGTHS,
+): SceneLengths {
+  const read = (value: unknown, otherwise: number) => {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : otherwise;
+  };
+  const min = read(values.scene_min_seconds, fallback.min);
+  return { min, max: Math.max(min, read(values.scene_max_seconds, fallback.max)) };
+}
+
+/**
+ * How long a planned scene of a multi-scene video runs: the planner's choice,
+ * raised to what its lines need to be said at SPOKEN_WORDS_PER_SECOND, and held
+ * to the user's range. The planner still decides; this only catches a length
+ * its own scene cannot fit in, and one outside what the user asked for.
+ */
+export function plannedStorySeconds(
+  seconds: number | undefined,
+  lines: string | undefined,
+  lengths: SceneLengths,
+): number {
+  const wanted = Number.isFinite(seconds) && Number(seconds) > 0 ? Number(seconds) : (lengths.min + lengths.max) / 2;
+  const needed = Math.ceil(spokenWords(lines) / SPOKEN_WORDS_PER_SECOND);
+  return Math.min(lengths.max, Math.max(lengths.min, wanted, needed));
+}
+
 /**
  * A multi-scene video's scene length as it is run: the planner's or the
  * user's, held to the range and snapped up to a length H3 makes exactly, so

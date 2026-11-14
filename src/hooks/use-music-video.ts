@@ -41,9 +41,11 @@ import {
   INSTRUMENTAL_PARAM,
   keptFrames,
   MUSIC_VIDEO_PICTURES,
+  DEFAULT_STORY_LENGTHS,
+  plannedStorySeconds,
   PLAN_BRIEF,
+  sceneLengths,
   splitSong,
-  STORY_SCENE_SECONDS,
   storyWindows,
   type PlannedKind,
 } from "@/lib/music-video/scenes";
@@ -427,9 +429,15 @@ export function useMusicVideo({
         setProject({ ...project, planPromptId: undefined });
         return;
       }
+      const story = project.kind === "story";
+      const lengths = sceneLengths(project.values, DEFAULT_STORY_LENGTHS);
       const scenes = project.scenes.map((scene, index) => ({
         ...scene,
         ...plan.outline[index],
+        // Held to the user's range, and long enough for its own lines.
+        ...(story
+          ? { seconds: plannedStorySeconds(plan.outline[index]?.seconds, plan.outline[index]?.lines, lengths) }
+          : {}),
         // An instrumental is told to the planner, and held here too: it
         // cannot hear the song, and its guess is what this switch overrules.
         ...(project.values[INSTRUMENTAL_PARAM] === true ? { sings: false } : {}),
@@ -461,7 +469,9 @@ export function useMusicVideo({
                 String(current.values.prompt ?? "").trim() ||
                 (current.kind === "story" ? "A short story told in a few scenes." : "A performance video for this song."),
               scene_list:
-                current.kind === "story" ? storySceneList(current.scenes.length) : sceneList(current.scenes),
+                current.kind === "story"
+                  ? storySceneList(current.scenes.length, sceneLengths(current.values, DEFAULT_STORY_LENGTHS))
+                  : sceneList(current.scenes),
               scene_outline: shotRequest(current, rewrite),
             },
             {
@@ -608,7 +618,8 @@ export function useMusicVideo({
     // a placeholder length until the planner gives it its own.
     if (kind === "story") {
       const count = Math.max(2, Math.round(Number(values.scene_count ?? 6)));
-      const windows = storyWindows(Array.from({ length: count }, () => STORY_SCENE_SECONDS.initial));
+      const lengths = sceneLengths(values, DEFAULT_STORY_LENGTHS);
+      const windows = storyWindows(Array.from({ length: count }, () => (lengths.min + lengths.max) / 2));
       const next: MusicVideoProject = {
         id: Date.now().toString(36),
         createdAt: Date.now(),
@@ -623,7 +634,7 @@ export function useMusicVideo({
         {
           ...values,
           prompt: String(values.prompt ?? "").trim() || "A short story told in a few scenes.",
-          scene_list: storySceneList(count),
+          scene_list: storySceneList(count, lengths),
         },
         {
           localDirector: modes.localDirector,
@@ -655,10 +666,7 @@ export function useMusicVideo({
       const windows = splitSong(
         analysis.seconds,
         analysis.onsets,
-        {
-          min: Number(values.scene_min_seconds ?? 4),
-          max: Number(values.scene_max_seconds ?? 9),
-        },
+        sceneLengths(values),
         analysis.loudness,
       );
 

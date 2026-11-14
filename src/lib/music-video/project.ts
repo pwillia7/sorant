@@ -13,6 +13,7 @@ import {
   shotBrief,
   type OutlineScene,
   type PlannedKind,
+  type SceneLengths,
   type SceneWindow,
   type ShotRequest,
 } from "./scenes";
@@ -282,13 +283,19 @@ ${lines.join("\n")}`;
 }
 
 /**
- * A multi-scene video's scene list: only how many there are. The planner
- * chooses each one's length, and is handed nothing to read it off.
+ * A multi-scene video's scene list: how many there are, and the range the
+ * user allows each one. The planner chooses each one's length within it.
  */
-export function storySceneList(count: number): string {
+export function storySceneList(count: number, lengths: SceneLengths): string {
+  const range =
+    lengths.min === lengths.max
+      ? `Every scene is ${lengths.min} seconds long: give each one exactly that, and plan only what fits in it.`
+      : `Each scene is from ${lengths.min} to ${lengths.max} seconds long — no shorter and no longer. Plan only what fits in that.`;
   return `${SCENES_HEADING}
 
-The video is ${count} scenes long. Return exactly ${count} entries.`;
+The video is ${count} scenes long. Return exactly ${count} entries.
+
+${range}`;
 }
 
 function describeEnergy(energy: number): string {
