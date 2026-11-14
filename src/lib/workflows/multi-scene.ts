@@ -1,4 +1,5 @@
 import {
+  CHOOSE_SCENE_COUNT_PARAM,
   DEFAULT_STORY_LENGTHS,
   SCENES_HEADING,
   STORY_SCENE_SECONDS,
@@ -28,7 +29,7 @@ import type { ParamDef, ParamValue, WorkflowDef } from "./types";
 
 export const MULTI_SCENE_PLANNER = `You are the director of a short video told in several scenes, laying out the whole of it before anyone writes a shot.
 
-You are given the user's idea, how many scenes it has, and, when there are any, reference pictures.
+You are given the user's idea, how many scenes it has — or the most it may have, when the number is yours to choose — and, when there are any, reference pictures.
 
 Each scene will be generated separately by a video model, as a short clip of the length you give it, with its own sound — voices, effects and the sound of the place. Nothing carries from one scene to the next except the pictures and the words written for it. A writer will later turn each of your lines into a full shot, seeing your whole outline but writing one scene at a time — so your outline is what makes the scenes one video.
 
@@ -40,7 +41,7 @@ Return ONLY a JSON object, with no markdown fence and nothing before or after it
 
 Then exactly one entry per scene, in order:
 
-"scene": its number. The last entry's number is the number of scenes — no more, no fewer.
+"scene": its number, from 1, with none skipped. The last entry's number is the number of scenes, which the scene list sets or bounds.
 
 "place": the place, made specific in a few words — what kind of place, the exact spot in it, the time of day, the light ("a hospital corridor at 3 a.m., under flickering strip lights"). When scenes return to a place, use the same words for it each time, so it looks like the same place.
 
@@ -263,14 +264,24 @@ const params: ParamDef[] = [
     hint: "The story, in a sentence or a paragraph — a director splits it into scenes you can edit.",
   }),
   {
+    id: CHOOSE_SCENE_COUNT_PARAM,
+    label: "Director picks the number of scenes",
+    type: "toggle",
+    default: true,
+    help: "On, the director gives each beat of the story its own scene and uses as few as tell it, up to the number below. Off, the story is told in exactly that many. Either way you see every scene, and can add or remove one, before anything renders.",
+    group: "Video",
+    scope: "browser",
+    targets: [],
+  },
+  {
     id: "scene_count",
     label: "Scenes",
     type: "slider",
-    default: 6,
+    default: 8,
     min: 2,
     max: 40,
     step: 1,
-    help: "How many scenes the story is told in. The director chooses how long each one is, between the shortest and longest below, by what happens in it and what is said.",
+    help: "How many scenes the story is told in — or, with the director picking, the most it may use. Each scene is its own render, so this is what sets how long the whole video takes. The director chooses how long each one is, between the shortest and longest below.",
     group: "Video",
     scope: "browser",
     targets: [],
@@ -349,6 +360,14 @@ export const multiScene: WorkflowDef = {
         reference_image_2: "b.png",
         reference_voice: "v.mp3",
         reference_voice_owner: "Mara",
+      },
+    },
+    {
+      name: "the director choosing the count",
+      values: {
+        prompt: "x",
+        scene_list: `${SCENES_HEADING}\nThe video has as many scenes as its story needs, and at most 8.`,
+        [CHOOSE_SCENE_COUNT_PARAM]: true,
       },
     },
     {

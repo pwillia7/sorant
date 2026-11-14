@@ -41,6 +41,7 @@ import {
   INSTRUMENTAL_PARAM,
   keptFrames,
   MUSIC_VIDEO_PICTURES,
+  CHOOSE_SCENE_COUNT_PARAM,
   DEFAULT_STORY_LENGTHS,
   plannedStorySeconds,
   PLAN_BRIEF,
@@ -431,7 +432,13 @@ export function useMusicVideo({
       }
       const story = project.kind === "story";
       const lengths = sceneLengths(project.values, DEFAULT_STORY_LENGTHS);
-      const scenes = project.scenes.map((scene, index) => ({
+      // A story whose planner chose its own count keeps as many scenes as it
+      // planned, up to the last one it wrote; the rest were only the limit.
+      const planned =
+        story && project.values[CHOOSE_SCENE_COUNT_PARAM] === true
+          ? project.scenes.slice(0, plan.outline.findLastIndex(outlined) + 1)
+          : project.scenes;
+      const scenes = planned.map((scene, index) => ({
         ...scene,
         ...plan.outline[index],
         // Held to the user's range, and long enough for its own lines.
@@ -619,6 +626,12 @@ export function useMusicVideo({
     if (kind === "story") {
       const count = Math.max(2, Math.round(Number(values.scene_count ?? 6)));
       const lengths = sceneLengths(values, DEFAULT_STORY_LENGTHS);
+      // On unless switched off: a form saved before the switch existed has
+      // no value for it. Settled here and kept on the project, so the plan's
+      // arrival reads the same answer the request was made with.
+      const choosing = values[CHOOSE_SCENE_COUNT_PARAM] !== false;
+      // With the planner choosing, this is the most it may use: placeholders
+      // until the plan says how many there are.
       const windows = storyWindows(Array.from({ length: count }, () => (lengths.min + lengths.max) / 2));
       const next: MusicVideoProject = {
         id: Date.now().toString(36),
@@ -626,7 +639,7 @@ export function useMusicVideo({
         kind: "story",
         song: "",
         songSeconds: windows.at(-1)?.end ?? 0,
-        values: { ...values },
+        values: { ...values, [CHOOSE_SCENE_COUNT_PARAM]: choosing },
         scenes: windows.map((window) => ({ ...window, shot: "" })),
       };
       const promptId = await jobs.submit(
@@ -634,7 +647,7 @@ export function useMusicVideo({
         {
           ...values,
           prompt: String(values.prompt ?? "").trim() || "A short story told in a few scenes.",
-          scene_list: storySceneList(count, lengths),
+          scene_list: storySceneList(count, lengths, choosing),
         },
         {
           localDirector: modes.localDirector,

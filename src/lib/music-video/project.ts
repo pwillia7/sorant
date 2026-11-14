@@ -286,14 +286,17 @@ ${lines.join("\n")}`;
  * A multi-scene video's scene list: how many there are, and the range the
  * user allows each one. The planner chooses each one's length within it.
  */
-export function storySceneList(count: number, lengths: SceneLengths): string {
+export function storySceneList(count: number, lengths: SceneLengths, chooseCount = false): string {
+  const scenes = chooseCount
+    ? `The video has as many scenes as its story needs, and at most ${count}. Give each beat of the story — a meeting, a turning point, a reveal, an ending — a scene of its own, and give nothing a scene that only repeats another or fills time. Use fewer than ${count} whenever the story is told in fewer: a short idea is a short video. Number the scenes from 1 with none skipped.`
+    : `The video is ${count} scenes long. Return exactly ${count} entries.`;
   const range =
     lengths.min === lengths.max
       ? `Every scene is ${lengths.min} seconds long: give each one exactly that, and plan only what fits in it.`
       : `Each scene is from ${lengths.min} to ${lengths.max} seconds long — no shorter and no longer. Plan only what fits in that.`;
   return `${SCENES_HEADING}
 
-The video is ${count} scenes long. Return exactly ${count} entries.
+${scenes}
 
 ${range}`;
 }

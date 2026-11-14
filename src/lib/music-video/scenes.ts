@@ -98,6 +98,13 @@ export interface ShotRequest {
  */
 export type PlannedKind = "music" | "story";
 
+/**
+ * The multi-scene switch that lets the planner decide how many scenes the
+ * story needs, with the Scenes slider as the most it may use. On, the project
+ * is rebuilt with however many scenes the plan comes back with.
+ */
+export const CHOOSE_SCENE_COUNT_PARAM = "choose_scene_count";
+
 /** How long a multi-scene video's scene may be: H3's trained range. */
 export const STORY_SCENE_SECONDS = { min: 4, max: 15, initial: 8 } as const;
 
