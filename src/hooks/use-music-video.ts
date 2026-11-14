@@ -443,7 +443,7 @@ export function useMusicVideo({
         ...plan.outline[index],
         // Held to the user's range, and long enough for its own lines.
         ...(story
-          ? { seconds: plannedStorySeconds(plan.outline[index]?.seconds, plan.outline[index]?.lines, lengths) }
+          ? { seconds: plannedStorySeconds(plan.outline[index], lengths) }
           : {}),
         // An instrumental is told to the planner, and held here too: it
         // cannot hear the song, and its guess is what this switch overrules.

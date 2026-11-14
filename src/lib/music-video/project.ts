@@ -288,7 +288,7 @@ ${lines.join("\n")}`;
  */
 export function storySceneList(count: number, lengths: SceneLengths, chooseCount = false): string {
   const scenes = chooseCount
-    ? `The video has as many scenes as its story needs, and at most ${count}. Give each beat of the story — a meeting, a turning point, a reveal, an ending — a scene of its own, and give nothing a scene that only repeats another or fills time. Use fewer than ${count} whenever the story is told in fewer: a short idea is a short video. Number the scenes from 1 with none skipped.`
+    ? `The video has as many scenes as its story needs, and at most ${count}. Give each beat of the story — a meeting, a turning point, an ending, a move to a new place — a scene of its own; a reveal or a reaction in the same place and moment is a cut inside its scene, not a new one. Give nothing a scene that only repeats another or fills time. Use fewer than ${count} whenever the story is told in fewer: a short idea is a short video. Number the scenes from 1 with none skipped.`
     : `The video is ${count} scenes long. Return exactly ${count} entries.`;
   const range =
     lengths.min === lengths.max
@@ -510,7 +510,9 @@ export function sceneValues(
   const lookNote = look
     ? `\n\n(How they look, in this scene and every other one in the video: ${look} — use these words as the observed detail in each subject's definition, and describe them no other way. They outrank anything below about anyone's appearance or how the video is rendered.)`
     : "";
-  const shot = `${scene.shot}${lookNote}`;
+  const own = scene.references ? referenceValues(scene.references, MUSIC_VIDEO_PICTURES) : {};
+  const pictures = leadingReferences({ ...values, ...own }, MUSIC_VIDEO_PICTURES);
+  const shot = `${withoutMissingPictures(scene.shot ?? "", pictures)}${lookNote}`;
   const background = (noun: string, note = "") =>
     idea
       ? `${shot}\n\n(This is scene ${index + 1} of ${project.scenes.length} in a ${noun}. The video as a whole: ${idea} — background only; this scene shows only what is described above${look ? ", and its people look only as described above" : ""}.${note})`
@@ -523,7 +525,7 @@ export function sceneValues(
     const voices = voicesOf(project, scene);
     return {
       ...values,
-      ...(scene.references ? referenceValues(scene.references, MUSIC_VIDEO_PICTURES) : {}),
+      ...own,
       ...voiceValues(voices, openerOf(scene, voices)),
       // Its own length, made whole: the join keeps every frame of it.
       duration: renderSeconds(scene),
@@ -536,7 +538,7 @@ export function sceneValues(
 
   return {
     ...values,
-    ...(scene.references ? referenceValues(scene.references, MUSIC_VIDEO_PICTURES) : {}),
+    ...own,
     reference_audio: project.song,
     reference_track_seconds: project.songSeconds,
     reference_track_lock: true,
@@ -546,6 +548,27 @@ export function sceneValues(
     prompt: background("music video"),
     seed: sceneSeed,
   };
+}
+
+/**
+ * A shot with every mention of a picture the scene does not have taken out.
+ *
+ * The writers are told to write no picture labels at all, and the local one
+ * writes them anyway — harmlessly for a picture that is there, but given two
+ * pictures and a third person in the story it called him "the man from
+ * Picture 3". H3 has no third picture to bind that to, and drew the man from
+ * the first one twice, with the second sat where the third should have been.
+ * "the man from Picture 3" becomes "the man"; a bare label, "someone".
+ */
+export function withoutMissingPictures(shot: string, pictures: number): string {
+  const missing = (n: string) => Number(n) > pictures;
+  return shot
+    .replace(/\s+(?:from|in|of|shown in)\s+(?:the\s+)?<?\s*picture\s+(\d+)(?:\s*>)?/gi, (all, n: string) =>
+      missing(n) ? "" : all,
+    )
+    .replace(/(^|[.!?]\s+)?(?:<\s*)?\bpicture\s+(\d+)(?:\s*>)?/gi, (all, start: string | undefined, n: string) =>
+      missing(n) ? `${start ?? ""}${start !== undefined ? "Someone" : "someone"}` : all,
+    );
 }
 
 /** A scene's voices as Reference to Video's controls, emptying a slot it leaves free. */

@@ -1,6 +1,8 @@
 import {
   CHOOSE_SCENE_COUNT_PARAM,
   DEFAULT_STORY_LENGTHS,
+  MAX_SHOTS_PER_SCENE,
+  MIN_SHOT_SECONDS,
   SCENES_HEADING,
   STORY_SCENE_SECONDS,
   type ShotRequest,
@@ -45,15 +47,18 @@ Then exactly one entry per scene, in order:
 
 "place": the place, made specific in a few words — what kind of place, the exact spot in it, the time of day, the light ("a hospital corridor at 3 a.m., under flickering strip lights"). When scenes return to a place, use the same words for it each time, so it looks like the same place.
 
-"happens": one or two sentences — who is in the scene and what they do. The event, not the camera. Name everyone who is there.
+"happens": who is in the scene and what they do, one short sentence for each thing that happens. The event, not the camera. Name everyone who is there.
+
+A scene can be more than one shot. It is made in one take, so its shots share the same room, light and people — which two separate scenes do not. When the story turns, inside one place and moment, to someone or something new — the person they are talking to, a reveal, a reaction — write "Cut to:" and then the new shot, in the same "happens": "The two men creep in through the front door. Cut to: the landlord, on the sofa, watching them." At most ${MAX_SHOTS_PER_SCENE} shots in a scene. A new place, or a jump in time, is a new scene, never a cut.
 
 "lines": what is said in the scene, as described below.
 
 "seconds": how long the scene runs, a whole number inside the range given with the scene list. Decide it last, from the "happens" and "lines" you have just written for that scene — never pick a length first and fill it. Add up what the scene holds:
-- about 3 seconds for each separate thing that happens in it: someone enters, a door opens, a look, a reaction;
-- one second for every word of its lines (count them), and a beat between two speakers;
-- nothing more. Time with nothing in it is not calm on screen: the video model fills it with stillness, a frozen stare, or things nobody asked for.
-A view of a place or a single reaction is the shortest the range allows. When what you wrote needs more than the longest the range allows, cut the scene down to what fits — fewer events, fewer words — rather than giving it a length outside the range. Scenes of a video differ in length; if every scene came out the same, you counted none of them.
+- one second to start;
+- a second and a half for each thing that happens — someone enters, a door opens, a look, a reaction — and at least ${MIN_SHOT_SECONDS} for each shot;
+- half a second for every word of its lines, and half a second for each turn of speech;
+- nothing more. Time with nothing in it is not calm on screen: the video model fills it with people standing still, a frozen stare, or cuts and things nobody asked for.
+So one action and a five-word line is about five seconds, and a view of a place is the shortest the range allows. The length is checked against this sum and cut down when it is longer. When what you wrote needs more than the longest the range allows, cut the scene down to what fits — fewer events, fewer words. Scenes of a video differ in length; if every scene came out the same, you counted none of them.
 
 WHAT MAKES A GOOD OUTLINE
 
@@ -61,7 +66,7 @@ One story, not a collection of clips. The first scenes set up who and where, the
 
 Each scene is made on its own, so it can only show what its own line says. Anything that has to carry across a cut — something someone is holding, an injury, rain, the time of day, who is in the room — is written again in every scene it is true of.
 
-Give each person one name or one plain description and use exactly those words for them in every scene. Use the names the user's idea gives. When it gives none, use a plain description — "the man", "the old fisherman" — and never make up a name. Never describe their face, hair or clothes: the pictures, or the shots, define them.
+Give each person one name or one plain description and use exactly those words for them in every scene. Use the names the user's idea gives. When it gives none, use a plain description — "the man", "the old fisherman" — and never make up a name. Never describe the face, hair or clothes of anyone in a picture: the pictures define them. Someone the idea names who is in no picture gets a short plain description of how they look the first time they appear in each scene ("the landlord, a slim man in a grey suit"), the same words every time.
 
 Use what the user gave you. Every concrete thing in the idea — each person, place, object and event — should appear somewhere in the outline, where it belongs in the story.
 
@@ -88,16 +93,22 @@ You are given the user's idea for the whole video, the director's outline of eve
 Return only the shot: full, flowing sentences of plain present-tense English, with no heading, label or list. Cover:
 - The place, made specific: what kind of place it is, the time of day, where the light comes from, and two or three concrete things in it.
 - Who is there and what they do: clear physical actions — what their hands do, what they hold, where they look, how they move.
-- The camera: the framing, the angle and at most one move, in a full sentence of its own wording — never a fragment like "Medium shot, static."
+- The camera: the framing, the angle and at most one move for each shot, in a full sentence of its own wording — never a fragment like "Medium shot, static."
 - What the scene sounds like: the sound of the place, and any sound the action makes.
 
-Write to your scene's length. It runs only the seconds it is given, and everything you write has to happen in that time: one clear action takes about three seconds, and every spoken word about one more. A scene of 4 to 6 seconds is one action, from one camera position, in three or four sentences. A longer one can hold a setup, a turn and a reaction, in up to six. Add no events, gestures or lines the outline does not give the scene to fill time, and do not leave it with nothing happening either.
+YOUR SCENE'S SHOTS
+
+When your scene's "What happens" has no "Cut to:", it is one continuous shot: write no cut, and say once that the camera stays on one continuous take.
+
+When it has "Cut to:", your scene is that many shots made in one take, in the order given. Write the first, then open each later one with when it cuts and to what: At about 4 seconds, the camera cuts to a close view of the woman by the window, ... Spread the cut times across the scene by what each shot holds: at least ${MIN_SHOT_SECONDS} seconds into the scene, at least ${MIN_SHOT_SECONDS} seconds after the cut before, and at least ${MIN_SHOT_SECONDS} seconds before the end. A line of dialogue is spoken whole inside one shot, never across a cut. Every shot is the same place and the same moment: the people carry on from where the last shot left them — same positions, same things in their hands — and only the view changes. Add no cut the outline does not have.
+
+Write to your scene's length. It runs only the seconds it is given, and everything you write has to happen in that time: a gesture, a look or an entrance takes about a second and a half, and every spoken word about half a second more. A scene of 4 to 6 seconds is one or two actions, in three or four sentences. A longer one can hold a setup, a turn and a reaction, in up to six — up to eight with cuts. Add no events, gestures or lines the outline does not give the scene to fill time, and do not leave it with nothing happening either: if what the outline gives is done before the end, the last thing is a held reaction, not people standing still.
 
 Follow the outline's line for your scene. Its words are notes, not text to copy: describe the place in your own words, with what is there and how it is lit. Take details from the user's idea, but only ones that belong to this moment.
 
 When your scene has lines, write every one of them into the shot, word for word, in double quotes, in the order given, each with who says it, to whom, and how — The old fisherman turns to the window and says quietly, "We're too late." Add no other words for anyone to say. When your scene has no lines, nobody speaks in it: do not mention talking, speech or voices.
 
-Your scene is read on its own, so name its place and its people in full, with the same names the outline uses — never a name the outline does not use. Do not refer to other scenes, and never write "again", "still" or "returns". Do not describe anyone's face, hair or clothes: the pictures define them. Never write a picture label such as <Picture 1>. No captions, titles or credits unless the user's idea asks for them.
+Your scene is read on its own, so name its place and its people in full, with the same names the outline uses — never a name the outline does not use. Do not refer to other scenes, and never write "again", "still" or "returns". Do not describe the face, hair or clothes of anyone in a picture: the pictures define them. Someone in no picture is described the way the outline describes them, never as "from a picture". Never write a picture label such as <Picture 1> or "Picture 2". No captions, titles or credits unless the user's idea asks for them.
 
 Keep the space between the camera and the people clear. Nothing passes in front of them or sits over them — no glass, smoke, screen, hologram or object crossing the frame — and light falls on them from the place, not from something glowing in front of them. Show technology as solid, physical things: a screen set into a fridge door, a panel beside a door, a television on a wall. Never write a hologram, a projection or an image floating in the air unless the user's idea asks for one: the video model draws it as a see-through layer over the people and copies their faces into it. A screen shows words, a logo or a product, never a person.
 

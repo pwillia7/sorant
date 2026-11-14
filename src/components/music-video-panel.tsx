@@ -620,6 +620,7 @@ function SceneOutline({
       <TextInput
         id={`scene-${index}-happens`}
         value={scene.happens ?? ""}
+        placeholder={story ? "She opens the door. Cut to: him, on the sofa, looking up." : undefined}
         disabled={disabled || rewriting}
         onChange={(happens) => video.editOutline(index, { happens })}
       />

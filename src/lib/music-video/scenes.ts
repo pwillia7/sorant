@@ -147,19 +147,66 @@ export function sceneLengths(
 }
 
 /**
- * How long a planned scene of a multi-scene video runs: the planner's choice,
- * raised to what its lines need to be said at SPOKEN_WORDS_PER_SECOND, and held
- * to the user's range. The planner still decides; this only catches a length
- * its own scene cannot fit in, and one outside what the user asked for.
+ * What a multi-scene outline writes between the shots of one scene: "The man
+ * creeps in. Cut to: Jerry, on the sofa, watching him." A scene is one run of
+ * the video model, and a run can hold cuts — two views of one place and moment
+ * made in one take share its room, its light and its people, which two scenes
+ * made apart do not, and cost one run rather than two.
+ */
+export const CUT_MARK = /\bcut to\s*:/gi;
+
+/** The most shots one scene's take is planned to hold. */
+export const MAX_SHOTS_PER_SCENE = 3;
+
+/** The shortest a shot inside a scene is worth: less and the cut reads as a glitch. */
+export const MIN_SHOT_SECONDS = 2.5;
+
+/** How many shots an outline line plans for its scene. */
+export function sceneShots(happens: string | undefined): number {
+  return Math.min(MAX_SHOTS_PER_SCENE, 1 + ((happens ?? "").match(CUT_MARK)?.length ?? 0));
+}
+
+/** The separate things an outline line has happen: its sentences, and its shots. */
+function sceneBeats(happens: string | undefined): number {
+  const beats = (happens ?? "")
+    .split(/[.!?;]+|\bcut to\s*:/i)
+    .filter((part) => /\p{L}/u.test(part)).length;
+  return Math.max(1, sceneShots(happens), beats);
+}
+
+/**
+ * How long a scene's outline needs, worked out rather than asked for.
+ *
+ * The planner is told the same arithmetic and is not held to it by anything
+ * but this: the local planner handed scenes of one wave and a five-word line
+ * nine and ten seconds, and H3 filled the rest with men standing still, and
+ * with cuts of its own nobody planned. The rates are what H3 takes to play a
+ * beat — about a second and a half for a gesture, a look or an entrance, half
+ * a second a word plus a breath between speakers — with a second to settle in.
+ */
+export function estimatedStorySeconds(happens: string | undefined, lines: string | undefined): number {
+  const turns = (lines ?? "").split("\n").filter((line) => /\p{L}/u.test(line)).length;
+  const worked = 1 + 1.5 * sceneBeats(happens) + 0.5 * spokenWords(lines) + 0.5 * turns;
+  return Math.max(worked, MIN_SHOT_SECONDS * sceneShots(happens));
+}
+
+/**
+ * How long a planned scene of a multi-scene video runs: the planner's choice
+ * where it is no longer than what the outline needs (see estimatedStorySeconds), never too short for its
+ * lines at SPOKEN_WORDS_PER_SECOND or its shots, and held to the user's range.
  */
 export function plannedStorySeconds(
-  seconds: number | undefined,
-  lines: string | undefined,
+  scene: { seconds?: number; happens?: string; lines?: string } | undefined,
   lengths: SceneLengths,
 ): number {
-  const wanted = Number.isFinite(seconds) && Number(seconds) > 0 ? Number(seconds) : (lengths.min + lengths.max) / 2;
-  const needed = Math.ceil(spokenWords(lines) / SPOKEN_WORDS_PER_SECOND);
-  return Math.min(lengths.max, Math.max(lengths.min, wanted, needed));
+  const estimate = estimatedStorySeconds(scene?.happens, scene?.lines);
+  const chosen = Number(scene?.seconds);
+  const wanted = Number.isFinite(chosen) && chosen > 0 ? Math.min(chosen, estimate) : estimate;
+  const needed = Math.max(
+    Math.ceil(spokenWords(scene?.lines) / SPOKEN_WORDS_PER_SECOND),
+    MIN_SHOT_SECONDS * sceneShots(scene?.happens),
+  );
+  return Math.round(Math.min(lengths.max, Math.max(lengths.min, wanted, needed)));
 }
 
 /**
