@@ -100,10 +100,18 @@ export type PlannedKind = "music" | "story";
 
 /**
  * The multi-scene switch that lets the planner decide how many scenes the
- * story needs, with the Scenes slider as the most it may use. On, the project
- * is rebuilt with however many scenes the plan comes back with.
+ * story needs. On, the Scenes slider stands down and the project is rebuilt
+ * with however many scenes the plan comes back with; off, the slider is the
+ * exact count.
  */
 export const CHOOSE_SCENE_COUNT_PARAM = "choose_scene_count";
+
+/**
+ * The most scenes a multi-scene video may have: the Scenes slider's top, and
+ * the ceiling on a plan whose director picked the count, since the project
+ * holds a placeholder for each scene the plan could fill.
+ */
+export const MAX_STORY_SCENES = 40;
 
 /**
  * How long a multi-scene video's scene may be: H3's trained range, about 5 to

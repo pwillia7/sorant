@@ -191,7 +191,7 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
             ? "Finding the beats in the song."
             : story
               ? project?.values.choose_scene_count === true
-                ? `Up to ${scenes.length} scenes — the director picks how many.`
+                ? "The director is picking how many scenes."
                 : `${scenes.length === 1 ? "One scene" : `${scenes.length} scenes`}.`
               : `${scenes.length} scenes, ${clock(project?.songSeconds ?? 0)} of song.`}
         </p>

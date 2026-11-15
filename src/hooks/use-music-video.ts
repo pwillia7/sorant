@@ -42,6 +42,7 @@ import {
   keptFrames,
   MUSIC_VIDEO_PICTURES,
   CHOOSE_SCENE_COUNT_PARAM,
+  MAX_STORY_SCENES,
   plannedStorySeconds,
   PLAN_BRIEF,
   sceneLengths,
@@ -639,14 +640,16 @@ export function useMusicVideo({
     // A story has no song to cut: as many scenes as were asked for, each at
     // a placeholder length until the planner gives it its own.
     if (kind === "story") {
-      const count = Math.max(1, Math.round(Number(values.scene_count ?? 6)));
-      const lengths = storyLengths(values, count);
       // On unless switched off: a form saved before the switch existed has
       // no value for it. Settled here and kept on the project, so the plan's
       // arrival reads the same answer the request was made with.
       const choosing = values[CHOOSE_SCENE_COUNT_PARAM] !== false;
-      // With the planner choosing, this is the most it may use: placeholders
-      // until the plan says how many there are.
+      // With the planner choosing, the Scenes slider is hidden and plays no
+      // part: placeholders up to the ceiling until the plan says how many.
+      const count = choosing
+        ? MAX_STORY_SCENES
+        : Math.max(1, Math.min(MAX_STORY_SCENES, Math.round(Number(values.scene_count ?? 6))));
+      const lengths = storyLengths(values, count);
       const windows = storyWindows(Array.from({ length: count }, () => (lengths.min + lengths.max) / 2));
       const next: MusicVideoProject = {
         id: Date.now().toString(36),

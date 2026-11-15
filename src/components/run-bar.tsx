@@ -65,11 +65,11 @@ export function runSummary(
   };
   const sceneCount = number("scene_count");
   if (sceneCount !== undefined) {
-    // With the director choosing, the slider is only the most it may use.
+    // With the director choosing, the slider is hidden and plays no part.
     const chosen = workflow.params.find((param) => param.id === "choose_scene_count");
     const choosing = chosen && (values.choose_scene_count ?? ("default" in chosen ? chosen.default : false)) === true;
     parts.push(
-      choosing ? `up to ${sceneCount} scenes` : sceneCount === 1 ? "1 scene" : `${sceneCount} scenes`,
+      choosing ? "director picks scenes" : sceneCount === 1 ? "1 scene" : `${sceneCount} scenes`,
     );
   }
   const duration = number("duration");
