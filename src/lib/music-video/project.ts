@@ -490,6 +490,9 @@ export function readShots(briefs: Record<string, string>, count: number): string
   });
 }
 
+/** The scene workflows' prompt limit (promptParam in minimax-common.ts). */
+const SCENE_PROMPT_LIMIT = 8000;
+
 /**
  * One scene's Reference to Video submission.
  *
@@ -529,16 +532,27 @@ export function sceneValues(
   const own = scene.references ? referenceValues(scene.references, MUSIC_VIDEO_PICTURES) : {};
   const pictures = leadingReferences({ ...values, ...own }, MUSIC_VIDEO_PICTURES);
   const shot = `${withoutMissingPictures(scene.shot ?? "", pictures)}${lookNote}`;
-  const background = (noun: string, note = "") =>
-    idea
-      ? `${shot}\n\n(This is scene ${index + 1} of ${project.scenes.length} in a ${noun}. The video as a whole: ${idea} — background only; this scene shows only what is described above${look ? ", and its people look only as described above" : ""}.${note})`
-      : `${shot}${note ? `\n\n(${note.trim()})` : ""}`;
+  const background = (noun: string, note = "") => {
+    if (!idea) return `${shot}${note ? `\n\n(${note.trim()})` : ""}`;
+    const framed = (about: string) =>
+      `${shot}\n\n(This is scene ${index + 1} of ${project.scenes.length} in a ${noun}. The video as a whole: ${about} — background only; this scene shows only what is described above${look ? ", and its people look only as described above" : ""}.${note})`;
+    // The idea is background, so it is what gives way when a long look and a
+    // long idea together would pass the scene's prompt limit.
+    const over = framed(idea).length - SCENE_PROMPT_LIMIT;
+    return over > 0 ? framed(`${idea.slice(0, Math.max(0, idea.length - over - 1)).trimEnd()}…`) : framed(idea);
+  };
   // A fixed offset per scene from one base, so a whole video can be made
   // again exactly; a random base stays random per scene.
   const sceneSeed = seed >= 0 ? seed + index : -1;
 
   if (project.kind === "story") {
     const voices = voicesOf(project, scene);
+    // The outline's place, word for word, after the shot: each scene's
+    // writer and director re-lit it for themselves, and one interview area
+    // came back under four different lights in four scenes.
+    const place = scene.place?.trim()
+      ? ` Where it happens, exactly as every scene set there shows it: ${scene.place.trim().replace(/\.?$/, ".")}`
+      : "";
     return {
       ...values,
       ...own,
@@ -547,7 +561,7 @@ export function sceneValues(
       duration: renderSeconds(scene),
       // Without lines the scene's director is free to write some, and a
       // silent video would come back talking.
-      prompt: background("video", scene.lines?.trim() ? "" : " Nobody speaks in this scene."),
+      prompt: background("video", `${place}${scene.lines?.trim() ? "" : " Nobody speaks in this scene."}`),
       seed: sceneSeed,
     };
   }
@@ -617,6 +631,7 @@ export function composeLook(
   planned: string,
   values: Record<string, ParamValue>,
   pictures: number,
+  story = false,
 ): string {
   const filled = leadingReferences(values, pictures);
   let releases = false;
@@ -633,7 +648,35 @@ export function composeLook(
     .filter((paragraph) => /^\s*the style of\b/i.test(paragraph) || !/\b(is|are) no (one|body|person|people|man|woman|character)\b|\bnobody\b/i.test(paragraph))
     .join("\n\n")
     .trim();
-  return [described, releases ? planned.trim() : ""].filter(Boolean).join("\n\n");
+  if (!story) return [described, releases ? planned.trim() : ""].filter(Boolean).join("\n\n");
+  return [described, storyLook(planned, values, filled)].filter(Boolean).join("\n\n");
+}
+
+/**
+ * A multi-scene planner's look, kept whole but for what a picture settles.
+ *
+ * A story's people are mostly in no picture, and its planner describes each
+ * of them once, with the footage, for every scene to be handed: with nothing
+ * holding them, the 1985 snooker segment's drunk player was five different
+ * men in seven scenes, and its presenter four. A paragraph about someone in a
+ * picture is kept only where that picture releases their clothes, for the
+ * reason above.
+ */
+function storyLook(planned: string, values: Record<string, ParamValue>, filled: number): string {
+  // A paragraph a line: the local planner separates them with one newline
+  // as often as with the blank line it is asked for.
+  return planned
+    .split(/\n+/)
+    .filter((paragraph) => {
+      const named = [...paragraph.matchAll(/<\s*picture\s+(\d+)\s*>/gi)].map((match) => Number(match[1]));
+      return named.every((index) => {
+        if (index > filled) return false;
+        const keep = referenceKeep(values, index);
+        return keep === "identity" || keep === "costume";
+      });
+    })
+    .join("\n\n")
+    .trim();
 }
 
 /** A JSON string's contents, as written between its quotes. */

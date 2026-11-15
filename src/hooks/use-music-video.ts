@@ -423,7 +423,13 @@ export function useMusicVideo({
       const briefs = planJob.briefs ?? {};
       const reply = briefs[PLAN_BRIEF] ?? Object.values(briefs)[0] ?? "";
       const plan = parsePlan(reply, project.scenes.length);
-      const look = composeLook(briefs[CAST_BRIEF], plan.look, project.values, MUSIC_VIDEO_PICTURES);
+      const look = composeLook(
+        briefs[CAST_BRIEF],
+        plan.look,
+        project.values,
+        MUSIC_VIDEO_PICTURES,
+        project.kind === "story",
+      );
       // The plan is a step, not a result: it has no file, and a history entry
       // that never shows anything is clutter.
       jobs.remove(planJob.promptId);

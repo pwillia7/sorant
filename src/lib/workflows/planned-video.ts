@@ -1,6 +1,7 @@
 import type { ComfyGraph } from "@/lib/comfy";
 import { ParamError } from "@/lib/params";
 import {
+  ASPECT_RATIOS,
   aspectRatioParam,
   directorTarget,
   leadingReferences,
@@ -324,9 +325,17 @@ export function plannedVideo(spec: PlannedVideoSpec) {
     ),
   );
 
-  const outputParams = (unit: string): ParamDef[] => [
+  const outputParams = (
+    unit: string,
+    { aspect }: { aspect?: (typeof ASPECT_RATIOS)[number] } = {},
+  ): ParamDef[] => [
     { ...lookParam(director, { references: true }), scope: "scenes" },
-    { ...aspectRatioParam("unused"), scope: "scenes", targets: [] },
+    {
+      ...aspectRatioParam("unused"),
+      ...(aspect ? { default: aspect } : {}),
+      scope: "scenes",
+      targets: [],
+    },
     {
       id: "megapixels",
       label: "Frame size",
