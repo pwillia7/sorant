@@ -16,6 +16,7 @@ import {
   STORY_SCENE_SECONDS,
   type OutlineScene,
   type PlannedKind,
+  type PlanRevision,
   type SceneLengths,
   type SceneWindow,
   type ShotRequest,
@@ -57,6 +58,23 @@ export interface MusicVideoProject {
    * project planned before there was one. See `sceneValues`.
    */
   look?: string;
+  /**
+   * The planner revising the whole plan to an ask, while it runs. The ask
+   * waits in `revising` for the shots to be written to it once it is in.
+   */
+  revisePromptId?: string;
+  revising?: string;
+  /**
+   * What has been asked of the director, oldest first: of the whole video,
+   * or of one scene. Shown back, so asking is a conversation rather than a
+   * box that forgets.
+   */
+  asks?: DirectorAsk[];
+  /**
+   * The outline, look and shots as they were before the last ask changed
+   * them, for putting back. One step: an ask is a small thing to redo.
+   */
+  beforeAsk?: AskSnapshot;
   /** The run that joins the scenes, once every one of them has a clip. */
   stitchPromptId?: string;
   /** Set once someone asks for the upscaled video; the join of it follows. */
@@ -145,6 +163,107 @@ export interface ProjectScene extends SceneWindow, Partial<OutlineScene> {
    * it is read off the scene's lines. See `openerOf`.
    */
   opener?: VoiceOpener;
+}
+
+/** One thing asked of the director. */
+export interface DirectorAsk {
+  ask: string;
+  /** The scene it was asked of, from 0; absent for the whole video. */
+  scene?: number;
+  at: number;
+}
+
+/** What an ask can change, kept to put back. */
+export interface AskSnapshot {
+  concept?: string;
+  look?: string;
+  scenes: Array<Pick<ProjectScene, "place" | "happens" | "lines" | "sings" | "part" | "shot">>;
+}
+
+/** The outline, look and shots as they stand, for undoing an ask. */
+export function askSnapshot(project: MusicVideoProject): AskSnapshot {
+  return {
+    concept: project.concept,
+    look: project.look,
+    scenes: project.scenes.map(({ place, happens, lines, sings, part, shot }) => ({
+      place,
+      happens,
+      lines,
+      sings,
+      part,
+      shot,
+    })),
+  };
+}
+
+/**
+ * A project with an ask undone: each scene's outline and shot as they were,
+ * where the scene is still there. Its renders are left alone — a scene
+ * rendered from the revised shot keeps that take until it is rendered again.
+ */
+export function restoreSnapshot(project: MusicVideoProject, snapshot: AskSnapshot): MusicVideoProject {
+  return {
+    ...project,
+    concept: snapshot.concept,
+    look: snapshot.look,
+    beforeAsk: undefined,
+    scenes: project.scenes.map((scene, index) =>
+      snapshot.scenes[index] ? { ...scene, ...snapshot.scenes[index] } : scene,
+    ),
+  };
+}
+
+/**
+ * The plan as it stands, in the shape the planner writes it, with the ask:
+ * what a revision of the whole video is handed. A story's carries its look,
+ * which its planner writes; a music video's look is the describer's, from the
+ * pictures, and is left as it is.
+ */
+export function planRevision(project: MusicVideoProject, ask: string): string {
+  const story = project.kind === "story";
+  const revision: PlanRevision = {
+    ask: ask.trim(),
+    plan: {
+      concept: project.concept ?? "",
+      scenes: project.scenes.map((scene, index) =>
+        story
+          ? {
+              scene: index + 1,
+              place: scene.place ?? "",
+              happens: scene.happens ?? "",
+              lines: scene.lines ?? "",
+              seconds: Math.round(scene.end - scene.start),
+            }
+          : {
+              scene: index + 1,
+              part: scene.part ?? "",
+              sings: scene.sings === true,
+              place: scene.place ?? "",
+              happens: scene.happens ?? "",
+            },
+      ),
+      ...(story ? { look: project.look ?? "" } : {}),
+    },
+  };
+  return JSON.stringify(revision);
+}
+
+/**
+ * A story's look after a revision: the paragraphs about pictures as they
+ * were — the describer wrote those from the pictures, and the planner is told
+ * not to touch them — and everything else as the revision has it. A revision
+ * that came back with no look keeps the old one whole.
+ */
+export function revisedLook(current: string | undefined, revised: string): string {
+  const paragraphs = (text: string | undefined) =>
+    (text ?? "")
+      .split(/\n+/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean);
+  const pictured = (paragraph: string) => /<\s*picture\s+\d+\s*>|^the style of\b/i.test(paragraph);
+  const fresh = paragraphs(revised).filter((paragraph) => !pictured(paragraph));
+  if (fresh.length === 0) return current ?? "";
+  return [...paragraphs(current).filter(pictured), ...fresh].join("\n\n");
 }
 
 /**
@@ -462,10 +581,21 @@ export function outlineShot(scene: Partial<OutlineScene>): string {
 /** The outline as the plan graph takes it back, to write the shots from. */
 export function shotRequest(
   project: MusicVideoProject,
-  rewrite?: { scene: number; take: number },
+  rewrite?: { scenes: number[]; take: number; ask?: string },
 ): string {
+  const ask = rewrite?.ask?.trim();
   const request: ShotRequest = {
-    ...(rewrite ? { only: [rewrite.scene], take: rewrite.take } : {}),
+    ...(rewrite ? { only: rewrite.scenes, take: rewrite.take } : {}),
+    ...(rewrite && ask
+      ? {
+          ask,
+          current: Object.fromEntries(
+            rewrite.scenes
+              .map((index) => [index, project.scenes[index]?.shot?.trim() ?? ""] as const)
+              .filter(([, shot]) => shot),
+          ),
+        }
+      : {}),
     concept: project.concept ?? "",
     scenes: project.scenes.map((scene) => ({
       part: scene.part ?? "",

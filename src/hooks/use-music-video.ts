@@ -20,7 +20,11 @@ import {
   recoverUpscales,
 } from "@/lib/music-video/recover";
 import {
+  askSnapshot,
   composeLook,
+  planRevision,
+  restoreSnapshot,
+  revisedLook,
   outlined,
   outlineShot,
   parsePlan,
@@ -106,6 +110,22 @@ export interface MusicVideoController {
   ) => void;
   /** Write one scene's shot again from its outline line. */
   rewriteShot: (index: number) => Promise<void>;
+  /**
+   * Ask the director to change one scene's shot — "make him angrier", "end
+   * on the glass" — revised from the shot as it stands. Its outline is left
+   * as it is.
+   */
+  askScene: (index: number, ask: string) => Promise<void>;
+  /**
+   * Ask the director to change the whole video — "more like a Monty Python
+   * sketch" — which revises the outline and the look, then every shot from
+   * the shot it has now. The scenes stay as many, and as long, as they are.
+   */
+  askVideo: (ask: string) => Promise<void>;
+  /** Put back the outline, look and shots as they were before the last ask. */
+  undoAsk: () => void;
+  /** Whether the director is busy with an ask, or writing shots. */
+  asking: boolean;
   editLook: (look: string) => void;
   /**
    * Give a scene pictures of its own, or with none, put it back on the
@@ -333,6 +353,7 @@ export function useMusicVideo({
     if (!project) return;
     const tags: Record<string, MusicVideoTag> = {};
     if (project.planPromptId) tags[project.planPromptId] = tagFor(project, "plan");
+    if (project.revisePromptId) tags[project.revisePromptId] = tagFor(project, "plan");
     if (project.stitchPromptId) tags[project.stitchPromptId] = tagFor(project, "join");
     if (project.upscaledStitchPromptId) {
       tags[project.upscaledStitchPromptId] = tagFor(project, "upscaled-join");
@@ -488,7 +509,7 @@ export function useMusicVideo({
 
   /** One run of the plan graph that writes shots from the outline: all of them, or one. */
   const submitShots = useCallback(
-    (current: MusicVideoProject, rewrite?: { scene: number; take: number }) =>
+    (current: MusicVideoProject, rewrite?: { scenes: number[]; take: number; ask?: string }) =>
       workflow
         ? jobs.submit(
             workflow,
@@ -588,7 +609,7 @@ export function useMusicVideo({
       if (!project || project.scenes[index]?.rewritePromptId) return;
       setError(null);
       const promptId = await submitShots(project, {
-        scene: index,
+        scenes: [index],
         take: Math.floor(Math.random() * 1_000_000),
       });
       if (!promptId) return;
@@ -605,6 +626,156 @@ export function useMusicVideo({
     },
     [project, submitShots],
   );
+
+  const asking = Boolean(
+    project &&
+      (project.revisePromptId ||
+        (project.shotsPromptId && !project.scenes.some((scene) => scene.shot)) ||
+        project.scenes.some((scene) => scene.rewritePromptId)),
+  );
+
+  /** Revise one scene's shot to an ask, from the shot it has now. */
+  const askScene = useCallback(
+    async (index: number, ask: string) => {
+      const text = ask.trim();
+      if (!project || !text || asking || !project.scenes[index]) return;
+      setError(null);
+      const promptId = await submitShots(project, {
+        scenes: [index],
+        take: Math.floor(Math.random() * 1_000_000),
+        ask: text,
+      });
+      if (!promptId) return;
+      setProject((previous) =>
+        previous?.id !== project.id
+          ? previous
+          : {
+              ...previous,
+              beforeAsk: askSnapshot(previous),
+              asks: [...(previous.asks ?? []), { ask: text, scene: index, at: Date.now() }],
+              scenes: previous.scenes.map((scene, i) =>
+                i === index ? { ...scene, rewritePromptId: promptId } : scene,
+              ),
+            },
+      );
+    },
+    [project, asking, submitShots],
+  );
+
+  /** Revise the whole plan to an ask: the planner first, then every shot. */
+  const askVideo = useCallback(
+    async (ask: string) => {
+      const text = ask.trim();
+      if (!project || !workflow || !text || asking) return;
+      setError(null);
+      const promptId = await jobs.submit(
+        workflow,
+        {
+          ...project.values,
+          prompt:
+            String(project.values.prompt ?? "").trim() ||
+            (project.kind === "story" ? "A short story told in a few scenes." : "A performance video for this song."),
+          // Held to the scenes the video has: some may be rendered already,
+          // and the scene cards are where scenes go in and come out.
+          scene_list:
+            project.kind === "story"
+              ? storySceneList(project.scenes.length, storyLengths(project.values, project.scenes.length))
+              : sceneList(project.scenes),
+          plan_revision: planRevision(project, text),
+        },
+        {
+          localDirector: modes.localDirector,
+          rewriteModel: modes.rewriteModel,
+          musicVideo: tagFor(project, "plan"),
+        },
+      );
+      if (!promptId) return;
+      setProject((previous) =>
+        previous?.id !== project.id
+          ? previous
+          : {
+              ...previous,
+              revisePromptId: promptId,
+              revising: text,
+              asks: [...(previous.asks ?? []), { ask: text, at: Date.now() }],
+            },
+      );
+    },
+    [project, workflow, asking, jobs, modes.localDirector, modes.rewriteModel],
+  );
+
+  // The revised plan arriving: folded into the outline and the look, then
+  // every shot is revised to the same ask from the shot it has. Once per
+  // run — the shots' submission is what clears the revision from the project.
+  const reviseJob = project?.revisePromptId ? byId.get(project.revisePromptId) : undefined;
+  const revisionsTaken = useRef(new Set<string>());
+  useEffect(() => {
+    if (!project || !reviseJob || revisionsTaken.current.has(reviseJob.promptId)) return;
+    if (reviseJob.phase !== "done" && !failed(reviseJob)) return;
+    revisionsTaken.current.add(reviseJob.promptId);
+    jobs.remove(reviseJob.promptId);
+    const ask = project.revising ?? "";
+    const reply = reviseJob.phase === "done" ? (reviseJob.briefs?.[PLAN_BRIEF] ?? Object.values(reviseJob.briefs ?? {})[0] ?? "") : "";
+    const plan = reply ? parsePlan(reply, project.scenes.length) : null;
+    if (!plan || !plan.outline.some(outlined)) {
+      setError(
+        reviseJob.phase === "done"
+          ? "The director's revision came back in a form that could not be read. Ask again."
+          : (reviseJob.error ?? "The director did not answer. Ask again."),
+      );
+      setProject({ ...project, revisePromptId: undefined, revising: undefined });
+      return;
+    }
+    const story = project.kind === "story";
+    const revised: MusicVideoProject = {
+      ...project,
+      revisePromptId: undefined,
+      revising: undefined,
+      beforeAsk: askSnapshot(project),
+      concept: plan.concept || project.concept,
+      look: story ? revisedLook(project.look, plan.look) : project.look,
+      scenes: project.scenes.map((scene, index) => {
+        const line = plan.outline[index];
+        // A scene the reply left out keeps its line; its shot is still
+        // revised to the ask below.
+        if (!line || !outlined(line)) return scene;
+        return {
+          ...scene,
+          place: line.place || scene.place,
+          happens: line.happens || scene.happens,
+          ...(story
+            ? { lines: project.values.dialogue === false ? "" : line.lines }
+            : {
+                part: line.part || scene.part,
+                sings: project.values[INSTRUMENTAL_PARAM] === true ? false : line.sings,
+              }),
+        };
+      }),
+    };
+    setProject(revised);
+    const all = revised.scenes.map((_, index) => index);
+    void submitShots(revised, { scenes: all, take: Math.floor(Math.random() * 1_000_000), ask }).then(
+      (promptId) => {
+        if (!promptId) return;
+        setProject((previous) =>
+          previous?.id !== revised.id
+            ? previous
+            : {
+                ...previous,
+                scenes: previous.scenes.map((scene) => ({ ...scene, rewritePromptId: promptId })),
+              },
+        );
+      },
+    );
+  }, [project, reviseJob, jobs, submitShots]);
+
+  const undoAsk = useCallback(() => {
+    setProject((previous) =>
+      previous?.beforeAsk && !previous.scenes.some((scene) => scene.rewritePromptId)
+        ? restoreSnapshot(previous, previous.beforeAsk)
+        : previous,
+    );
+  }, []);
 
   const stitchJob = project?.stitchPromptId ? byId.get(project.stitchPromptId) : undefined;
   const final = stitchJob?.phase === "done" ? stitchJob : undefined;
@@ -1311,6 +1482,10 @@ export function useMusicVideo({
     editShot,
     editOutline,
     rewriteShot,
+    askScene,
+    askVideo,
+    undoAsk,
+    asking,
     editLook,
     editReferences,
     editVoices,

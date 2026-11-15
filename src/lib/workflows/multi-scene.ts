@@ -427,6 +427,31 @@ export const multiScene: WorkflowDef = {
       },
     },
     {
+      name: "revising the plan to an ask",
+      values: {
+        prompt: "x",
+        scene_list: `${SCENES_HEADING}\n2`,
+        reference_image_1: "a.png",
+        plan_revision: JSON.stringify({
+          ask: "Make it funnier.",
+          plan: { concept: "x", scenes: [{ scene: 1, place: "a", happens: "b", lines: "", seconds: 6 }], look: "" },
+        }),
+      },
+    },
+    {
+      name: "revising one shot to an ask",
+      values: {
+        prompt: "x",
+        scene_list: `${SCENES_HEADING}\n2`,
+        scene_outline: outline([SCENE_A, SCENE_B], {
+          only: [0],
+          take: 3,
+          ask: "Make it funnier.",
+          current: { 0: "Mara waves." },
+        }),
+      },
+    },
+    {
       name: "a run before the scenes were counted",
       values: { prompt: "x" },
       rejects: "have not been counted",

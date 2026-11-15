@@ -18,6 +18,7 @@ import {
   PLAN_BRIEF,
   SCENES_HEADING,
   SHOT_BRIEF,
+  type PlanRevision,
   type ShotRequest,
 } from "@/lib/music-video/scenes";
 import type { ParamDef, ParamTarget, ParamValue, WorkflowDef } from "./types";
@@ -182,6 +183,66 @@ function readOutline(values: Record<string, ParamValue>): ShotRequest | null {
 /** Last, after everything else: it is what the reply has to match one for one. */
 const scenesBlock = (values: Record<string, ParamValue>) => String(values[SCENES_PARAM] ?? "");
 
+/**
+ * The user's ask and the plan as it stands, handed back to the planner to
+ * revise rather than plan from nothing: "make it more like a Monty Python
+ * sketch", "the presenter is a woman". Set, the planner returns the whole
+ * plan again with the change made. See `revisionBlock`.
+ */
+export const REVISION_PARAM = "plan_revision";
+
+function readRevision(values: Record<string, ParamValue>): PlanRevision | null {
+  const raw = String(values[REVISION_PARAM] ?? "").trim();
+  if (!raw) return null;
+  try {
+    const revision = JSON.parse(raw) as PlanRevision;
+    if (revision.ask?.trim() && Array.isArray(revision.plan?.scenes)) return revision;
+  } catch {
+    // Falls through to the refusal below.
+  }
+  throw new ParamError("The plan to revise could not be read. Plan again.", "prompt");
+}
+
+/**
+ * After the scene list: the plan the reply is to be a revision of. Fixed to
+ * the scenes the video has, at the lengths they have — some may already be
+ * rendered, and the scene cards are where scenes go in and come out.
+ */
+function revisionBlock(values: Record<string, ParamValue>): string {
+  const revision = readRevision(values);
+  if (!revision) return "";
+  return `REVISING THE PLAN
+
+This video is already planned, and some of its scenes may already be written and rendered. The plan as it stands is below, in the shape you return. The user has asked the director for a change:
+
+"${revision.ask.trim()}"
+
+Return the whole plan again, in the same JSON shape, with that change made. Every rule above still holds. Change what the request needs and nothing else: a scene it does not touch comes back word for word. Keep exactly the same scenes, in the same order, with the same numbers${revision.plan.scenes.some((scene) => "seconds" in scene) ? ' and the same "seconds"' : ""} — the scenes are already timed, so fit any change into the time each scene has, with fewer words if it needs them. When the request is about the tone, the style or someone throughout, carry it into every scene it touches${revision.plan.look !== undefined ? ', and into "look" when it changes how someone or the footage looks' : ""}.
+
+THE PLAN AS IT STANDS
+
+${JSON.stringify(revision.plan, null, 1)}`;
+}
+
+/**
+ * Appended to a shot writer's instruction when its shot is revised: the ask,
+ * and the shot as it stands, so the change is made to what is there rather
+ * than to a fresh shot that loses every edit before it.
+ */
+function shotRevisionBlock(ask: string, shot: string): string {
+  return `REVISING YOUR SCENE'S SHOT
+
+Your scene's shot is already written. The user has asked the director for a change:
+
+"${ask.trim()}"
+
+The shot as it stands:
+
+${shot.trim()}
+
+Write the shot again with that change made, following every rule above. Keep what the request does not touch — the place, the people, the action, the camera and every quoted line, word for word — and keep to your scene's length. Where the request and your scene's outline disagree, the request wins. Return only the new shot.`;
+}
+
 type Block = (values: Record<string, ParamValue>) => string;
 
 export interface PlannedVideoSpec {
@@ -255,7 +316,7 @@ export function plannedVideo(spec: PlannedVideoSpec) {
   const director: ParamTarget = directorTarget(
     ids,
     spec.planner,
-    [picturesBlock, ...spec.blocks, scenesBlock],
+    [picturesBlock, ...spec.blocks, scenesBlock, revisionBlock],
     // No length block: the planner is not writing one clip of a known length.
     () => "",
   );
@@ -279,6 +340,14 @@ export function plannedVideo(spec: PlannedVideoSpec) {
 
   const plumbing: ParamDef[] = [
     {
+      id: REVISION_PARAM,
+      label: "Plan revision",
+      type: "written",
+      default: "",
+      maxLength: 100000,
+      targets: [director],
+    },
+    {
       id: SCENES_PARAM,
       label: "Scene list",
       type: "written",
@@ -293,7 +362,9 @@ export function plannedVideo(spec: PlannedVideoSpec) {
       type: "written",
       default: "",
       // Two or three hundred characters a scene, with its line of the list.
-      maxLength: 60000,
+      // And, when shots are revised, the shots as they stand: up to forty of
+      // a couple of thousand characters each.
+      maxLength: 200000,
       // Through the planner's node, which `finalize` turns into the writers:
       // each one's instruction is built from this there.
       targets: [director],
@@ -435,7 +506,13 @@ export function plannedVideo(spec: PlannedVideoSpec) {
       outline.scenes.forEach((_, index) => {
         if (outline.only && !outline.only.includes(index)) return;
         const node = structuredClone(template);
-        node.inputs.system_prompt = spec.shotSystem(outline, index, values);
+        const current = outline.ask?.trim() ? outline.current?.[index]?.trim() : "";
+        node.inputs.system_prompt = [
+          spec.shotSystem(outline, index, values),
+          current ? shotRevisionBlock(outline.ask ?? "", current) : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n");
         // One shot, not a plan.
         node.inputs.max_tokens = 1024;
         node.inputs.seed = seed + index;

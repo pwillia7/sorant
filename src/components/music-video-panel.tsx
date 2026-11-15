@@ -28,6 +28,7 @@ import {
   sceneHasReferences,
   videoReferences,
   videoVoices,
+  type DirectorAsk,
   type SceneReference,
   type SceneVoice,
 } from "@/lib/music-video/project";
@@ -249,6 +250,22 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                   ? "Given word for word to every scene, so each person keeps one face and outfit, and the footage one look, across the cuts. Edits apply to scenes rendered from now on."
                   : "Given word for word to every scene, so the costume and any style picture\u2019s look hold across the cuts. Edits apply to scenes rendered from now on."}
               </p>
+            </div>
+          ) : null}
+          {project ? (
+            <div className="mb-3 rounded-lg border border-border-default p-3">
+              <AskDirector
+                id="music-video-ask"
+                label="Ask the director"
+                placeholder="Make it more like a Monty Python sketch. The presenter is a woman."
+                button="Revise every scene"
+                help="Revises the outline, the look and every shot from what they say now, so your edits are kept. The scenes stay as many and as long as they are; rendered scenes keep their takes until you render them again."
+                busy={Boolean(project.revisePromptId) || (video.asking && project.asks?.at(-1)?.scene === undefined)}
+                disabled={step === "planning" || step === "stitching" || video.asking}
+                asks={(project.asks ?? []).filter((ask) => ask.scene === undefined)}
+                onAsk={video.askVideo}
+                undo={project.beforeAsk && !video.asking ? video.undoAsk : undefined}
+              />
             </div>
           ) : null}
           <ol className="flex flex-col gap-3">
@@ -687,6 +704,97 @@ function SceneOutline({
           : "Off for an instrumental stretch: a mouth moving to words where there is no voice looks wrong. Changes here take effect when the shot is rewritten."}
       </p>
     </div>
+  );
+}
+
+/**
+ * A line to the director: what to change, sent with what is there now, so
+ * the reply is a revision rather than a fresh start. What has been asked
+ * before is listed above it, oldest first, so a run of asks reads as a
+ * conversation.
+ */
+function AskDirector({
+  id,
+  label,
+  placeholder,
+  button,
+  help,
+  busy,
+  disabled,
+  asks,
+  onAsk,
+  undo,
+}: {
+  id: string;
+  label: string;
+  placeholder: string;
+  button: string;
+  help?: string;
+  busy: boolean;
+  disabled: boolean;
+  asks: DirectorAsk[];
+  onAsk: (ask: string) => Promise<void>;
+  undo?: () => void;
+}) {
+  const [ask, setAsk] = useState("");
+  const send = async () => {
+    const text = ask.trim();
+    if (!text || disabled) return;
+    await onAsk(text);
+    setAsk("");
+  };
+  return (
+    <form
+      className="flex flex-col gap-1.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void send();
+      }}
+    >
+      <label className="text-[12px] font-medium text-fg-muted" htmlFor={id}>
+        {label}
+      </label>
+      {asks.length > 0 ? (
+        <ul className="flex flex-col gap-1">
+          {asks.slice(-4).map((item) => (
+            <li key={item.at} className="text-[12px] leading-snug text-fg-subtle">
+              <span className="text-fg-muted">You asked:</span> {item.ask}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="flex gap-2">
+        <div className="min-w-0 flex-1">
+          <TextInput
+            id={id}
+            value={ask}
+            placeholder={placeholder}
+            disabled={disabled}
+            describedBy={help ? `${id}-help` : undefined}
+            onChange={setAsk}
+          />
+        </div>
+        <Button type="submit" variant="secondary" size="sm" disabled={disabled || !ask.trim()}>
+          {busy ? (
+            <>
+              <Spinner /> Revising…
+            </>
+          ) : (
+            button
+          )}
+        </Button>
+        {undo ? (
+          <Button type="button" variant="quiet" size="sm" onClick={undo}>
+            Undo last ask
+          </Button>
+        ) : null}
+      </div>
+      {help ? (
+        <p id={`${id}-help`} className="text-[12px] leading-snug text-fg-subtle">
+          {help}
+        </p>
+      ) : null}
+    </form>
   );
 }
 
@@ -1180,6 +1288,20 @@ function SceneCard({
               disabled={busy || Boolean(scene.rewritePromptId)}
               onChange={(value) => video.editShot(index, value)}
             />
+          ) : null}
+          {shown === "shot" ? (
+            <div className="mt-2">
+              <AskDirector
+                id={`scene-${index}-ask`}
+                label="Ask the director about this shot"
+                placeholder="Make him angrier. End on the glass breaking."
+                button="Revise shot"
+                busy={Boolean(scene.rewritePromptId)}
+                disabled={busy || video.asking || !scene.shot?.trim()}
+                asks={(project?.asks ?? []).filter((ask) => ask.scene === index)}
+                onAsk={(ask) => video.askScene(index, ask)}
+              />
+            </div>
           ) : shown === "outline" ? (
             <SceneOutline index={index} scene={scene} disabled={busy} video={video} />
           ) : shown === "pictures" ? (

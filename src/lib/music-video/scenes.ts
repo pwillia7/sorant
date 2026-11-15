@@ -89,6 +89,28 @@ export interface ShotRequest {
    * be the same request, and ComfyUI would hand back the cached shot.
    */
   take?: number;
+  /**
+   * What the user asked the director to change, when the shots in `only` are
+   * revised rather than written fresh: "make it more like a Monty Python
+   * sketch". Each is written again from the shot it has now, in `current`.
+   */
+  ask?: string;
+  /** The shots being revised as they stand, by scene index from 0. */
+  current?: Record<number, string>;
+}
+
+/**
+ * What the plan graph is handed to revise a plan rather than make one: the
+ * user's ask, and the plan as it stands in the shape the planner writes. See
+ * REVISION_PARAM.
+ */
+export interface PlanRevision {
+  ask: string;
+  plan: {
+    concept: string;
+    scenes: Array<Record<string, unknown>>;
+    look?: string;
+  };
 }
 
 /**
