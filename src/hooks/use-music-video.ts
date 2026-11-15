@@ -42,11 +42,11 @@ import {
   keptFrames,
   MUSIC_VIDEO_PICTURES,
   CHOOSE_SCENE_COUNT_PARAM,
-  DEFAULT_STORY_LENGTHS,
   plannedStorySeconds,
   PLAN_BRIEF,
   sceneLengths,
   splitSong,
+  storyLengths,
   storyWindows,
   type PlannedKind,
 } from "@/lib/music-video/scenes";
@@ -134,6 +134,20 @@ export interface MusicVideoController {
   editOpener: (index: number, opener: VoiceOpener | undefined) => void;
   /** A multi-scene video's: how long a scene runs. The scenes after it move along. */
   editLength: (index: number, seconds: number) => void;
+  /**
+   * A multi-scene video's: put a blank scene in after this one (-1 for the
+   * start), to fill in and write a shot for. The scenes after it move along.
+   */
+  addScene: (after: number) => void;
+  /** A multi-scene video's: take a scene out. The scenes after it move up. */
+  removeScene: (index: number) => void;
+  /**
+   * Whether scenes can go in or come out at this position: only where nothing
+   * from it on has been sent anywhere. A run is filed under its scene's
+   * number, so moving a rendered scene along would hand its takes and
+   * upscales to whichever scene took its place.
+   */
+  canReshapeAt: (index: number) => boolean;
   /** Queue every scene that has no job, or whose job failed. */
   renderAll: () => Promise<void>;
   /** The finished video, once the stitch has run. */
@@ -431,13 +445,14 @@ export function useMusicVideo({
         return;
       }
       const story = project.kind === "story";
-      const lengths = sceneLengths(project.values, DEFAULT_STORY_LENGTHS);
       // A story whose planner chose its own count keeps as many scenes as it
       // planned, up to the last one it wrote; the rest were only the limit.
       const planned =
         story && project.values[CHOOSE_SCENE_COUNT_PARAM] === true
           ? project.scenes.slice(0, plan.outline.findLastIndex(outlined) + 1)
           : project.scenes;
+      // A single take may run longer than the slider lets one of many.
+      const lengths = storyLengths(project.values, planned.length);
       const scenes = planned.map((scene, index) => ({
         ...scene,
         ...plan.outline[index],
@@ -477,7 +492,7 @@ export function useMusicVideo({
                 (current.kind === "story" ? "A short story told in a few scenes." : "A performance video for this song."),
               scene_list:
                 current.kind === "story"
-                  ? storySceneList(current.scenes.length, sceneLengths(current.values, DEFAULT_STORY_LENGTHS))
+                  ? storySceneList(current.scenes.length, storyLengths(current.values, current.scenes.length))
                   : sceneList(current.scenes),
               scene_outline: shotRequest(current, rewrite),
             },
@@ -624,8 +639,8 @@ export function useMusicVideo({
     // A story has no song to cut: as many scenes as were asked for, each at
     // a placeholder length until the planner gives it its own.
     if (kind === "story") {
-      const count = Math.max(2, Math.round(Number(values.scene_count ?? 6)));
-      const lengths = sceneLengths(values, DEFAULT_STORY_LENGTHS);
+      const count = Math.max(1, Math.round(Number(values.scene_count ?? 6)));
+      const lengths = storyLengths(values, count);
       // On unless switched off: a form saved before the switch existed has
       // no value for it. Settled here and kept on the project, so the plan's
       // arrival reads the same answer the request was made with.
@@ -806,6 +821,69 @@ export function useMusicVideo({
     );
   }, []);
 
+  const canReshapeAt = useCallback(
+    (index: number) => {
+      if (!project || project.kind !== "story") return false;
+      if (
+        project.scenes
+          .slice(index)
+          .some((scene) => scene.promptId || scene.rewritePromptId || scene.upscalePromptId)
+      ) {
+        return false;
+      }
+      return !jobs.jobs.some(
+        (job) =>
+          job.musicVideo?.projectId === project.id &&
+          (job.musicVideo.part === "scene" || job.musicVideo.part === "upscale") &&
+          (job.musicVideo.scene ?? -1) >= index,
+      );
+    },
+    [project, jobs.jobs],
+  );
+
+  const addScene = useCallback(
+    (after: number) => {
+      if (!project || !canReshapeAt(after + 1)) return;
+      const lengths = storyLengths(project.values);
+      const blank: ProjectScene = {
+        id: `added-${Date.now().toString(36)}`,
+        start: 0,
+        end: 0,
+        energy: 0.5,
+        shot: "",
+        place: "",
+        happens: "",
+        lines: "",
+        seconds: Math.round((lengths.min + lengths.max) / 2),
+      };
+      setProject({
+        ...project,
+        // The join was of the scenes as they were.
+        stitchPromptId: undefined,
+        upscaledStitchPromptId: undefined,
+        scenes: retimed([
+          ...project.scenes.slice(0, after + 1),
+          blank,
+          ...project.scenes.slice(after + 1),
+        ]),
+      });
+    },
+    [project, canReshapeAt],
+  );
+
+  const removeScene = useCallback(
+    (index: number) => {
+      if (!project || project.scenes.length < 2 || !canReshapeAt(index)) return;
+      setProject({
+        ...project,
+        stitchPromptId: undefined,
+        upscaledStitchPromptId: undefined,
+        scenes: retimed(project.scenes.filter((_, i) => i !== index)),
+      });
+    },
+    [project, canReshapeAt],
+  );
+
   /** Which form ids every scene run inherits — the ones scoped to scenes. */
   const scoped = useMemo(
     () => (workflow?.params ?? []).filter((param) => param.scope === "scenes").map((param) => param.id),
@@ -892,6 +970,13 @@ export function useMusicVideo({
       if (!scene) break;
       const job = jobFor(scene);
       if (scene.promptId && !failed(job)) continue;
+      // A scene put in by hand and not yet written: nothing to send.
+      if (!scene.shot.trim()) {
+        setError(
+          `Scene ${index + 1} has no shot yet. Fill in its outline and press Rewrite shot, or write the shot yourself.`,
+        );
+        break;
+      }
       const promptId = await submitScene(current, index, failed(job));
       if (!promptId) {
         setError(`Scene ${index + 1} was refused — see the message above.`);
@@ -1222,6 +1307,9 @@ export function useMusicVideo({
     editVoices,
     editOpener,
     editLength,
+    addScene,
+    removeScene,
+    canReshapeAt,
     renderAll,
     redo,
     takesFor,

@@ -7,10 +7,12 @@ import {
 import type { ParamValue } from "@/lib/workflows/types";
 import {
   clock,
+  MAX_SHOTS_PER_SCENE,
   MUSIC_VIDEO_PICTURES,
   renderSeconds,
   SCENES_HEADING,
   shotBrief,
+  STORY_SCENE_SECONDS,
   type OutlineScene,
   type PlannedKind,
   type SceneLengths,
@@ -114,6 +116,11 @@ export const MUSIC_VIDEO_FRAME_RATES = [
 ] as const;
 
 export interface ProjectScene extends SceneWindow, Partial<OutlineScene> {
+  /**
+   * A key for a scene put in by hand, which has no place in the plan to be
+   * told apart by. See `addScene`.
+   */
+  id?: string;
   /** What happens in it: written from the outline, until someone edits it. */
   shot: string;
   /** The job that rendered it, if it has been submitted. */
@@ -288,12 +295,19 @@ ${lines.join("\n")}`;
  */
 export function storySceneList(count: number, lengths: SceneLengths, chooseCount = false): string {
   const scenes = chooseCount
-    ? `The video has as many scenes as its story needs, and at most ${count}. Give each beat of the story — a meeting, a turning point, an ending, a move to a new place — a scene of its own; a reveal or a reaction in the same place and moment is a cut inside its scene, not a new one. Give nothing a scene that only repeats another or fills time. Use fewer than ${count} whenever the story is told in fewer: a short idea is a short video. Number the scenes from 1 with none skipped.`
-    : `The video is ${count} scenes long. Return exactly ${count} entries.`;
+    ? `The video has as many scenes as its story needs: one, or more, up to ${count}. A scene is one place and one moment, made in one take, and a take can hold up to ${MAX_SHOTS_PER_SCENE} shots: a reveal, a reaction, or a cut to the person being spoken to is a "Cut to:" inside its scene, not a new scene. Only a new place, or a jump in time, needs a new scene. So a story that happens in one place and moment, and fits the longest a scene may be, is one scene — a single take with its cuts — and that is the best way to tell it, since a single take keeps the room, the light and the people exactly the same. Give nothing a scene that only repeats another or fills time; a short idea is a short video. Number the scenes from 1 with none skipped.`
+    : count === 1
+      ? `The video is one scene long: a single take, with up to ${MAX_SHOTS_PER_SCENE} shots inside it. Return exactly one entry.`
+      : `The video is ${count} scenes long. Return exactly ${count} entries.`;
+  // The planner choosing may land on one scene, which may be a longer take.
+  const singleTake =
+    chooseCount && lengths.max < STORY_SCENE_SECONDS.max
+      ? ` A video told in one scene is the exception: that one scene may run up to ${STORY_SCENE_SECONDS.max} seconds when its shots fill it.`
+      : "";
   const range =
     lengths.min === lengths.max
       ? `Every scene is ${lengths.min} seconds long: give each one exactly that, and plan only what fits in it.`
-      : `Each scene is from ${lengths.min} to ${lengths.max} seconds long — no shorter and no longer. Plan only what fits in that.`;
+      : `Each scene is from ${lengths.min} to ${lengths.max} seconds long — no shorter and no longer. Plan only what fits in that.${singleTake}`;
   return `${SCENES_HEADING}
 
 ${scenes}

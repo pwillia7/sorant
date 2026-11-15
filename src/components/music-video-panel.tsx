@@ -10,7 +10,9 @@ import {
   MessageSquareQuote,
   Mic,
   MicVocal,
+  Plus,
   RefreshCw,
+  Trash2,
   X,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -62,6 +64,8 @@ const STEP_HINT: Record<MusicVideoController["step"], string> = {
 /** Where a multi-scene video's steps read differently: it has no song. */
 const STORY_STEP_HINT: Partial<Record<MusicVideoController["step"], string>> = {
   idle: "Write the idea, choose how many scenes, then plan the video.",
+  planning: "Planning the scenes…",
+  planned: "Read the scenes through, change any you like — add a scene or take one out — then render them.",
   stitching: "Joining the scenes, each with its own sound…",
 };
 
@@ -186,7 +190,9 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
           {step === "cutting"
             ? "Finding the beats in the song."
             : story
-              ? `${scenes.length} scenes.`
+              ? project?.values.choose_scene_count === true
+                ? `Up to ${scenes.length} scenes — the director picks how many.`
+                : `${scenes.length === 1 ? "One scene" : `${scenes.length} scenes`}.`
               : `${scenes.length} scenes, ${clock(project?.songSeconds ?? 0)} of song.`}
         </p>
       ) : null}
@@ -247,7 +253,7 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
               const clip = sceneClip(job);
               const busy = job?.phase === "queued" || job?.phase === "running";
               return (
-                <li key={`${scene.start}-${index}`}>
+                <li key={scene.id ?? `${scene.start}-${index}`}>
                   <SceneCard
                     index={index}
                     job={job}
@@ -659,7 +665,7 @@ function SceneOutline({
           variant="quiet"
           size="xs"
           className="ml-auto"
-          disabled={disabled || rewriting}
+          disabled={disabled || rewriting || !(scene.place?.trim() || scene.happens?.trim())}
           onClick={() => void video.rewriteShot(index)}
         >
           {rewriting ? (
@@ -978,14 +984,15 @@ function SceneCard({
   /** Every scene with a clip, for the large viewer to step through. */
   siblings: ClipItem[];
 }) {
-  const [tab, setTab] = useState<SceneTab>("shot");
   const project = video.project;
   const scene = project?.scenes[index];
+  // A scene put in by hand starts on its outline, which is what it needs first.
+  const [tab, setTab] = useState<SceneTab>(story && scene && !scene.shot ? "outline" : "shot");
   if (!project || !scene) return null;
   const takes = video.takesFor(index);
   const tabs: Array<{ id: SceneTab; label: string; icon?: ReactNode }> = [
     { id: "shot", label: "Shot" },
-    ...(scene.place || scene.happens ? [{ id: "outline" as const, label: "Outline" }] : []),
+    ...(story || scene.place || scene.happens ? [{ id: "outline" as const, label: "Outline" }] : []),
     {
       id: "pictures",
       label: scene.references ? `Pictures · own (${scene.references.length})` : "Pictures",
@@ -1085,18 +1092,52 @@ function SceneCard({
               </span>
             </Badge>
           )}
-          {finished ? (
-            <Button
-              variant="quiet"
-              size="xs"
-              className="ml-auto"
-              icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
-              onClick={() => void video.redo(index)}
-              title="Render another take on a fresh seed, with the shot as it reads now. The takes you have stay to pick from."
-            >
-              Redo
-            </Button>
-          ) : null}
+          <span className="ml-auto flex items-center gap-1">
+            {finished ? (
+              <Button
+                variant="quiet"
+                size="xs"
+                icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
+                onClick={() => void video.redo(index)}
+                title="Render another take on a fresh seed, with the shot as it reads now. The takes you have stay to pick from."
+              >
+                Redo
+              </Button>
+            ) : null}
+            {story ? (
+              <>
+                <Button
+                  variant="quiet"
+                  size="xs"
+                  icon={<Plus className="size-3.5" aria-hidden="true" />}
+                  disabled={!video.canReshapeAt(index + 1)}
+                  onClick={() => video.addScene(index)}
+                  title={
+                    video.canReshapeAt(index + 1)
+                      ? "Put a blank scene in after this one: fill in its outline, then Rewrite shot. The scenes after it move along."
+                      : "A scene after this one has been rendered, so nothing can go in before it. Add scenes after the last rendered one."
+                  }
+                >
+                  Scene after
+                </Button>
+                {project.scenes.length > 1 ? (
+                  <Button
+                    variant="quiet"
+                    size="xs"
+                    icon={<Trash2 className="size-3.5" aria-hidden="true" />}
+                    disabled={!video.canReshapeAt(index)}
+                    onClick={() => video.removeScene(index)}
+                    aria-label={`Remove scene ${index + 1}`}
+                    title={
+                      video.canReshapeAt(index)
+                        ? "Take this scene out. The scenes after it move up."
+                        : "This scene, or one after it, has been rendered, so it stays."
+                    }
+                  />
+                ) : null}
+              </>
+            ) : null}
+          </span>
         </div>
 
         <div role="tablist" aria-label={`Scene ${index + 1}`} className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border-default [scrollbar-width:none]">

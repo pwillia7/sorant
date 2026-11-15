@@ -29,7 +29,7 @@ import type { ParamDef, ParamValue, WorkflowDef } from "./types";
  * refuses a run with nothing to build from. See `scenes.bare`.
  */
 
-export const MULTI_SCENE_PLANNER = `You are the director of a short video told in several scenes, laying out the whole of it before anyone writes a shot.
+export const MULTI_SCENE_PLANNER = `You are the director of a short video told in one or more scenes, laying out the whole of it before anyone writes a shot.
 
 You are given the user's idea, how many scenes it has — or the most it may have, when the number is yours to choose — and, when there are any, reference pictures.
 
@@ -53,7 +53,7 @@ A scene can be more than one shot. It is made in one take, so its shots share th
 
 "lines": what is said in the scene, as described below.
 
-"seconds": how long the scene runs, a whole number inside the range given with the scene list. Decide it last, from the "happens" and "lines" you have just written for that scene — never pick a length first and fill it. Add up what the scene holds:
+"seconds": how long the scene runs, a whole number inside the range given with the scene list. The video model is trained on clips of about ${STORY_SCENE_SECONDS.min} to ${STORY_SCENE_SECONDS.max} seconds. A scene of one shot is at its best between ${STORY_SCENE_SECONDS.min} and 10; a take with cuts in it can use up to ${STORY_SCENE_SECONDS.max}, since each shot needs its own time. Shorter than ${STORY_SCENE_SECONDS.min} seconds, speech comes back garbled and lips stop matching the words. Decide it last, from the "happens" and "lines" you have just written for that scene — never pick a length first and fill it. Add up what the scene holds:
 - one second to start;
 - a second and a half for each thing that happens — someone enters, a door opens, a look, a reaction — and at least ${MIN_SHOT_SECONDS} for each shot;
 - half a second for every word of its lines, and half a second for each turn of speech;
@@ -62,7 +62,7 @@ So one action and a five-word line is about five seconds, and a view of a place 
 
 WHAT MAKES A GOOD OUTLINE
 
-One story, not a collection of clips. The first scenes set up who and where, the middle ones build or complicate it, and the last ones resolve it. Give each key moment — a meeting, a turning point, a reveal, an ending — a scene of its own, and tell them in order.
+One story, not a collection of clips. It sets up who and where, builds or complicates it, and resolves it — across several scenes, or inside one. Give each key moment — a meeting, a turning point, a reveal, an ending — its own shot, and tell them in order. A moment in a new place, or later in time, is a new scene; a moment in the same place and moment is a "Cut to:" inside the scene it belongs to.
 
 Each scene is made on its own, so it can only show what its own line says. Anything that has to carry across a cut — something someone is holding, an injury, rain, the time of day, who is in the room — is written again in every scene it is true of.
 
@@ -70,7 +70,7 @@ Give each person one name or one plain description and use exactly those words f
 
 Use what the user gave you. Every concrete thing in the idea — each person, place, object and event — should appear somewhere in the outline, where it belongs in the story.
 
-Vary the scenes the way a film does: a scene that shows where we are before scenes close on the people in it, quiet scenes against busy ones, and no two scenes that are the same event.
+Vary the shots the way a film does: a view that shows where we are before closer ones on the people in it, quiet scenes against busy ones, and no two scenes that are the same event.
 
 Show technology and screens as solid, physical things: a screen set into a fridge door, a panel beside a door, a television on a wall, a phone in a hand. No holograms, projections or images floating in the air unless the user's idea asks for them — the video model draws them as see-through layers over the people and copies the people's faces into them. A screen shows words, a logo or a product, never a person.
 
@@ -279,7 +279,7 @@ const params: ParamDef[] = [
     label: "Director picks the number of scenes",
     type: "toggle",
     default: true,
-    help: "On, the director gives each beat of the story its own scene and uses as few as tell it, up to the number below. Off, the story is told in exactly that many. Either way you see every scene, and can add or remove one, before anything renders.",
+    help: "On, the director uses as few scenes as tell the story, up to the number below — just one, a single take with cuts inside it, when the story stays in one place and moment. Off, the story is told in exactly that many. Either way you see every scene, and can add or remove one, before anything renders.",
     group: "Video",
     scope: "browser",
     targets: [],
@@ -289,7 +289,7 @@ const params: ParamDef[] = [
     label: "Scenes",
     type: "slider",
     default: 8,
-    min: 2,
+    min: 1,
     max: 40,
     step: 1,
     help: "How many scenes the story is told in — or, with the director picking, the most it may use. Each scene is its own render, so this is what sets how long the whole video takes. The director chooses how long each one is, between the shortest and longest below.",
@@ -306,7 +306,7 @@ const params: ParamDef[] = [
     max: 10,
     step: 1,
     unit: "sec",
-    help: "No scene is planned shorter than this. A scene with lines is made longer if its words need it.",
+    help: "No scene is planned shorter than this. The model is trained on about 5 to 15 seconds: shorter, speech garbles and lip sync slips. A scene with lines is made longer if its words need it.",
     group: "Video",
     scope: "browser",
     targets: [],
@@ -320,7 +320,7 @@ const params: ParamDef[] = [
     max: STORY_SCENE_SECONDS.max,
     step: 1,
     unit: "sec",
-    help: "No scene is planned longer than this; the director cuts a scene down to what fits rather than going over. The model's sweet spot is 5 to 10 seconds, and long scenes with little in them come out slow or frozen.",
+    help: "No scene is planned longer than this; the director cuts a scene down to what fits rather than going over. The model's sweet spot is 5 to 10 seconds, and long scenes with little in them come out slow or frozen. A video the director tells in one scene may run up to 15 seconds whatever this says, for a single take with cuts in it.",
     group: "Video",
     scope: "browser",
     targets: [],
@@ -349,7 +349,7 @@ const SCENE_B = { part: "", sings: false, place: "c", happens: "d", lines: "", t
 export const multiScene: WorkflowDef = {
   id: "multi-scene",
   name: "Multi-scene video",
-  description: "One idea told in several scenes, each with its own sound — a short film, a sketch, a story.",
+  description: "One idea told in one or more scenes, each with its own sound — a short film, a sketch, a story.",
   // None, for the music video's reason: a scene count times a scene's time.
   hasAudio: true,
   graph: planned.graph,

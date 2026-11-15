@@ -246,6 +246,10 @@ export const multiSceneStitch: WorkflowDef = {
       },
     },
     {
+      name: "one scene",
+      values: { scenes: JSON.stringify([{ file: "video/a-audio.mp4 [output]", seconds: 12.04 }]) },
+    },
+    {
       name: "a scene list that climbs out of the output folder",
       values: { scenes: JSON.stringify([{ file: "../secrets.mp4 [output]", seconds: 4 }]) },
       rejects: "not a clip this can join",

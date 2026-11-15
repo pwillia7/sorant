@@ -105,11 +105,29 @@ export type PlannedKind = "music" | "story";
  */
 export const CHOOSE_SCENE_COUNT_PARAM = "choose_scene_count";
 
-/** How long a multi-scene video's scene may be: H3's trained range. */
-export const STORY_SCENE_SECONDS = { min: 4, max: 15, initial: 8 } as const;
+/**
+ * How long a multi-scene video's scene may be: H3's trained range, about 5 to
+ * 15 seconds. Below it the sound is the first thing to go, and a short
+ * talking clip is where lip sync falls apart (see tips.ts).
+ */
+export const STORY_SCENE_SECONDS = { min: 5, max: 15, initial: 8 } as const;
 
 /** The range a multi-scene video's planner is held to unless the form says otherwise. */
-export const DEFAULT_STORY_LENGTHS: SceneLengths = { min: 4, max: 10 };
+export const DEFAULT_STORY_LENGTHS: SceneLengths = { min: 5, max: 10 };
+
+/**
+ * The range a multi-scene video's scenes are planned in: the form's sliders,
+ * held to H3's trained range. A video of one scene may run to the top of that
+ * range whatever the Longest scene slider says — the slider is there to stop
+ * a video of many scenes padding each one, and a single take with its cuts in
+ * it is the case a long run is for.
+ */
+export function storyLengths(values: Record<string, unknown>, scenes?: number): SceneLengths {
+  const { min, max } = sceneLengths(values, DEFAULT_STORY_LENGTHS);
+  const held = (seconds: number) =>
+    Math.min(STORY_SCENE_SECONDS.max, Math.max(STORY_SCENE_SECONDS.min, seconds));
+  return { min: held(min), max: scenes === 1 ? STORY_SCENE_SECONDS.max : Math.max(held(min), held(max)) };
+}
 
 /**
  * How fast a scene's lines may be spoken: about twenty words in fifteen
