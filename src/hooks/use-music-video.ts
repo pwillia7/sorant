@@ -44,6 +44,7 @@ import {
   CAST_BRIEF,
   INSTRUMENTAL_PARAM,
   keptFrames,
+  mergeContinuousScenes,
   MUSIC_VIDEO_PICTURES,
   CHOOSE_SCENE_COUNT_PARAM,
   MAX_STORY_SCENES,
@@ -481,7 +482,7 @@ export function useMusicVideo({
           : project.scenes;
       // A single take may run longer than the slider lets one of many.
       const lengths = storyLengths(project.values, planned.length);
-      const scenes = planned.map((scene, index) => ({
+      const timed = planned.map((scene, index) => ({
         ...scene,
         ...plan.outline[index],
         // Held to the user's range, and long enough for its own lines.
@@ -494,6 +495,13 @@ export function useMusicVideo({
         // And a story with the dialogue off, for one stray line.
         ...(project.kind === "story" && project.values.dialogue === false ? { lines: "" } : {}),
       }));
+      // A story whose planner chose its count has each run of scenes in one
+      // place made into as few renders as fit; one whose count the user set
+      // keeps the number they asked for.
+      const scenes =
+        story && project.values[CHOOSE_SCENE_COUNT_PARAM] === true
+          ? mergeContinuousScenes(timed, lengths.max)
+          : timed;
       setProject({
         ...project,
         look,

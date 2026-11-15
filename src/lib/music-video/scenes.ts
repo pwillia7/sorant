@@ -214,6 +214,63 @@ export function sceneShots(happens: string | undefined): number {
   return Math.min(MAX_SHOTS_PER_SCENE, 1 + ((happens ?? "").match(CUT_MARK)?.length ?? 0));
 }
 
+/**
+ * Whether two outline lines are the same place, as the planner is told to
+ * write a place it returns to: the same words, give or take case and
+ * punctuation.
+ */
+export function samePlace(a: string | undefined, b: string | undefined): boolean {
+  const plain = (text: string | undefined) =>
+    (text ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  return plain(a) !== "" && plain(a) === plain(b);
+}
+
+/**
+ * A story's planned scenes with each run of scenes in one place made into
+ * as few renders as fit.
+ *
+ * The planner is told that one place and one moment is one scene, and splits
+ * them anyway: a 45-second security-camera fall into a koi pond — one place,
+ * one fixed camera, one continuous moment — came back as four scenes with the
+ * same place word for word, each held to six seconds by its estimate. Four
+ * renders of one moment draw the man, the pond and the light four times; one
+ * render draws them once. So two scenes in a row in the same place become one
+ * take when together they still fit the longest a scene may be, their shots
+ * fit a take, and their lines can be said in the time — what happens in the
+ * second follows on from the first in the same take, with no cut between.
+ *
+ * Lengths are the scenes' own, already worked out (see plannedStorySeconds),
+ * added together.
+ */
+export function mergeContinuousScenes<
+  T extends { place?: string; happens?: string; lines?: string; seconds?: number },
+>(scenes: T[], longest: number): T[] {
+  const merged: T[] = [];
+  const shots = (happens: string | undefined) => 1 + ((happens ?? "").match(CUT_MARK)?.length ?? 0);
+  for (const scene of scenes) {
+    const last = merged.at(-1);
+    if (last && samePlace(last.place, scene.place)) {
+      const seconds = (last.seconds ?? 0) + (scene.seconds ?? 0);
+      const lines = [last.lines?.trim(), scene.lines?.trim()].filter(Boolean).join("\n");
+      const fits =
+        seconds <= longest &&
+        shots(last.happens) + shots(scene.happens) - 1 <= MAX_SHOTS_PER_SCENE &&
+        Math.ceil(spokenWords(lines) / SPOKEN_WORDS_PER_SECOND) <= seconds;
+      if (fits) {
+        merged[merged.length - 1] = {
+          ...last,
+          happens: [last.happens?.trim(), scene.happens?.trim()].filter(Boolean).join(" "),
+          lines,
+          seconds,
+        };
+        continue;
+      }
+    }
+    merged.push(scene);
+  }
+  return merged;
+}
+
 /** The separate things an outline line has happen: its sentences, and its shots. */
 function sceneBeats(happens: string | undefined): number {
   const beats = (happens ?? "")
