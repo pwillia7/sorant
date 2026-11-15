@@ -303,15 +303,37 @@ export function estimatedStorySeconds(happens: string | undefined, lines: string
 export function plannedStorySeconds(
   scene: { seconds?: number; happens?: string; lines?: string } | undefined,
   lengths: SceneLengths,
+  /**
+   * Take the planner's length as it is, not cut to the estimate: when the
+   * idea asks for a total length (see requestedSeconds), which the estimate
+   * knows nothing of. A 45-second koi-pond fall was cut to four six-second
+   * scenes, 24 seconds in all, because each scene's two long sentences
+   * counted as two beats.
+   */
+  trustChosen = false,
 ): number {
   const estimate = estimatedStorySeconds(scene?.happens, scene?.lines);
   const chosen = Number(scene?.seconds);
-  const wanted = Number.isFinite(chosen) && chosen > 0 ? Math.min(chosen, estimate) : estimate;
+  const wanted =
+    Number.isFinite(chosen) && chosen > 0 ? (trustChosen ? chosen : Math.min(chosen, estimate)) : estimate;
   const needed = Math.max(
     Math.ceil(spokenWords(scene?.lines) / SPOKEN_WORDS_PER_SECOND),
     MIN_SHOT_SECONDS * sceneShots(scene?.happens),
   );
   return Math.round(Math.min(lengths.max, Math.max(lengths.min, wanted, needed)));
+}
+
+/**
+ * The total length the user's idea asks for, in seconds — "a 45-second
+ * video", "60 seconds long", "a 2-minute short" — or null when it names none.
+ * The first such length in the idea; a length of under ten seconds is taken
+ * to be about something inside the story ("a 3-second pause"), not the video.
+ */
+export function requestedSeconds(idea: string | undefined): number | null {
+  const match = (idea ?? "").match(/\b(\d+(?:\.\d+)?)[\s-]*(seconds?|secs?|minutes?|mins?)\b/i);
+  if (!match) return null;
+  const seconds = Number(match[1]) * (/^min/i.test(match[2]) ? 60 : 1);
+  return seconds >= 10 ? seconds : null;
 }
 
 /**

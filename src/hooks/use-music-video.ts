@@ -49,6 +49,7 @@ import {
   CHOOSE_SCENE_COUNT_PARAM,
   MAX_STORY_SCENES,
   plannedStorySeconds,
+  requestedSeconds,
   PLAN_BRIEF,
   sceneLengths,
   splitSong,
@@ -487,7 +488,13 @@ export function useMusicVideo({
         ...plan.outline[index],
         // Held to the user's range, and long enough for its own lines.
         ...(story
-          ? { seconds: plannedStorySeconds(plan.outline[index], lengths) }
+          ? {
+              seconds: plannedStorySeconds(
+                plan.outline[index],
+                lengths,
+                requestedSeconds(String(project.values.prompt ?? "")) !== null,
+              ),
+            }
           : {}),
         // An instrumental is told to the planner, and held here too: it
         // cannot hear the song, and its guess is what this switch overrules.

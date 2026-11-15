@@ -691,7 +691,7 @@ export function sceneValues(
       duration: renderSeconds(scene),
       // Without lines the scene's director is free to write some, and a
       // silent video would come back talking.
-      prompt: background("video", `${place}${scene.lines?.trim() ? "" : " Nobody speaks in this scene."}`),
+      prompt: background("video", `${place}${scene.lines?.trim() ? "" : " Nobody speaks in this scene, but it has the sound of its place and action, not silence."}`),
       seed: sceneSeed,
     };
   }
