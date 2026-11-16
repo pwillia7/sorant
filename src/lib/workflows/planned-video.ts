@@ -217,6 +217,8 @@ This video is already planned, and some of its scenes may already be written and
 
 "${revision.ask.trim()}"
 
+The user may have seen scenes rendered, and is usually describing what came out wrong, so read the request as the result they want: "fix that he's not turning the wheel" means he turns it.
+
 Return the whole plan again, in the same JSON shape, with that change made. Every rule above still holds. Change what the request needs and nothing else: a scene it does not touch comes back word for word. Keep exactly the same scenes, in the same order, with the same numbers${revision.plan.scenes.some((scene) => "seconds" in scene) ? ' and the same "seconds"' : ""} — the scenes are already timed, so fit any change into the time each scene has, with fewer words if it needs them. When the request is about the tone, the style or someone throughout, carry it into every scene it touches${revision.plan.look !== undefined ? ', and into "look" when it changes how someone or the footage looks' : ""}.
 
 THE PLAN AS IT STANDS
@@ -230,17 +232,23 @@ ${JSON.stringify(revision.plan, null, 1)}`;
  * than to a fresh shot that loses every edit before it.
  */
 function shotRevisionBlock(ask: string, shot: string): string {
+  // The request goes after the shot, last of all: ahead of it, the local
+  // writer handed "fix that he's not turning the giant steering wheel" back
+  // as the same shot word for word, and once as "his hands pressed flat
+  // against the bar without turning it" — the problem, written in.
   return `REVISING YOUR SCENE'S SHOT
 
-Your scene's shot is already written. The user has asked the director for a change:
-
-"${ask.trim()}"
-
-The shot as it stands:
+Your scene's shot is already written, and has been rendered. Here it is as it stands:
 
 ${shot.trim()}
 
-Write the shot again with that change made, following every rule above. Keep what the request does not touch — the place, the people, the action, the camera and every quoted line, word for word — and keep to your scene's length. Where the request and your scene's outline disagree, the request wins. Return only the new shot.`;
+The user watched it and asked the director for a change:
+
+"${ask.trim()}"
+
+They are usually describing what came out wrong, so read it as the result they want: "fix that he's not turning the wheel" means that in the new shot he turns it, plainly, in the moment it belongs to. Find the sentences that have to change and rewrite them so the change is unmistakable — an action asked for is a clear physical action of its own, said outright, not implied. Returning the shot unchanged, or with the problem written in, is wrong.
+
+Keep what the request does not touch — the place, the people, the camera and every quoted line, word for word — follow every rule above, and keep to your scene's length. Where the request and your scene's outline disagree, the request wins. Return only the new shot.`;
 }
 
 type Block = (values: Record<string, ParamValue>) => string;

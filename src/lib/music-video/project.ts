@@ -527,13 +527,30 @@ export function parsePlan(reply: string, count: number): Plan {
     outline: Array.from(placed, (entry) => ({
       part: text(entry?.part),
       sings: entry?.sings === true,
-      place: text(entry?.place),
+      place: standalonePlace(text(entry?.place)),
       happens: text(entry?.happens),
       ...(Number(entry?.seconds) > 0 ? { seconds: Number(entry?.seconds) } : {}),
       lines: text(entry?.lines),
     })),
     shots: Array.from(placed, (entry) => text(entry?.shot)),
   };
+}
+
+/**
+ * A place sentence with its pointers to other scenes taken out.
+ *
+ * Each scene sees only its own place, word for word, and the planner is told
+ * so — and still wrote "the same concrete floor and yellow grid markings" for
+ * a garage it returned to, which the writer turned into "as before". The
+ * things are named; the "same" only points at a scene this one cannot see.
+ */
+export function standalonePlace(place: string): string {
+  return place
+    .replace(/,?\s*(?:just\s+)?(?:as|like)\s+(?:before|earlier|in (?:the )?(?:scene|shot) \d+|in the (?:first|last|previous|earlier) (?:scene|shot))\b/gi, "")
+    .replace(/\b(the|its|their|his|her)\s+same\s+/gi, "$1 ")
+    .replace(/\bthe same\s+/gi, "the ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 /**
@@ -815,7 +832,9 @@ export function composeLook(
     .join("\n\n")
     .trim();
   if (!story) return [described, releases ? planned.trim() : ""].filter(Boolean).join("\n\n");
-  return [described, storyLook(planned, values, filled)].filter(Boolean).join("\n\n");
+  return [described, withoutPictured(storyLook(planned, values, filled), described, values)]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /**
@@ -840,6 +859,36 @@ function storyLook(planned: string, values: Record<string, ParamValue>, filled: 
     })
     .join("\n\n")
     .trim();
+}
+
+/**
+ * A story planner's look without its own description of someone a picture
+ * already shows whole.
+ *
+ * The planner never sees the pictures, and the outline calls the pictured
+ * person by a plain name: a driver given in <Picture 1> was "The McLaren
+ * driver" in every scene, and the planner described him too — dark visor
+ * where the picture's was clear. Both went to every scene, and its director
+ * gave him one visor in one scene and both in the next. The describer's
+ * "The driver in <Picture 1>" says who the picture holds; a planner paragraph
+ * whose name ends in the same word is the same person, and the picture wins.
+ */
+function withoutPictured(planned: string, described: string, values: Record<string, ParamValue>): string {
+  const pictured = new Set<string>();
+  for (const match of described.matchAll(/(?:^|\n)\s*the\s+([^\n:<]{1,40}?)\s+(?:in|from|of)\s+<\s*picture\s+(\d+)\s*>/gi)) {
+    const keep = referenceKeep(values, Number(match[2]));
+    if (keep === "identity" || keep === "costume" || keep === "style") continue;
+    const head = match[1].toLowerCase().split(/\s+/).at(-1);
+    if (head) pictured.add(head);
+  }
+  if (pictured.size === 0) return planned;
+  return lookParagraphs(planned)
+    .filter((paragraph) => {
+      const label = paragraph.match(/^\s*([^:<\n]{1,60}):/)?.[1];
+      const head = label?.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(" ").at(-1);
+      return !head || !pictured.has(head);
+    })
+    .join("\n\n");
 }
 
 /**
