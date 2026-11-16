@@ -21,6 +21,9 @@ import {
 } from "@/lib/music-video/recover";
 import {
   askSnapshot,
+  carriesOn,
+  chainStale,
+  chainValues,
   composeLook,
   planRevision,
   restoreSnapshot,
@@ -51,10 +54,12 @@ import {
   plannedStorySeconds,
   requestedSeconds,
   PLAN_BRIEF,
+  sceneJoins,
   sceneLengths,
   splitSong,
   storyLengths,
   storyWindows,
+  withoutCuts,
   type PlannedKind,
 } from "@/lib/music-video/scenes";
 import { FPS } from "@/lib/workflows/minimax-common";
@@ -129,6 +134,11 @@ export interface MusicVideoController {
   /** Whether the director is busy with an ask, or writing shots. */
   asking: boolean;
   editLook: (look: string) => void;
+  /**
+   * Whether a multi-scene video's scene carries on from the end of the one
+   * before, rendered from its last second, or is drawn afresh after a cut.
+   */
+  editContinues: (index: number, continues: boolean) => void;
   /**
    * Give a scene pictures of its own, or with none, put it back on the
    * video's. Read when the scene is next sent, like every other edit. Takes
@@ -228,6 +238,8 @@ interface Options {
   sceneWorkflow: WorkflowSummary | undefined;
   /** What a scene with nothing to build from runs as. See `scenes.bare`. */
   bareSceneWorkflow?: WorkflowSummary;
+  /** What a scene that carries on from the one before runs as. See `scenes.continued`. */
+  continuedSceneWorkflow?: WorkflowSummary;
   stitchWorkflow: WorkflowSummary | undefined;
   upscaleWorkflow: WorkflowSummary | undefined;
   values: Record<string, ParamValue>;
@@ -322,11 +334,19 @@ function retimed(scenes: ProjectScene[]): ProjectScene[] {
 const failed = (job: Job | undefined) =>
   job !== undefined && ["error", "cancelled", "unknown"].includes(job.phase);
 
+/** A scene's run recorded against it, once sent. */
+const sentPatch = (sent: { promptId: string; continuedFrom?: string }): Partial<ProjectScene> => ({
+  promptId: sent.promptId,
+  continuedFrom: sent.continuedFrom,
+  waiting: undefined,
+});
+
 export function useMusicVideo({
   kind,
   workflow,
   sceneWorkflow,
   bareSceneWorkflow,
+  continuedSceneWorkflow,
   stitchWorkflow,
   upscaleWorkflow,
   values,
@@ -505,10 +525,21 @@ export function useMusicVideo({
       // A story whose planner chose its count has each run of scenes in one
       // place made into as few renders as fit; one whose count the user set
       // keeps the number they asked for.
-      const scenes =
+      const merged =
         story && project.values[CHOOSE_SCENE_COUNT_PARAM] === true
           ? mergeContinuousScenes(timed, lengths.max)
           : timed;
+      // Whether each scene carries on from the last: the director's call,
+      // unless the form settled it for every scene.
+      const joins = sceneJoins(project.values);
+      const scenes = story
+        ? merged.map((scene, index) => {
+            const continues =
+              index > 0 && (joins === "continuous" || (joins === "director" && scene.continues === true));
+            // One take, by what it is. See withoutCuts.
+            return { ...scene, continues, ...(continues ? { happens: withoutCuts(scene.happens ?? "") } : {}) };
+          })
+        : merged;
       setProject({
         ...project,
         look,
@@ -808,8 +839,15 @@ export function useMusicVideo({
       return project.planPromptId || project.shotsPromptId ? "planning" : "idle";
     }
     const sceneJobs = project.scenes.map(jobFor);
-    if (sceneJobs.every((job) => job?.phase === "done")) return "rendered";
-    if (sceneJobs.some((job) => job && !failed(job))) return "rendering";
+    // A scene waiting on the one before is part of the render; one carrying
+    // on from a take that is no longer used still has to be made again.
+    const behind = project.scenes.some((scene, index) => scene.waiting || chainStale(project, index));
+    if (!behind && sceneJobs.every((job) => job?.phase === "done")) return "rendered";
+    if (project.scenes.some((scene) => scene.waiting)) return "rendering";
+    if (sceneJobs.some((job) => job && !failed(job)) && !sceneJobs.every((job) => job?.phase === "done")) {
+      return "rendering";
+    }
+    if (behind) return "planned";
     return "planned";
   }, [busy, project, jobFor, final, stitchJob]);
 
@@ -955,6 +993,19 @@ export function useMusicVideo({
     setProject((previous) => (previous ? { ...previous, look } : previous));
   }, []);
 
+  const editContinues = useCallback((index: number, continues: boolean) => {
+    setProject((previous) =>
+      previous
+        ? {
+            ...previous,
+            scenes: previous.scenes.map((scene, i) =>
+              i === index ? { ...scene, continues: index > 0 && continues, waiting: undefined } : scene,
+            ),
+          }
+        : previous,
+    );
+  }, []);
+
   const editReferences = useCallback<MusicVideoController["editReferences"]>((index, references) => {
     setProject((previous) =>
       previous
@@ -1085,9 +1136,53 @@ export function useMusicVideo({
     [workflow],
   );
 
+  /**
+   * Send one scene to render. A scene that carries on from the one before is
+   * an Extend of that scene's clip, and is sent only once that clip exists:
+   * `waiting` comes back for one whose scene before has not finished, and the
+   * caller marks it to go when that one does.
+   */
   const submitScene = useCallback(
-    async (current: MusicVideoProject, index: number, fresh: boolean) => {
+    async (
+      current: MusicVideoProject,
+      index: number,
+      fresh: boolean,
+    ): Promise<{ promptId: string; continuedFrom?: string } | "waiting" | null> => {
       const scene = current.scenes[index];
+      // Under the first scene in the history, so a video's scenes read as one
+      // family rather than forty unrelated clips.
+      const first = current.scenes[0]?.promptId;
+      const options = {
+        ...modes,
+        derivedFrom: index > 0 ? first : undefined,
+        musicVideo: tagFor(current, "scene", index),
+      };
+
+      if (carriesOn(current, index)) {
+        if (!continuedSceneWorkflow) return null;
+        const before = current.scenes[index - 1];
+        const beforeJob = jobFor(before);
+        const output = savedVideo(beforeJob);
+        if (!output || !beforeJob) return "waiting";
+        // Into ComfyUI's input folder with its latent tail beside it — the
+        // same hand-off the Extend button makes.
+        const { ref, tail } = await api<{ ref: string; tail?: string | null }>("/api/remix", {
+          method: "POST",
+          body: JSON.stringify({
+            filename: output.filename,
+            subfolder: output.subfolder,
+            type: output.type,
+            tailOf: beforeJob.promptId,
+          }),
+        });
+        const values = chainValues(current, scene, index, scoped, { ref, tail: tail ?? null });
+        const known = new Set(continuedSceneWorkflow.params.map((param) => param.id));
+        for (const id of Object.keys(values)) if (!known.has(id)) delete values[id];
+        if (fresh) values.seed = -1;
+        const promptId = await jobs.submit(continuedSceneWorkflow, values, options);
+        return promptId ? { promptId, continuedFrom: beforeJob.promptId } : null;
+      }
+
       // Nothing for Reference to Video to build from: Text to Video, with
       // the values it has controls for.
       const bare = !sceneHasReferences(current, scene);
@@ -1099,17 +1194,12 @@ export function useMusicVideo({
         for (const id of Object.keys(values)) if (!known.has(id)) delete values[id];
       }
       if (fresh) values.seed = -1;
-      // Under the first scene in the history, so a video's scenes read as one
-      // family rather than forty unrelated clips.
-      const first = current.scenes[0]?.promptId;
-      return jobs.submit(target, values, {
-        ...modes,
-        derivedFrom: index > 0 ? first : undefined,
-        musicVideo: tagFor(current, "scene", index),
-      });
+      const promptId = await jobs.submit(target, values, options);
+      return promptId ? { promptId } : null;
     },
-    [sceneWorkflow, bareSceneWorkflow, scoped, jobs, modes],
+    [sceneWorkflow, bareSceneWorkflow, continuedSceneWorkflow, scoped, jobs, modes, jobFor],
   );
+
 
   /**
    * A scene whose brief never got written because the gateway was briefly
@@ -1129,14 +1219,14 @@ export function useMusicVideo({
       if (!job || job.phase !== "error" || !TRANSIENT.test(job.error ?? "")) return;
       if ((scene.retries ?? 0) >= MAX_RETRIES || retrying.current.has(job.promptId)) return;
       retrying.current.add(job.promptId);
-      void submitScene(project, index, false).then((promptId) => {
-        if (!promptId) return;
+      void submitScene(project, index, false).then((result) => {
+        if (!result || result === "waiting") return;
         setProject((previous) =>
           previous
             ? {
                 ...previous,
                 scenes: previous.scenes.map((s, i) =>
-                  i === index ? { ...s, promptId, retries: (s.retries ?? 0) + 1 } : s,
+                  i === index ? { ...s, ...sentPatch(result), retries: (s.retries ?? 0) + 1 } : s,
                 ),
               }
             : previous,
@@ -1164,7 +1254,9 @@ export function useMusicVideo({
       const scene = current.scenes[index];
       if (!scene) break;
       const job = jobFor(scene);
-      if (scene.promptId && !failed(job)) continue;
+      // A scene that carries on from a take of the scene before that the
+      // video no longer uses is rendered again, from the one it does.
+      if (scene.promptId && !failed(job) && !chainStale(current, index)) continue;
       // A scene put in by hand and not yet written: nothing to send.
       if (!scene.shot.trim()) {
         setError(
@@ -1172,16 +1264,25 @@ export function useMusicVideo({
         );
         break;
       }
-      const promptId = await submitScene(current, index, failed(job));
-      if (!promptId) {
+      let result: Awaited<ReturnType<typeof submitScene>>;
+      try {
+        result = await submitScene(current, index, failed(job));
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : `Scene ${index + 1} could not be sent.`);
+        break;
+      }
+      if (!result) {
         setError(`Scene ${index + 1} was refused — see the message above.`);
         break;
       }
+      // Carrying on from a scene that has not finished: it goes when that
+      // one does (see the chain below), and the scenes after it carry on.
+      const patch: Partial<ProjectScene> = result === "waiting" ? { waiting: true } : sentPatch(result);
       const recorded = (previous: MusicVideoProject | null) =>
         previous?.id === id
           ? {
               ...previous,
-              scenes: previous.scenes.map((s, i) => (i === index ? { ...s, promptId } : s)),
+              scenes: previous.scenes.map((s, i) => (i === index ? { ...s, ...patch } : s)),
             }
           : previous;
       // Into the ref as well as the state, so the next scene sees this one
@@ -1191,6 +1292,63 @@ export function useMusicVideo({
     }
   }, [project, jobFor, submitScene]);
 
+  /**
+   * The chain: a scene waiting on the one before it is sent once that one's
+   * clip is in, and given up — with the reason — if that one fails. Once per
+   * take of the scene before, so a slow answer is not sent twice.
+   */
+  const chained = useRef(new Set<string>());
+  useEffect(() => {
+    if (!project) return;
+    project.scenes.forEach((scene, index) => {
+      if (!scene.waiting || !carriesOn(project, index)) return;
+      const before = project.scenes[index - 1];
+      if (before.waiting) return;
+      const beforeJob = jobFor(before);
+      if (!before.promptId || failed(beforeJob)) {
+        setError(
+          `Scene ${index + 1} carries on from scene ${index}, which has no finished clip. Render scene ${index} again, then this one.`,
+        );
+        setProject((previous) =>
+          previous?.id === project.id
+            ? {
+                ...previous,
+                scenes: previous.scenes.map((s, i) => (i === index ? { ...s, waiting: undefined } : s)),
+              }
+            : previous,
+        );
+        return;
+      }
+      if (!savedVideo(beforeJob)) return;
+      const key = `${project.id}:${index}:${before.promptId}`;
+      if (chained.current.has(key)) return;
+      chained.current.add(key);
+      void submitScene(project, index, false)
+        .then((result) => {
+          if (!result || result === "waiting") {
+            chained.current.delete(key);
+            return;
+          }
+          setProject((previous) =>
+            previous?.id === project.id
+              ? {
+                  ...previous,
+                  stitchPromptId: undefined,
+                  upscaledStitchPromptId: undefined,
+                  scenes: previous.scenes.map((s, i) =>
+                    i === index ? { ...s, ...sentPatch(result), upscalePromptId: undefined } : s,
+                  ),
+                }
+              : previous,
+          );
+        })
+        .catch((cause: unknown) => {
+          chained.current.delete(key);
+          setError(cause instanceof Error ? cause.message : `Scene ${index + 1} could not be sent.`);
+        });
+    });
+  }, [project, jobFor, submitScene]);
+
   const redo = useCallback(
     async (index: number) => {
       if (!project) return;
@@ -1198,8 +1356,16 @@ export function useMusicVideo({
       if (old && (old.phase === "queued" || old.phase === "running")) {
         await jobs.cancel(old.promptId);
       }
-      const promptId = await submitScene(project, index, true);
-      if (!promptId) return;
+      let result: Awaited<ReturnType<typeof submitScene>>;
+      try {
+        result = await submitScene(project, index, true);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : `Scene ${index + 1} could not be sent.`);
+        return;
+      }
+      if (!result) return;
+      const patch: Partial<ProjectScene> =
+        result === "waiting" ? { waiting: true } : { ...sentPatch(result), upscalePromptId: undefined };
       setProject((previous) =>
         previous
           ? {
@@ -1208,9 +1374,7 @@ export function useMusicVideo({
               upscaledStitchPromptId: undefined,
               // Its upscale was of the take being put down, which stays in
               // `takesFor` with that upscale for picking back up.
-              scenes: previous.scenes.map((s, i) =>
-                i === index ? { ...s, promptId, upscalePromptId: undefined } : s,
-              ),
+              scenes: previous.scenes.map((s, i) => (i === index ? { ...s, ...patch } : s)),
             }
           : previous,
       );
@@ -1502,6 +1666,7 @@ export function useMusicVideo({
     undoAsk,
     asking,
     editLook,
+    editContinues,
     editReferences,
     editVoices,
     editOpener,

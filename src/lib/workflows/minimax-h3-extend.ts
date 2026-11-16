@@ -482,6 +482,18 @@ const TAIL_PARAM = "source_tail";
 const STORY_PARAM = "source_story";
 
 /**
+ * Save the new footage on its own rather than joined to the source.
+ *
+ * For a multi-scene video's scene that carries on from the one before (see
+ * `chainValues` in project.ts): the video's own join lays the scenes end to
+ * end, so a scene that came back with every scene before it inside would be
+ * played twice. From the latents the 22 carried frames are dropped as they
+ * are for the join; from a last frame — a tail ComfyUI has forgotten — the
+ * segment is kept whole, whose first frame repeats the source's last.
+ */
+const SEGMENT_ONLY_PARAM = "segment_only";
+
+/**
  * The story so far, for the director to read as background.
  *
  * Told as history it must not replay, never as the instruction: a segment given
@@ -523,6 +535,9 @@ function finalize(graph: ComfyGraph, values: Record<string, ParamValue>) {
 
   if (!source || tail !== source) {
     for (const id of LATENT_SEAM) delete graph[id];
+    // From the last frame the generated segment is all new but its first
+    // frame, which is the source's last again: one held frame at the join.
+    if (values[SEGMENT_ONLY_PARAM] === true) newPartOnly(graph, ["132", 0], ["132", 1]);
     return;
   }
 
@@ -532,6 +547,15 @@ function finalize(graph: ComfyGraph, values: Record<string, ParamValue>) {
   graph["105:14"].inputs.latent_image = ["150", 0];
   graph["131"].inputs["images.image1"] = ["151", 0];
   graph["135"].inputs.audio2 = ["152", 0];
+
+  if (values[SEGMENT_ONLY_PARAM] === true) newPartOnly(graph, ["151", 0], ["152", 0]);
+}
+
+/** Saves the given frames and sound alone, with the join to the source taken out. */
+function newPartOnly(graph: ComfyGraph, images: [string, number], audio: [string, number]) {
+  graph["137"].inputs.images = images;
+  graph["137"].inputs.audio = audio;
+  for (const id of ["131", "135", ...SILENT_SOURCE]) delete graph[id];
 }
 
 /**
@@ -589,6 +613,19 @@ const params: ParamDef[] = [
     group: "Source",
     revealedBy: TAIL_PARAM,
     targets: [director],
+  },
+  {
+    id: SEGMENT_ONLY_PARAM,
+    label: "Only the new part",
+    type: "toggle",
+    default: false,
+    help: "Save only the footage this run adds, not the source clip with it. A multi-scene video turns this on for a scene that carries on from the one before, since the video's join puts the scenes together itself.",
+    group: "Source",
+    // Shown only where something turned it on: a scene of a multi-scene
+    // video, its settings brought back into the form.
+    revealedBy: SEGMENT_ONLY_PARAM,
+    readBy: "finalize",
+    targets: [],
   },
   literalPromptParam(),
   rewriteModelParam(graph, [ids.director]),
@@ -656,6 +693,19 @@ export const minimaxH3Extend: WorkflowDef = {
     {
       name: "a tail left over from another clip",
       values: { source_video: "upload.mp4", [TAIL_PARAM]: "clip.mp4" },
+    },
+    {
+      name: "a scene carrying on, only the new part saved",
+      values: {
+        source_video: "clip.mp4",
+        [TAIL_PARAM]: "clip.mp4",
+        [STORY_PARAM]: "She walks along the pier.",
+        [SEGMENT_ONLY_PARAM]: true,
+      },
+    },
+    {
+      name: "only the new part asked for, but no tail",
+      values: { source_video: "clip.mp4", [SEGMENT_ONLY_PARAM]: true },
     },
     {
       name: "a generation with its latent tail, turbo",

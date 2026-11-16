@@ -163,6 +163,17 @@ export interface ProjectScene extends SceneWindow, Partial<OutlineScene> {
    * it is read off the scene's lines. See `openerOf`.
    */
   opener?: VoiceOpener;
+  /**
+   * For a scene that carries on from the one before: the run of that scene it
+   * was rendered from. A new take of the scene before leaves this one carrying
+   * on from a clip that is no longer in the video. See `chainStale`.
+   */
+  continuedFrom?: string;
+  /**
+   * Asked to render, and waiting for the scene before it to finish first: it
+   * starts from that scene's last frames, so it cannot be sent until they exist.
+   */
+  waiting?: boolean;
 }
 
 /** One thing asked of the director. */
@@ -233,6 +244,7 @@ export function planRevision(project: MusicVideoProject, ask: string): string {
               happens: scene.happens ?? "",
               lines: scene.lines ?? "",
               seconds: Math.round(scene.end - scene.start),
+              ...(carriesOn(project, index) ? { continues: true } : {}),
             }
           : {
               scene: index + 1,
@@ -531,6 +543,7 @@ export function parsePlan(reply: string, count: number): Plan {
       happens: text(entry?.happens),
       ...(Number(entry?.seconds) > 0 ? { seconds: Number(entry?.seconds) } : {}),
       lines: text(entry?.lines),
+      continues: entry?.continues === true,
     })),
     shots: Array.from(placed, (entry) => text(entry?.shot)),
   };
@@ -571,6 +584,7 @@ function readEntries(body: string): Record<string, unknown>[] {
       lines: stringField(chunk, "lines"),
       part: stringField(chunk, "part"),
       sings: /"sings"\s*:\s*true/.test(chunk),
+      continues: /"continues"\s*:\s*true/.test(chunk),
       place: stringField(chunk, "place"),
       happens: stringField(chunk, "happens"),
       shot: stringField(chunk, "shot"),
@@ -615,13 +629,17 @@ export function shotRequest(
       : {}),
     concept: project.concept ?? "",
     ...(project.kind === "story" && project.look?.trim() ? { look: project.look.trim() } : {}),
-    scenes: project.scenes.map((scene) => ({
+    scenes: project.scenes.map((scene, index) => ({
       part: scene.part ?? "",
       sings: scene.sings === true,
       place: scene.place ?? "",
       happens: scene.happens ?? "",
       ...(project.kind === "story"
-        ? { lines: scene.lines ?? "", timing: `${(scene.end - scene.start).toFixed(1)} s` }
+        ? {
+            lines: scene.lines ?? "",
+            timing: `${(scene.end - scene.start).toFixed(1)} s`,
+            ...(carriesOn(project, index) ? { continues: true } : {}),
+          }
         : { timing: sceneLine(scene) }),
     })),
   };
@@ -918,3 +936,68 @@ function unescapeJson(raw: string): string {
 
 /** Whether a scene is still to be (re)submitted. */
 export const needsRender = (scene: ProjectScene): boolean => !scene.promptId;
+
+/**
+ * Whether a scene is rendered carrying on from the one before it rather than
+ * drawn afresh: a multi-scene video's, marked to, and never the first.
+ */
+export function carriesOn(project: Pick<MusicVideoProject, "kind" | "scenes">, index: number): boolean {
+  return project.kind === "story" && index > 0 && project.scenes[index]?.continues === true;
+}
+
+/**
+ * Whether a scene that carries on was rendered from a take of the scene
+ * before that the video no longer uses — a redo, or another take picked — so
+ * its first second no longer matches the end of the scene ahead of it.
+ */
+export function chainStale(project: Pick<MusicVideoProject, "kind" | "scenes">, index: number): boolean {
+  const scene = project.scenes[index];
+  if (!carriesOn(project, index) || !scene?.promptId) return false;
+  return scene.continuedFrom !== project.scenes[index - 1]?.promptId;
+}
+
+/** The Extend control a chained scene's run turns on. See minimax-h3-extend.ts. */
+export const SEGMENT_ONLY_PARAM = "segment_only";
+
+/** Extend's "Story so far" limit. */
+const STORY_LIMIT = 4000;
+
+/**
+ * A scene that carries on, as an Extend run of the scene before it: the same
+ * prompt, length and seed its own render would have had, handed the earlier
+ * clip and its latent tail to start from, and only the new part saved.
+ *
+ * The story so far is the shots of the scenes this one continues, back to the
+ * start of the take, most recent kept when they run long: Extend's director
+ * reads them as what the clip already showed, so it keeps who and where
+ * without playing any of it again.
+ */
+export function chainValues(
+  project: MusicVideoProject,
+  scene: ProjectScene,
+  index: number,
+  scoped: string[],
+  source: { ref: string; tail: string | null },
+): Record<string, ParamValue> {
+  const own = sceneValues(project, scene, index, scoped);
+  const earlier: string[] = [];
+  for (let at = index - 1; at >= 0; at -= 1) {
+    const shot = project.scenes[at]?.shot?.trim();
+    if (shot) earlier.unshift(shot);
+    if (!carriesOn(project, at)) break;
+  }
+  let story = earlier.join("\n\n");
+  while (story.length > STORY_LIMIT && earlier.length > 1) {
+    earlier.shift();
+    story = earlier.join("\n\n");
+  }
+  return {
+    ...own,
+    source_video: source.ref,
+    // Extend takes the tail only when it is named after the clip; one
+    // ComfyUI no longer had (a restart forgets it) starts from the last frame.
+    source_tail: source.tail ?? "",
+    source_story: story.slice(-STORY_LIMIT),
+    [SEGMENT_ONLY_PARAM]: true,
+  };
+}

@@ -999,6 +999,11 @@ function Workbench({
     const bare = workflows.find((workflow) => workflow.id === picked?.scenes?.bare);
     return bare ? effectiveWorkflow(bare, turboOn) : undefined;
   }, [workflows, picked, turboOn]);
+  // And a scene that carries on from the one before. See `scenes.continued`.
+  const continuedSceneWorkflow = useMemo(() => {
+    const continued = workflows.find((workflow) => workflow.id === picked?.scenes?.continued);
+    return continued ? effectiveWorkflow(continued, turboOn) : undefined;
+  }, [workflows, picked, turboOn]);
   // One for each kind, both always mounted, so each keeps its own project
   // while the other is on screen. Only the one on screen is handed the
   // workflows it submits to.
@@ -1009,6 +1014,7 @@ function Workbench({
       workflow: active ? selected : undefined,
       sceneWorkflow: active ? modesWorkflow : undefined,
       bareSceneWorkflow: active ? bareSceneWorkflow : undefined,
+      continuedSceneWorkflow: active ? continuedSceneWorkflow : undefined,
       stitchWorkflow: active ? stitchWorkflow : undefined,
       // Whichever workflow the Upscale button sends a clip to.
       upscaleWorkflow: active

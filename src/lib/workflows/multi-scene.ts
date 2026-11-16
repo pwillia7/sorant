@@ -4,8 +4,11 @@ import {
   MAX_SHOTS_PER_SCENE,
   MAX_STORY_SCENES,
   MIN_SHOT_SECONDS,
+  SCENE_JOINS_PARAM,
+  sceneJoins,
   SCENES_HEADING,
   STORY_SCENE_SECONDS,
+  withoutCuts,
   type ShotRequest,
 } from "@/lib/music-video/scenes";
 import { picturesBlock, plannedVideo } from "./planned-video";
@@ -34,11 +37,11 @@ export const MULTI_SCENE_PLANNER = `You are the director of a short video told i
 
 You are given the user's idea, how many scenes it has — or the most it may have, when the number is yours to choose — and, when there are any, reference pictures.
 
-Each scene will be generated separately by a video model, as a short clip of the length you give it, with its own sound — voices, effects and the sound of the place. Nothing carries from one scene to the next except the pictures and the words written for it. A writer will later turn each of your lines into a full shot, seeing your whole outline but writing one scene at a time — so your outline is what makes the scenes one video.
+Each scene will be generated separately by a video model, as a short clip of the length you give it, with its own sound — voices, effects and the sound of the place. Nothing carries from one scene to the next except the pictures and the words written for it — unless the scene carries on from the one before it (see "continues"). A writer will later turn each of your lines into a full shot, seeing your whole outline but writing one scene at a time — so your outline is what makes the scenes one video.
 
 Return ONLY a JSON object, with no markdown fence and nothing before or after it:
 
-{"concept":"...","scenes":[{"scene":1,"place":"...","happens":"...","lines":"...","seconds":6}],"look":"..."}
+{"concept":"...","scenes":[{"scene":1,"continues":false,"place":"...","happens":"...","lines":"...","seconds":6}],"look":"..."}
 
 "concept": three to five sentences on the video as a whole — who is in it, what happens, how it opens, where it turns and how it ends, and the places it moves through in order.
 
@@ -51,6 +54,8 @@ Then exactly one entry per scene, in order, and "look" last, after every scene (
 "happens": who is in the scene and what they do, one short sentence for each thing that happens. The event, not the camera. Name everyone who is there.
 
 A scene can be more than one shot. It is made in one take, so its shots share the same room, light and people — which two separate scenes do not. When the story turns, inside one place and moment, to someone or something new — the person they are talking to, a reveal, a reaction — write "Cut to:" and then the new shot, in the same "happens": "The two men creep in through the front door. Cut to: the landlord, on the sofa, watching them." A cut must show something new: a closer or wider view of the same thing is the camera moving inside the shot, not a cut. At most ${MAX_SHOTS_PER_SCENE} shots in a scene. A new place, or a jump in time, is a new scene, never a cut — and only those: two scenes in a row in the same place, with no jump in time, are one scene, up to the longest the range allows. Each scene is a separate render that draws its people and place afresh, so every scene you split off is a chance for them to change.
+
+"continues": whether this scene carries straight on from the end of the scene before — see CARRYING ON. Always false for scene 1.
 
 "lines": what is said in the scene, as described below.
 
@@ -73,6 +78,17 @@ Vary the shots the way a film does — a view of where we are before closer ones
 Show technology and screens as solid, physical things: a screen set into a fridge door, a panel beside a door, a television on a wall, a phone in a hand. No holograms, projections or images floating in the air unless the user's idea asks for them — the video model draws them as see-through layers over the people and copies the people's faces into them. A screen shows words, a logo or a product, never a person.
 
 No picture label appears anywhere in "place", "happens" or "lines".
+
+CARRYING ON
+
+A scene with "continues": true is not drawn afresh: the video model is handed the last second of the scene before — its picture and its sound — and goes on from there. So its people, its things, its light and the camera are exactly as that scene left them, and the motion runs through the join with no cut. Use it when the story is one unbroken take that needs more than one scene to hold it: a point-of-view ride or run, a chase, a security camera, a walk and talk, one long continuous moment. Do not use it across a jump in time, for a cut to another view or another person, or into another place unless the camera travels there on screen.
+
+A scene that carries on:
+- starts at the exact moment the scene before ends, with the same camera, and its "happens" opens on that: "The bike bursts back out through the cottage's front wall and onto the street" — never the approach to something the scene before already reached.
+- has no "Cut to:". It is one continuous shot.
+- may travel into a new place on camera — out of a house, down the road, onto the cliff — and its "place" is where it arrives, but the light and time of day stay as they were.
+
+And the scene before one that carries on ends in the middle of its action, still moving — never with everyone at rest, unless the story rests there — so the next scene has something to carry on.
 
 THE LOOK
 
@@ -137,6 +153,22 @@ Nobody speaks anywhere in this video. Every "lines" is an empty string. Tell it 
 People may speak. "lines" holds what is said in the scene, one turn per line, each the speaker's name as "happens" uses it, a colon, and the words: "The girl: We're too late.\\nThe old fisherman: Then we run." Keep it short and spoken — at most three turns in a scene, each under about ten words. The video model needs about a second for every word: a line packed tighter than that comes back slurred. So the longest scene the range allows holds at most that many words, and a scene with a lot happening holds fewer. Not every scene needs words: leave "lines" an empty string where nobody speaks. Someone heard but not seen — a narrator, a commentator, a voice on a phone — has "(off-screen)" after their name: "The commentator (off-screen): And he's down." Never put stage directions, sounds or a picture label in "lines".`;
 }
 
+/** Whether scenes may carry on from each other, as the form sets it. See SCENE_JOINS_PARAM. */
+function joinsBlock(values: Record<string, ParamValue>): string {
+  const joins = sceneJoins(values);
+  if (joins === "continuous") {
+    return `HOW THE SCENES JOIN
+
+The whole video is one unbroken take. Every scene after the first carries on from the one before: "continues" is true for scenes 2 onward, no scene has a "Cut to:", and every scene but the last ends in the middle of its action.`;
+  }
+  if (joins === "cuts") {
+    return `HOW THE SCENES JOIN
+
+Every scene is drawn on its own, with a cut between scenes. "continues" is false for every scene.`;
+  }
+  return "";
+}
+
 /** Who the voice recordings belong to, so their lines are written for them by name. */
 function voicesBlock(values: Record<string, ParamValue>): string {
   if (values[DIALOGUE_PARAM] === false) return "";
@@ -159,14 +191,28 @@ function shotSystem(
   index: number,
   values: Record<string, ParamValue>,
 ): string {
-  const scene = outline.scenes[index];
+  // A scene that carries on is one take, whatever its line says. See withoutCuts.
+  const scenes = outline.scenes.map((s) => (s.continues ? { ...s, happens: withoutCuts(s.happens) } : s));
+  const scene = scenes[index];
   const oneLine = (lines: string | undefined) => (lines ?? "").trim().replace(/\s*\n\s*/g, " / ");
-  const lines = outline.scenes
+  const lines = scenes
     .map(
       (s, i) =>
-        `${i + 1}. [${s.timing}] ${s.place} — ${s.happens}${oneLine(s.lines) ? ` Lines: ${oneLine(s.lines)}` : ""}`,
+        `${i + 1}. [${s.timing}]${s.continues ? " (carries on from scene " + i + ")" : ""} ${s.place} — ${s.happens}${oneLine(s.lines) ? ` Lines: ${oneLine(s.lines)}` : ""}`,
     )
     .join("\n");
+  const before = scenes[index - 1];
+  const next = scenes[index + 1];
+  const carrying = [
+    scene.continues && before
+      ? `Your scene carries on from scene ${index}. The video model is given the last second of that scene's footage and goes on from it, so open at the exact moment it ends — "${before.happens}" — with the camera where it was, moving as it was. No establishing view, no cut, no approach to something that scene already reached: one continuous take, and you write no cut even if the line says "Cut to:". Keep the light and time of day as they were.`
+      : "",
+    next?.continues
+      ? `Scene ${index + 2} carries on from the end of yours, so end in the middle of the action, still moving — never with everyone come to rest.`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return [
     MULTI_SCENE_WRITER,
     picturesBlock(values),
@@ -180,10 +226,11 @@ function shotSystem(
     `THE OUTLINE\n\n${lines}`,
     `YOUR SCENE
 
-Scene ${index + 1} of ${outline.scenes.length}, ${scene.timing} long.
+Scene ${index + 1} of ${scenes.length}, ${scene.timing} long.
 Place: ${scene.place}
 What happens: ${scene.happens}
 ${scene.lines?.trim() ? `Lines:\n${scene.lines.trim()}` : "Lines: none — nobody speaks."}`,
+    carrying ? `HOW YOUR SCENE JOINS\n\n${carrying}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -192,7 +239,7 @@ ${scene.lines?.trim() ? `Lines:\n${scene.lines.trim()}` : "Lines: none — nobod
 const planned = plannedVideo({
   planner: MULTI_SCENE_PLANNER,
   noun: "a video",
-  blocks: [dialogueBlock, voicesBlock],
+  blocks: [dialogueBlock, voicesBlock, joinsBlock],
   shotSystem,
   unplanned: {
     message: "The scenes have not been counted yet. Press Plan again.",
@@ -343,6 +390,32 @@ const params: ParamDef[] = [
     targets: [],
   },
   {
+    id: SCENE_JOINS_PARAM,
+    label: "Between scenes",
+    type: "select",
+    default: "director",
+    options: [
+      {
+        value: "director",
+        label: "Director decides",
+        help: "The director carries a scene on from the one before where the story is one unbroken moment, and cuts where it moves on.",
+      },
+      {
+        value: "continuous",
+        label: "One continuous take",
+        help: "Every scene carries on from the end of the one before: a ride, a chase, a long walk.",
+      },
+      {
+        value: "cuts",
+        label: "A cut every time",
+        help: "Every scene is drawn on its own.",
+      },
+    ],
+    help: "A scene that carries on starts from the last second of the scene before — the same people, light and motion, with no cut — instead of being drawn again. It waits for that scene to finish before it renders, and a new take of that scene means rendering it again. You can switch it per scene before rendering.",
+    group: "Video",
+    targets: [director],
+  },
+  {
     id: DIALOGUE_PARAM,
     label: "Dialogue",
     type: "toggle",
@@ -365,6 +438,7 @@ const outline = (scenes: ShotRequest["scenes"], extra: Partial<ShotRequest> = {}
   JSON.stringify({ concept: "x", scenes, ...extra } satisfies ShotRequest);
 const SCENE_A = { part: "", sings: false, place: "a", happens: "b", lines: "Mara: Hi.", timing: "8.0 s" };
 const SCENE_B = { part: "", sings: false, place: "c", happens: "d", lines: "", timing: "5.0 s" };
+const SCENE_C = { ...SCENE_B, continues: true };
 
 export const multiScene: WorkflowDef = {
   id: "multi-scene",
@@ -374,7 +448,13 @@ export const multiScene: WorkflowDef = {
   hasAudio: true,
   graph: planned.graph,
   params,
-  scenes: { kind: "story", workflow: "minimax-h3-ref", stitch: "multi-scene-stitch", bare: "minimax-h3" },
+  scenes: {
+    kind: "story",
+    workflow: "minimax-h3-ref",
+    stitch: "multi-scene-stitch",
+    bare: "minimax-h3",
+    continued: "minimax-h3-extend",
+  },
   jumpsQueue: (values) => String(values.scene_outline ?? "").trim() !== "",
 
   finalizeCases: [
@@ -412,6 +492,22 @@ export const multiScene: WorkflowDef = {
         scene_list: `${SCENES_HEADING}\n2`,
         reference_image_1: "a.png",
         scene_outline: outline([SCENE_A, SCENE_B]),
+      },
+    },
+    {
+      name: "one continuous take",
+      values: {
+        prompt: "x",
+        scene_list: `${SCENES_HEADING}\n3`,
+        [SCENE_JOINS_PARAM]: "continuous",
+      },
+    },
+    {
+      name: "writing the shots, one carrying on",
+      values: {
+        prompt: "x",
+        scene_list: `${SCENES_HEADING}\n3`,
+        scene_outline: outline([SCENE_A, SCENE_B, SCENE_C]),
       },
     },
     {

@@ -626,6 +626,12 @@ export interface WorkflowDef {
      * `sceneHasReferences`.
      */
     bare?: string;
+    /**
+     * The workflow a scene that carries on from the one before runs as: an
+     * Extend of that scene's clip from its latent tail, keeping only the new
+     * part. See `carriesOn` in project.ts.
+     */
+    continued?: string;
   };
   graph: ComfyGraph;
   params: ParamDef[];

@@ -6,6 +6,7 @@ import {
   Circle,
   Clock3,
   Images,
+  Link2,
   LoaderCircle,
   MessageSquareQuote,
   Mic,
@@ -20,6 +21,8 @@ import type { MusicVideoController } from "@/hooks/use-music-video";
 import { withToken } from "@/lib/client";
 import { formatDuration, totalRenderMs, type Job } from "@/lib/jobs";
 import {
+  carriesOn,
+  chainStale,
   keepsVideoLook,
   MUSIC_VIDEO_FRAME_RATES,
   MUSIC_VIDEO_UPSCALE_SIZES,
@@ -1197,7 +1200,41 @@ function SceneCard({
               <MessageSquareQuote className="size-3" aria-hidden="true" /> lines
             </Badge>
           ) : null}
-          {sceneHasReferences(project, scene) ? null : (
+          {story && index > 0 ? (
+            <button
+              type="button"
+              aria-pressed={carriesOn(project, index)}
+              disabled={busy}
+              onClick={() => video.editContinues(index, !carriesOn(project, index))}
+              title={
+                carriesOn(project, index)
+                  ? `Carries on from the end of scene ${index}: rendered from its last second, with no cut, so this scene's own pictures and voices are not used. It waits for scene ${index} to finish, and a new take of scene ${index} means rendering this one again. Click to draw it on its own instead. Press Rewrite shot after switching, so the shot opens and ends the right way.`
+                  : `Drawn on its own, after a cut. Click to carry it on from the end of scene ${index} instead — same people, light and motion, no cut. Press Rewrite shot after switching, so the shot opens where scene ${index} ends.`
+              }
+              className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[11px] leading-4 font-medium
+                whitespace-nowrap transition-colors disabled:opacity-50
+                ${
+                  carriesOn(project, index)
+                    ? "border-accent/40 bg-accent/10 text-accent"
+                    : "border-dashed border-border-default text-fg-muted hover:text-fg"
+                }`}
+            >
+              <Link2 className="size-3" aria-hidden="true" />
+              {carriesOn(project, index) ? `carries on from ${index}` : "cut"}
+            </button>
+          ) : null}
+          {scene.waiting ? (
+            <Badge>
+              <Clock3 className="size-3" aria-hidden="true" /> waiting for scene {index}
+            </Badge>
+          ) : chainStale(project, index) ? (
+            <Badge tone="warning">
+              <span title={`Made from a take of scene ${index} the video no longer uses, so the join would jump. Render the video again to carry it on from the take in use.`}>
+                scene {index} changed
+              </span>
+            </Badge>
+          ) : null}
+          {carriesOn(project, index) || sceneHasReferences(project, scene) ? null : (
             <Badge>
               <span title="With no pictures and no voices, this scene is made from its words alone.">
                 Text to Video
@@ -1211,7 +1248,7 @@ function SceneCard({
                 size="xs"
                 icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
                 onClick={() => void video.redo(index)}
-                title="Render another take on a fresh seed, with the shot as it reads now. The takes you have stay to pick from."
+                title={`Render another take on a fresh seed, with the shot as it reads now. The takes you have stay to pick from.${carriesOn(project, index + 1) ? ` Scene ${index + 2} carries on from this one, so it will need rendering again too.` : ""}`}
               >
                 Redo
               </Button>

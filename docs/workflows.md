@@ -43,7 +43,7 @@ timing and encoding controls via `minimax-common.ts`.
 | `minimax-h3-ref2v` — remix | The source clip's frames, measured by `GetImageSizeAndCount` — length included |
 | `minimax-h3-extend` — extend | The source clip's **last frame**, measured by `GetImageSize` (whichever seam the run takes) |
 | `music-video` — music video | Aspect ratio, applied to every scene; each scene is a `minimax-h3-ref` run |
-| `multi-scene` — multi-scene video | Aspect ratio, applied to every scene; each scene is a `minimax-h3-ref` run, or `minimax-h3` when it has no pictures and no voices |
+| `multi-scene` — multi-scene video | Aspect ratio, applied to every scene; each scene is a `minimax-h3-ref` run, or `minimax-h3` when it has no pictures and no voices, or `minimax-h3-extend` when it carries on from the scene before |
 | `upscale` — upscale | The **Output size** control, applied to the clip's short side |
 | `image-edit` — the Edit button | The picture's own shape, at 1 MP |
 
@@ -544,6 +544,21 @@ What changes without a song:
    crash seen there ([music video's join](#music-video)) is not ruled out
    here. The upscaled join reads each upscale's file with sound rather than
    the silent copy.
+6. **Scenes that carry on.** A scene marked `continues` is not drawn
+   afresh: it is a `minimax-h3-extend` run (`scenes.continued`) of the scene
+   before, from that scene's latent tail, with **Only the new part**
+   (`segment_only`) on so the clip is just its own footage. The planner
+   decides per scene unless **Between scenes** says one continuous take or a
+   cut every time, and each scene card has a switch. It is one take, so a
+   continuing scene's "Cut to:" is turned into "Then" (`withoutCuts`), and the
+   writer is told to open where the scene before ends and, before a
+   continuing scene, to end mid-motion. Such a scene waits (`waiting`) for the
+   scene before to finish, which the browser watches for, so the tab has to
+   stay open for the chain to carry on. It records the take it carried on
+   from (`continuedFrom`); a new take of that scene leaves it stale
+   (`chainStale`), and the next render makes it again. It renders without
+   its own pictures or voices — the carried second holds the people. A tail
+   ComfyUI has forgotten (a restart) falls back to the last frame.
 
 Each kind keeps its own project in the browser, so a music video and a
 multi-scene video can be in progress at once.

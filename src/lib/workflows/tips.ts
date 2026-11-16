@@ -426,6 +426,14 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
         ],
       },
       {
+        heading: "Cuts, or one continuous take",
+        items: [
+          "A scene can carry on from the one before instead of cutting: it starts from that scene's last second, so the same people, light and motion run through with no cut. Good for a ride, a chase, a security camera, or one long moment.",
+          "Between scenes lets the director decide, or makes it one continuous take, or a cut every time. Each scene card's switch changes one scene; press Rewrite shot after, so the shot opens and ends the right way.",
+          "A scene that carries on waits for the one before it to finish, so keep the tab open while it renders. Redoing the scene before means rendering it again too.",
+        ],
+      },
+      {
         heading: "Time",
         items: [
           "Frame size and Steps are per scene: 1 MP takes about three times as long as 0.5 MP. Try at 0.5 MP, then remake the keeper.",

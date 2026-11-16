@@ -68,7 +68,34 @@ export interface OutlineScene {
    * words"; empty where nobody speaks.
    */
   lines?: string;
+  /**
+   * A multi-scene video's scene that carries straight on from the one before:
+   * the same moment and camera, rendered from the last second of that
+   * scene's own render rather than drawn afresh. See SCENE_JOINS_PARAM.
+   */
+  continues?: boolean;
 }
+
+/**
+ * How a multi-scene video's scenes meet: where the director decides, scene by
+ * scene, whether one carries straight on from the last; every scene carrying
+ * on, one unbroken take; or every scene its own render with a cut between.
+ *
+ * A scene that carries on is rendered from the end of the scene before — its
+ * last 22 frames and their sound, as the sampler left them — so the bike, the
+ * light and the motion go through the join instead of being drawn again. On
+ * a POV motorbike run told in four scenes, made apart, the bike was a
+ * different model in each and every scene ended parked and the next started
+ * cruising; chained, it was one bike and one ride (2026-11-16). The cost is
+ * order: a scene that carries on waits for the one before it to finish, and a
+ * new take of that one leaves it behind. See `chainStale`.
+ */
+export const SCENE_JOINS_PARAM = "scene_joins";
+export type SceneJoins = "director" | "continuous" | "cuts";
+export const sceneJoins = (values: Record<string, unknown>): SceneJoins => {
+  const value = values[SCENE_JOINS_PARAM];
+  return value === "continuous" || value === "cuts" ? value : "director";
+};
 
 /**
  * The outline, as the plan graph is handed it back to write the shots from.
@@ -204,6 +231,17 @@ export function sceneLengths(
  * made apart do not, and cost one run rather than two.
  */
 export const CUT_MARK = /\bcut to\s*:/gi;
+
+/**
+ * An outline line made one continuous shot: each "Cut to:" turned into the
+ * next thing that happens. For a scene that carries on from the one before,
+ * which is one take by what it is — the local planner wrote "Cut to:" into
+ * three of four such scenes anyway, and the writer, told to write a cut for
+ * each, wrote them.
+ */
+export function withoutCuts(happens: string): string {
+  return happens.replace(/\s*\bcut to\s*:\s*(\S)/gi, (_, first: string) => ` Then ${first.toLowerCase()}`).trim();
+}
 
 /** The most shots one scene's take is planned to hold. */
 export const MAX_SHOTS_PER_SCENE = 3;
