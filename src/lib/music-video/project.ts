@@ -597,6 +597,7 @@ export function shotRequest(
         }
       : {}),
     concept: project.concept ?? "",
+    ...(project.kind === "story" && project.look?.trim() ? { look: project.look.trim() } : {}),
     scenes: project.scenes.map((scene) => ({
       part: scene.part ?? "",
       sings: scene.sings === true,
@@ -655,9 +656,13 @@ export function sceneValues(
 
   const seed = Number(project.values.seed ?? -1);
   const idea = String(project.values.prompt ?? "").trim();
-  const look = keepsVideoLook(project, scene) ? (project.look?.trim() ?? "") : "";
+  const whole = keepsVideoLook(project, scene) ? (project.look?.trim() ?? "") : "";
+  const look =
+    project.kind === "story"
+      ? lookForScene(whole, [scene.place, scene.happens, scene.lines, scene.shot].join(" "))
+      : whole;
   const lookNote = look
-    ? `\n\n(How they look, in this scene and every other one in the video: ${look} — use these words as the observed detail in each subject's definition, and describe them no other way. They outrank anything below about anyone's appearance or how the video is rendered.)`
+    ? `\n\n(How ${project.kind === "story" ? "the people and things in this scene look, the same in every scene of the video" : "they look, in this scene and every other one in the video"}: ${look} — use these words as the observed detail in each subject's definition, and describe them no other way. They outrank anything below about anyone's appearance or how the video is rendered.)`
     : "";
   const own = scene.references ? referenceValues(scene.references, MUSIC_VIDEO_PICTURES) : {};
   const pictures = leadingReferences({ ...values, ...own }, MUSIC_VIDEO_PICTURES);
@@ -708,6 +713,37 @@ export function sceneValues(
     prompt: background("music video"),
     seed: sceneSeed,
   };
+}
+
+/**
+ * A story's look, cut to the paragraphs one scene has a use for: the footage,
+ * whatever a picture's describer wrote, and each named person or thing the
+ * scene's own words mention.
+ *
+ * Handed every paragraph, the scene's director put everyone in: a pit-lane
+ * scene of the driver alone came back with the engineer from the garage
+ * standing beside the cockpit, because he was in the list of how people look
+ * "in this scene and every other one". A name is found by its last word as
+ * well as whole — "the engineer" for "The race engineer", "the car" for "The
+ * McLaren car" — so a scene that shortens it still gets its description.
+ */
+export function lookForScene(look: string, sceneText: string): string {
+  const text = ` ${sceneText.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ")} `;
+  const has = (words: string) => words !== "" && text.includes(` ${words} `);
+  return lookParagraphs(look)
+    .filter((paragraph) => {
+      const label = paragraph.match(/^\s*([^:<\n]{1,60}):/)?.[1];
+      if (!label) return true;
+      const words = label
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .trim()
+        .replace(/^(the|a|an) /, "");
+      if (words === "footage" || words.startsWith("style")) return true;
+      return has(words) || has(words.split(" ").at(-1) ?? "");
+    })
+    .join("\n\n")
+    .trim();
 }
 
 /**
@@ -793,10 +829,7 @@ export function composeLook(
  * reason above.
  */
 function storyLook(planned: string, values: Record<string, ParamValue>, filled: number): string {
-  // A paragraph a line: the local planner separates them with one newline
-  // as often as with the blank line it is asked for.
-  return planned
-    .split(/\n+/)
+  return lookParagraphs(planned)
     .filter((paragraph) => {
       const named = [...paragraph.matchAll(/<\s*picture\s+(\d+)\s*>/gi)].map((match) => Number(match[1]));
       return named.every((index) => {
@@ -807,6 +840,22 @@ function storyLook(planned: string, values: Record<string, ParamValue>, filled: 
     })
     .join("\n\n")
     .trim();
+}
+
+/**
+ * A story look's paragraphs, one per person or thing and one for the footage.
+ *
+ * A paragraph a line: the local planner separates them with one newline as
+ * often as with the blank line it is asked for — and has run them all into
+ * one, "...white helmet. The McLaren F1 car: a 2016 ... The footage: ...",
+ * which reads as a single paragraph about the first person. So a sentence
+ * that opens on a name and a colon starts a new one too.
+ */
+export function lookParagraphs(look: string): string[] {
+  return look
+    .split(/\n+|(?<=[.!?])\s+(?=(?:The |A |An )?[\p{Lu}][^.:!?<\n]{0,50}:\s)/u)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 }
 
 /** A JSON string's contents, as written between its quotes. */

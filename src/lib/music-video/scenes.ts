@@ -97,6 +97,8 @@ export interface ShotRequest {
   ask?: string;
   /** The shots being revised as they stand, by scene index from 0. */
   current?: Record<number, string>;
+  /** How the people and recurring things look, for the writer's pronouns only. */
+  look?: string;
 }
 
 /**

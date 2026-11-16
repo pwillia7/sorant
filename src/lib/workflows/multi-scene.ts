@@ -60,7 +60,9 @@ WHAT MAKES A GOOD OUTLINE
 
 One story, not a collection of clips. It sets up who and where, builds or complicates it, and resolves it — across several scenes, or inside one. Give each key moment — a meeting, a turning point, a reveal, an ending — its own shot, in order.
 
-Each scene is made on its own, so it can only show what its own line says. Anything that has to carry across a cut — something someone is holding, an injury, rain, the time of day, who is in the room — is written again in every scene it is true of.
+Each scene is made on its own, so it can only show what its own line says. Anything that has to carry across a cut — something someone is holding, an injury, rain, the time of day, who is in the room — is written again in every scene it is true of. So is what an earlier scene changed: once a scene bolts something on, breaks it, crashes the car or takes off a coat, every later scene's "happens" says it is that way, or the next scene starts as if it never happened.
+
+When the idea says what kind of footage the video is — TV broadcast footage, a security camera, a phone video, a news report, a documentary — every scene is something that footage would hold, seen the way it sees: a race broadcast is its trackside, onboard and pit-lane cameras, its replays and its commentary booth, never a room no broadcast camera is in. A voice that belongs to that footage — a race commentator, a narrator, a news anchor — speaks across the video, not in one scene.
 
 Give each person one name or one plain description and use exactly those words for them in every scene. Use the names the user's idea gives. When it gives none, use a plain description — "the snooker player", "the old fisherman" — and never make up a name. In "place", "happens" and "lines", never describe anyone's face, hair, build or clothes: how everyone looks is written once, in "look", and given to every scene.
 
@@ -76,11 +78,12 @@ THE LOOK
 
 Every scene is drawn by a video model that has never seen the others. Anyone it is not told the look of comes out a different person in every scene — a different face, age and build each time — and the footage a different kind of footage. "look" is what holds them: it is given word for word to every scene, ahead of everything else about how anyone or anything looks.
 
-Write it after the scenes, as short paragraphs separated by a blank line, so that it describes the people exactly as the scenes name them:
+Write it after the scenes, as short paragraphs separated by a blank line, so that it describes the people and things exactly as the scenes name them. Each scene is handed only the paragraphs whose name its "happens" or "lines" uses, so name them the same way there:
 
 - One for each person in the story who is in no picture and is seen in any scene, under the exact words "happens" uses for them: "The snooker player: a heavyset man in his fifties with a red, puffy face, thinning sandy hair combed over, and heavy jowls; he wears a creased white shirt, a loose black bow tie and a grey waistcoat with one button undone." Apparent age, build, face, hair and facial hair, and every garment with its colour — concrete enough that two strangers drawing him would draw the same man, and never a famous person's name. Only how they look: never what they do, feel or hold, since every scene is a different moment. Take what the idea says about them, and decide the rest. Make each one easy to tell apart from the others at a glance. A crowd, or someone only passing, needs none.
 - When a picture is set to keep only who someone is, what they wear, once for the whole video: "The man in <Picture 1> wears ...".
-- Last, one paragraph for the footage, opening "The footage:": what it is shot on and when — 1980s broadcast videotape, 16 mm film, a phone video, a modern digital film — with its colour, contrast and grain, from what the idea asks for. Unless a picture sets the style: then leave it out.
+- One for each thing seen in more than one scene that has to look the same each time — a car, an animal, a robot, a prop the story turns on — under the exact words "happens" uses for it: "The McLaren car: a 2016 Formula 1 car in black and chrome with orange-red accents, ...". Its shape, colours, markings and size, and how it differs from the ordinary kind.
+- Last, one paragraph for the footage, opening "The footage:": what it is shot on and the year it is from, with its colour, contrast and grain — a modern HD television broadcast, a phone video, a 1990s camcorder tape, 16 mm film. The year is the one the idea sets the events in, never an older one: footage of a 2016 race is 2016 HD television, sharp and clean. Make it look old only when the idea is set then, or asks for it. Unless a picture sets the style: then leave it out.
 
 Never describe the face, hair or clothes of anyone in a picture that is kept whole: the picture defines them. With no pictures and nobody to describe, "look" is still the footage paragraph.`;
 
@@ -108,11 +111,13 @@ When it has "Cut to:", your scene is that many shots made in one take, in the or
 
 Write to your scene's length. It runs only the seconds it is given, and everything you write has to happen in that time: a gesture, a look or an entrance takes about a second and a half, and every spoken word about half a second more. A scene of 4 to 6 seconds is one or two actions, in three or four sentences. A longer one can hold a setup, a turn and a reaction, in up to six — up to eight with cuts. Add no events, gestures or lines the outline does not give the scene to fill time, and do not leave it with nothing happening either: if what the outline gives is done before the end, the last thing is a held reaction, not people standing still.
 
+Your scene picks up where the scenes before it left off. Whatever an earlier scene changed — something bolted on or broken off, a crash, a coat taken off, night fallen — is already so when yours starts, and you write it in, since the video model knows nothing of those scenes. Do not show any of it happening again, and do not undo it.
+
 Follow the outline's line for your scene. Open on its place as the outline gives it: keep its light, its colour and the things it names exactly as written, change none of them, and add only what this moment needs. The same place is seen in other scenes, and has to look the same in all of them. Take details from the user's idea, but only ones that belong to this moment.
 
 When your scene has lines, write every one of them into the shot, word for word, in double quotes, in the order given, each with who says it, to whom, and how — The old fisherman turns to the window and says quietly, "We're too late." Add no other words for anyone to say. A line whose speaker is marked (off-screen) is said in an off-screen voiceover: write that the voice is heard off-screen and that nobody on screen moves their lips to it. When your scene has no lines, nobody speaks in it: do not mention talking, speech or voices — but it still has the sound of its place and its action.
 
-Your scene is read on its own, so name its place and its people in full, with the same names the outline uses — never a name the outline does not use. Do not refer to other scenes, and never write "again", "still" or "returns". Never describe anyone's face, hair, age, build or clothes, and never how the footage looks — film, video, grain, colour grade: all of that is written once for the whole video and given to the video model with your shot, and anything you add competes with it. Name people by the outline's words alone. Someone in no picture is never called "from a picture". Never write a picture label such as <Picture 1> or "Picture 2". No captions, titles or credits unless the user's idea asks for them.
+Your scene is read on its own, so name its place and its people in full, with the same names the outline uses — never a name the outline does not use. Do not refer to other scenes, and never write "again", "still" or "returns". Never describe anyone's face, hair, age, build or clothes, or how a recurring thing the outline names looks, and never how the footage looks — film, video, grain, colour grade: all of that is written once for the whole video and given to the video model with your shot, and anything you add competes with it. Name people by the outline's words alone. Someone in no picture is never called "from a picture". Never write a picture label such as <Picture 1> or "Picture 2". No captions, titles or credits unless the user's idea asks for them.
 
 Keep the space between the camera and the people clear. Nothing passes in front of them or sits over them — no glass, smoke, screen, hologram or object crossing the frame — and light falls on them from the place, not from something glowing in front of them. Show technology as solid, physical things: a screen set into a fridge door, a panel beside a door, a television on a wall. Never write a hologram, a projection or an image floating in the air unless the user's idea asks for one: the video model draws it as a see-through layer over the people and copies their faces into it. A screen shows words, a logo or a product, never a person.
 
@@ -166,6 +171,12 @@ function shotSystem(
     MULTI_SCENE_WRITER,
     picturesBlock(values),
     `THE VIDEO\n\n${outline.concept}`,
+    // So "he" and "she" match who is described, without the writer
+    // describing them: one anchor wrote "beside him" of a woman, and the
+    // scene's director copied it.
+    outline.look?.trim()
+      ? `WHO IS WHO\n\nHow the people and things look is given to the video model with your shot. It is here only so you call each person "he" or "she" correctly and know which thing is which — never describe any of it:\n\n${outline.look.trim()}`
+      : "",
     `THE OUTLINE\n\n${lines}`,
     `YOUR SCENE
 
