@@ -243,6 +243,35 @@ export function withoutCuts(happens: string): string {
   return happens.replace(/\s*\bcut to\s*:\s*(\S)/gi, (_, first: string) => ` Then ${first.toLowerCase()}`).trim();
 }
 
+/**
+ * An outline's lines with every scene that is part of one take made one
+ * shot: each scene that carries on, and — when every scene after the first
+ * carries on — the first as well, since the whole video is then one take.
+ * Asked for one continuous take, the local planner still opened a helmet-cam
+ * TT run with "Cut to: a close-up of the dashboard", and three seconds of a
+ * speedometer from a camera the footage does not have went into the video
+ * (2026-11-16).
+ */
+export function asTakes<T extends { continues?: boolean; happens?: string }>(scenes: T[]): T[] {
+  const oneTake = scenes.length > 1 && scenes.slice(1).every((scene) => scene.continues === true);
+  return scenes.map((scene) =>
+    scene.continues || oneTake ? { ...scene, happens: withoutCuts(scene.happens ?? "") } : scene,
+  );
+}
+
+/**
+ * The last thing an outline line has happen: where its scene ends, for the
+ * scene that carries on from it to open on. The whole line was quoted once,
+ * and the writer opened the next scene back at its first sentence.
+ */
+export function lastBeat(happens: string | undefined): string {
+  const beats = withoutCuts(happens ?? "")
+    .split(/(?<=[.!?])\s+/)
+    .map((beat) => beat.trim())
+    .filter(Boolean);
+  return beats.at(-1) ?? "";
+}
+
 /** The most shots one scene's take is planned to hold. */
 export const MAX_SHOTS_PER_SCENE = 3;
 

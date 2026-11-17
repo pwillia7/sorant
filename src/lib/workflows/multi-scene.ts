@@ -5,10 +5,11 @@ import {
   MAX_STORY_SCENES,
   MIN_SHOT_SECONDS,
   SCENE_JOINS_PARAM,
+  asTakes,
+  lastBeat,
   sceneJoins,
   SCENES_HEADING,
   STORY_SCENE_SECONDS,
-  withoutCuts,
   type ShotRequest,
 } from "@/lib/music-video/scenes";
 import { picturesBlock, plannedVideo } from "./planned-video";
@@ -53,7 +54,7 @@ Then exactly one entry per scene, in order, and "look" last, after every scene (
 
 "happens": who is in the scene and what they do, one short sentence for each thing that happens. The event, not the camera. Name everyone who is there.
 
-A scene can be more than one shot. It is made in one take, so its shots share the same room, light and people — which two separate scenes do not. When the story turns, inside one place and moment, to someone or something new — the person they are talking to, a reveal, a reaction — write "Cut to:" and then the new shot, in the same "happens": "The two men creep in through the front door. Cut to: the landlord, on the sofa, watching them." A cut must show something new: a closer or wider view of the same thing is the camera moving inside the shot, not a cut. At most ${MAX_SHOTS_PER_SCENE} shots in a scene. A new place, or a jump in time, is a new scene, never a cut — and only those: two scenes in a row in the same place, with no jump in time, are one scene, up to the longest the range allows. Each scene is a separate render that draws its people and place afresh, so every scene you split off is a chance for them to change.
+A scene can be more than one shot. It is made in one take, so its shots share the same room, light and people — which two separate scenes do not. When the story turns, inside one place and moment, to someone or something new — the person they are talking to, a reveal, a reaction — write "Cut to:" and then the new shot, in the same "happens": "The two men creep in through the front door. Cut to: the landlord, on the sofa, watching them." A cut must show something new: a closer or wider view of the same thing is the camera moving inside the shot, not a cut. When the idea fixes the camera — a helmet or chest camera, a GoPro, a dashcam, a security camera, a phone held by someone in the scene, one take — no scene has a "Cut to:" at all: a close-up of a dashboard or a view from the roadside is a camera that footage does not have. At most ${MAX_SHOTS_PER_SCENE} shots in a scene. A new place, or a jump in time, is a new scene, never a cut — and only those: two scenes in a row in the same place, with no jump in time, are one scene, up to the longest the range allows. Each scene is a separate render that draws its people and place afresh, so every scene you split off is a chance for them to change.
 
 "continues": whether this scene carries straight on from the end of the scene before — see CARRYING ON. Always false for scene 1.
 
@@ -86,9 +87,11 @@ A scene with "continues": true is not drawn afresh: the video model is handed th
 A scene that carries on:
 - starts at the exact moment the scene before ends, with the same camera, and its "happens" opens on that: "The bike bursts back out through the cottage's front wall and onto the street" — never the approach to something the scene before already reached.
 - has no "Cut to:". It is one continuous shot.
-- may travel into a new place on camera — out of a house, down the road, onto the cliff — and its "place" is where it arrives, but the light and time of day stay as they were.
+- may travel into a new place on camera — out of a house, down the road, onto the cliff — and its "place" is where it arrives, but the light and time of day stay as they were. Its "happens" says how it gets there: "The bike tears down the hallway and bursts out through the back wall into a sunlit courtyard."
 
 And the scene before one that carries on ends in the middle of its action, still moving — never with everyone at rest, unless the story rests there — so the next scene has something to carry on.
+
+Where one scene ends and the next carries on is a seam, not a beat of the story: put it in plain motion — on the open road between two crashes, mid-run down a corridor — never at an impact or halfway through something. A scene that hits something takes it all the way through, in its own "happens": the bike hits the wall, bursts through the house and out the far side into the garden, still going. A line that ends at the hit comes back with the bike stopped against it, and the next scene has nothing moving to carry on. When the idea has something keep going — through everything, without stopping — the last scene ends with it still going. And keep a long take busy: when the idea is one thing after another, every scene has its share of them, and none is only the run-up to the next.
 
 THE LOOK
 
@@ -159,7 +162,11 @@ function joinsBlock(values: Record<string, ParamValue>): string {
   if (joins === "continuous") {
     return `HOW THE SCENES JOIN
 
-The whole video is one unbroken take. Every scene after the first carries on from the one before: "continues" is true for scenes 2 onward, no scene has a "Cut to:", and every scene but the last ends in the middle of its action.`;
+The whole video is one unbroken take. Every scene after the first carries on from the one before: "continues" is true for scenes 2 onward, no scene has a "Cut to:", and every scene but the last ends in the middle of its action.
+
+The scenes are only where the take is cut into renders, so cut it where nothing is happening: each scene but the last ends in plain motion — on the open road, between two crashes — never as it hits something. Whatever a scene hits, it goes through and out the far side in that same scene.
+
+Keep the take busy. When the idea is one thing after another — crash after crash, obstacle after obstacle — every scene has its share, something new every three or four seconds — the first scene too, from its first few seconds — and no scene is only the way to the next one: a run-up, a turn, a stretch of road on its own is the start of the scene that has the crash in it. Put each thing that is hit in the way, across the road ahead, rather than at the side: the video model steers around what it can, and a car parked at the kerb comes back as a near miss.`;
   }
   if (joins === "cuts") {
     return `HOW THE SCENES JOIN
@@ -191,8 +198,8 @@ function shotSystem(
   index: number,
   values: Record<string, ParamValue>,
 ): string {
-  // A scene that carries on is one take, whatever its line says. See withoutCuts.
-  const scenes = outline.scenes.map((s) => (s.continues ? { ...s, happens: withoutCuts(s.happens) } : s));
+  // A scene in a take is one shot, whatever its line says. See asTakes.
+  const scenes = asTakes(outline.scenes);
   const scene = scenes[index];
   const oneLine = (lines: string | undefined) => (lines ?? "").trim().replace(/\s*\n\s*/g, " / ");
   const lines = scenes
@@ -205,10 +212,15 @@ function shotSystem(
   const next = scenes[index + 1];
   const carrying = [
     scene.continues && before
-      ? `Your scene carries on from scene ${index}. The video model is given the last second of that scene's footage and goes on from it, so open at the exact moment it ends — "${before.happens}" — with the camera where it was, moving as it was. No establishing view, no cut, no approach to something that scene already reached: one continuous take, and you write no cut even if the line says "Cut to:". Keep the light and time of day as they were.`
+      ? `Your scene carries on from scene ${index}. The video model is given the last second of that scene's footage and goes on from it, and its last moment is "${lastBeat(before.happens)}" — so open just after that, with the camera where it was, moving as it was. That moment is already on screen: do not write it again, even where your own line opens on it — start from what comes after. No establishing view, no cut, no approach to something that scene already reached: one continuous take, and you write no cut even if the line says "Cut to:". Keep the light and time of day as they were.
+
+So your scene does not open on its place. Its place is where the camera arrives, and the video model draws only what you write on the way there: say how the camera gets from where it was into the place — round the bend, down the lane, out through the wall — and about when it is in it — "At about 3 seconds, the bike sweeps out between the hedges onto ..." — and give the place there, its light and things as the outline gives them, before anything happens in it. Something the camera goes through — a wall, a car, a house — it goes all the way through and out the other side, on screen, still moving: say what it comes out into. A shot that stops at the hit comes back with the camera stopped there.`
       : "",
     next?.continues
-      ? `Scene ${index + 2} carries on from the end of yours, so end in the middle of the action, still moving — never with everyone come to rest.`
+      ? `Scene ${index + 2} carries on from the end of yours, so end in the middle of the action, still moving — never with everyone come to rest, and never stopped against something. When your line ends as it hits something, end your scene going through it, still moving.`
+      : "",
+    scene.continues || next?.continues
+      ? `Your scene is part of one long take, so fill its ${scene.timing}: put about when each thing in your line happens — "At about 4 seconds, ..." — spread across the whole scene, the first within its first two seconds and the last within its last three, so it is never just travelling with nothing happening. The video model runs ahead of the times it is given, so leave no more than four seconds between two things. When something is hit and gone through, put it in the way first — across the road ahead, blocking it with no gap around it, not parked at the side for the camera to swerve into, even where your line has it parked at the kerb — and say what becomes of it as the camera goes through: the bike rides up over the car's bonnet and roof, crushing them flat, or bursts through its windows and cabin and out the far door; the wall gives way in a spray of bricks. A swerve into something at the roadside, a clip, a strike or a scrape comes back as a near miss.`
       : "",
   ]
     .filter(Boolean)

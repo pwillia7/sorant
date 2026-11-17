@@ -426,8 +426,15 @@ ${lines.join("\n")}`;
  * choosing, that the number is its own — and the range the user allows each
  * one. The planner chooses each one's length within it.
  */
-export function storySceneList(count: number, lengths: SceneLengths, chooseCount = false): string {
-  const scenes = chooseCount
+export function storySceneList(
+  count: number,
+  lengths: SceneLengths,
+  chooseCount = false,
+  oneTake = false,
+): string {
+  const scenes = chooseCount && oneTake
+    ? `The video has as many scenes as its story needs: one, or more, up to ${MAX_STORY_SCENES} at the very most. The whole video is one take, with no cuts, split into scenes only because one render holds no more than the longest a scene may be: a scene is as much of the take as fits in one. Number the scenes from 1 with none skipped.`
+    : chooseCount
     ? `The video has as many scenes as its story needs: one, or more, up to ${MAX_STORY_SCENES} at the very most. A scene is one place and one moment, made in one take, and a take can hold up to ${MAX_SHOTS_PER_SCENE} shots: a reveal, a reaction, or a cut to the person being spoken to is a "Cut to:" inside its scene, not a new scene. Only a new place, or a jump in time, needs a new scene. So a story that happens in one place and moment, and fits the longest a scene may be, is one scene — a single take with its cuts — and that is the best way to tell it, since a single take keeps the room, the light and the people exactly the same. Give nothing a scene that only repeats another or fills time; a short idea is a short video. Number the scenes from 1 with none skipped.`
     : count === 1
       ? `The video is one scene long: a single take, with up to ${MAX_SHOTS_PER_SCENE} shots inside it. Return exactly one entry.`
@@ -441,11 +448,15 @@ export function storySceneList(count: number, lengths: SceneLengths, chooseCount
     lengths.min === lengths.max
       ? `Every scene is ${lengths.min} seconds long: give each one exactly that, and plan only what fits in it.`
       : `Each scene is from ${lengths.min} to ${lengths.max} seconds long — no shorter and no longer. Plan only what fits in that.${singleTake}`;
+  // The local planner twice wrote "concept" and then "look", with no scenes
+  // at all, under a long prompt (2026-11-16); this is the last thing it reads.
   return `${SCENES_HEADING}
 
 ${scenes}
 
-${range}`;
+${range}
+
+Return "concept", then "scenes" with every scene in it, then "look" last.`;
 }
 
 function describeEnergy(energy: number): string {

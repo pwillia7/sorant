@@ -431,6 +431,7 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
           "A scene can carry on from the one before instead of cutting: it starts from that scene's last second, so the same people, light and motion run through with no cut. Good for a ride, a chase, a security camera, or one long moment.",
           "Between scenes lets the director decide, or makes it one continuous take, or a cut every time. Each scene card's switch changes one scene; press Rewrite shot after, so the shot opens and ends the right way.",
           "A scene that carries on waits for the one before it to finish, so keep the tab open while it renders. Redoing the scene before means rendering it again too.",
+          "In one continuous take there are no cuts at all, even in the first scene. Where one scene hands over to the next is best in plain motion. A scene that ends as the bike hits a wall comes back with the bike stopped against it, so if you edit a line, take each crash all the way through inside its own scene.",
         ],
       },
       {

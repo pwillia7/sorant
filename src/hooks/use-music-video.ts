@@ -59,7 +59,7 @@ import {
   splitSong,
   storyLengths,
   storyWindows,
-  withoutCuts,
+  asTakes,
   type PlannedKind,
 } from "@/lib/music-video/scenes";
 import { FPS } from "@/lib/workflows/minimax-common";
@@ -533,12 +533,12 @@ export function useMusicVideo({
       // unless the form settled it for every scene.
       const joins = sceneJoins(project.values);
       const scenes = story
-        ? merged.map((scene, index) => {
-            const continues =
-              index > 0 && (joins === "continuous" || (joins === "director" && scene.continues === true));
-            // One take, by what it is. See withoutCuts.
-            return { ...scene, continues, ...(continues ? { happens: withoutCuts(scene.happens ?? "") } : {}) };
-          })
+        ? asTakes(
+            merged.map((scene, index) => ({
+              ...scene,
+              continues: index > 0 && (joins === "continuous" || (joins === "director" && scene.continues === true)),
+            })),
+          )
         : merged;
       setProject({
         ...project,
@@ -895,7 +895,7 @@ export function useMusicVideo({
         {
           ...values,
           prompt: String(values.prompt ?? "").trim() || "A short story told in a few scenes.",
-          scene_list: storySceneList(count, lengths, choosing),
+          scene_list: storySceneList(count, lengths, choosing, sceneJoins(values) === "continuous"),
         },
         {
           localDirector: modes.localDirector,
