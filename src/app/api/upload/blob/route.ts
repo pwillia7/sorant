@@ -36,6 +36,7 @@ export async function POST(request: Request) {
   if (denied) return denied;
 
   let pathname: string | undefined;
+  let stored: string | undefined;
   try {
     const body = (await request.json()) as { pathname?: string; name?: string };
     pathname = body.pathname?.trim();
@@ -49,7 +50,14 @@ export async function POST(request: Request) {
       throw new ParamError("That is not an upload this app made.", "file");
     }
 
-    const blob = await get(pathname, { access: "private", useCache: false });
+    // get() puts the pathname into the store's URL as it is, so a name with a
+    // "#", "?" or "%" in it — "clip #2.mp4" — asked for a different file, or
+    // none, and the upload looked expired. Each segment is encoded first.
+    const blob = await get(encodedPath(pathname), {
+      access: "private",
+      useCache: false,
+    });
+    if (blob) stored = blob.blob.url;
     if (!blob || blob.statusCode !== 200) {
       throw new ParamError(
         "The upload was not found — it may have expired. Try again.",
@@ -94,9 +102,15 @@ export async function POST(request: Request) {
   } finally {
     // Best effort, and never the reason a claim fails: the copy is what
     // mattered. Anything this misses is swept by a later claim.
-    if (pathname) await del(pathname).catch(() => undefined);
+    const target = stored ?? pathname;
+    if (target) await del(target).catch(() => undefined);
     await sweepAbandoned().catch(() => undefined);
   }
+}
+
+/** A store pathname as it has to appear in the store's URL. */
+function encodedPath(pathname: string): string {
+  return pathname.split("/").map(encodeURIComponent).join("/");
 }
 
 /** Deletes uploads nobody claimed. See ABANDONED_AFTER_MS. */
@@ -105,6 +119,6 @@ async function sweepAbandoned(): Promise<void> {
   const cutoff = Date.now() - ABANDONED_AFTER_MS;
   const stale = blobs
     .filter((blob) => new Date(blob.uploadedAt).getTime() < cutoff)
-    .map((blob) => blob.pathname);
+    .map((blob) => blob.url);
   if (stale.length > 0) await del(stale);
 }
