@@ -41,6 +41,26 @@ export interface StitchScene {
    * multi-scene join. See `multiSceneStitch`.
    */
   sound?: string;
+  /**
+   * Where this scene starts in the join's `soundtrack`, in seconds: its sound
+   * is that stretch of it. See `multiSceneStitch`.
+   */
+  from?: number;
+}
+
+/**
+ * A clip someone uploaded, in the input folder, by the name they gave it —
+ * which may have anything in it ("#", brackets, "⧸"), so only what could
+ * reach outside the folder is refused. ComfyUI checks it is there.
+ */
+function isSourceName(file: string): boolean {
+  return (
+    /\.(mp4|webm|mov|mkv|m4v)$/i.test(file) &&
+    !file.includes("..") &&
+    !file.startsWith("/") &&
+    !file.includes("\\") &&
+    !/[\u0000-\u001f]/.test(file)
+  );
 }
 
 /** A name in output or input, nothing that climbs out of either. */
@@ -66,13 +86,22 @@ export function parseScenes(value: ParamValue | undefined): StitchScene[] {
     const file = String((scene as StitchScene)?.file ?? "");
     const seconds = Number((scene as StitchScene)?.seconds);
     const sound = (scene as StitchScene)?.sound;
+    const from = (scene as StitchScene)?.from;
     if (!isClipName(file) || (sound !== undefined && !isClipName(String(sound)))) {
       throw new ParamError("One of the scenes is not a clip this can join.", "scenes");
     }
     if (!(seconds > 0)) {
       throw new ParamError("One of the scenes has no length.", "scenes");
     }
-    return sound === undefined ? { file, seconds } : { file, seconds, sound: String(sound) };
+    if (from !== undefined && !(Number(from) >= 0)) {
+      throw new ParamError("One of the scenes starts before its soundtrack does.", "scenes");
+    }
+    return {
+      file,
+      seconds,
+      ...(sound !== undefined ? { sound: String(sound) } : {}),
+      ...(from !== undefined ? { from: Number(from) } : {}),
+    };
   });
 }
 
@@ -226,9 +255,28 @@ export const musicVideoStitch: WorkflowDef = {
  * scene's length before they are joined into one track for `complete_audio`.
  * It is all scenes or none: a track only part made of `sound` clips would
  * have nothing to fill the rest.
+ *
+ * A `soundtrack` clip goes further: every scene is a stretch of it, from its
+ * `from` for its `seconds`, and the sound is cut out of one read of it. A long
+ * Character swap has one — every segment is cut from the same clip by time and
+ * keeps that clip's sound — so its join reads the clip's own sound rather
+ * than 52 segments' copies of it, each re-encoded on the way. Those wandered
+ * 20 ms either side of the clip's even before any upscale (2026-11-17). By
+ * stretch and not one track from the top, because a segment ending at a
+ * shot's exact cut can come out a frame short of its plan, and its picture
+ * skips that frame of the clip: the sound skips with it and stays in sync.
+ * So `seconds` has to be each clip's real length here. Unset, the loader is
+ * taken out.
  */
+const SOUNDTRACK_NODE = "soundtrack";
+
 const ownSoundGraph: ComfyGraph = {
   [LIST_NODE]: graph[LIST_NODE],
+  [SOUNDTRACK_NODE]: {
+    class_type: "LoadAudio",
+    inputs: { audio: "" },
+    _meta: { title: "Load Audio (the clip under every scene)" },
+  },
   [JOIN_NODE]: {
     class_type: "ConcatenateVideo",
     inputs: { codec: "auto" },
@@ -254,7 +302,18 @@ export const multiSceneStitch: WorkflowDef = {
   hasAudio: true,
   tool: true,
   graph: ownSoundGraph,
-  params: [params[0]],
+  params: [
+    params[0],
+    {
+      id: "soundtrack",
+      label: "Soundtrack",
+      type: "written",
+      default: "",
+      maxLength: 300,
+      group: "Scenes",
+      targets: [{ node: SOUNDTRACK_NODE, input: "audio" }],
+    },
+  ],
 
   finalizeCases: [
     {
@@ -290,6 +349,46 @@ export const multiSceneStitch: WorkflowDef = {
       },
     },
     {
+      name: "a long swap under its clip's own sound",
+      values: {
+        soundtrack: "Tiktok⧸Reels clip #2 [vDIThTS8DeE].mp4",
+        scenes: JSON.stringify([
+          { file: "video/a.mp4 [output]", seconds: 5.125, from: 0 },
+          { file: "video/b-audio.mp4 [output]", seconds: 4.208, from: 5.125 },
+          { file: "video/c-audio.mp4 [output]", seconds: 2.5, from: 9.375 },
+        ]),
+      },
+    },
+    {
+      name: "a soundtrack and each scene's own sound at once",
+      values: {
+        soundtrack: "clip.mp4",
+        scenes: JSON.stringify([
+          { file: "video/a-audio.mp4 [output]", seconds: 5.125, sound: "video/a.mp4 [output]" },
+        ]),
+      },
+      rejects: "not both",
+    },
+    {
+      name: "a soundtrack with a scene that does not say where it starts",
+      values: {
+        soundtrack: "clip.mp4",
+        scenes: JSON.stringify([
+          { file: "video/a.mp4 [output]", seconds: 5.125, from: 0 },
+          { file: "video/b.mp4 [output]", seconds: 4.25 },
+        ]),
+      },
+      rejects: "where in the soundtrack",
+    },
+    {
+      name: "a soundtrack that climbs out of the input folder",
+      values: {
+        soundtrack: "../secrets.mp4",
+        scenes: JSON.stringify([{ file: "video/a.mp4 [output]", seconds: 5.125, from: 0 }]),
+      },
+      rejects: "not a clip this can read",
+    },
+    {
       name: "only some scenes with another clip's sound",
       values: {
         scenes: JSON.stringify([
@@ -321,6 +420,20 @@ export const multiSceneStitch: WorkflowDef = {
     if (withSound > 0 && withSound < scenes.length) {
       throw new ParamError("Either every scene takes its sound from another clip, or none does.", "scenes");
     }
+    const track = String(values.soundtrack ?? "");
+    if (!track) {
+      delete graph[SOUNDTRACK_NODE];
+    } else {
+      if (!isSourceName(track)) {
+        throw new ParamError("The soundtrack is not a clip this can read.", "soundtrack");
+      }
+      if (withSound > 0) {
+        throw new ParamError("A join has one soundtrack or each scene's own sound, not both.", "soundtrack");
+      }
+      if (scenes.some((scene) => scene.from === undefined)) {
+        throw new ParamError("Every scene has to say where in the soundtrack it starts.", "scenes");
+      }
+    }
     let soundtrack: [string, number] | null = null;
     scenes.forEach((scene, index) => {
       const load = `load_${index}`;
@@ -331,17 +444,28 @@ export const multiSceneStitch: WorkflowDef = {
       };
       graph[JOIN_NODE].inputs[`videos.video${index}`] = [load, 0];
 
-      if (scene.sound === undefined) return;
-      const sound = `sound_${index}`;
+      // The scene's sound: its stretch of the soundtrack, or its own clip's
+      // from the top, trimmed to the scene either way.
+      let source: [string, number];
+      let start = 0;
+      if (track) {
+        source = [SOUNDTRACK_NODE, 0];
+        start = scene.from ?? 0;
+      } else if (scene.sound !== undefined) {
+        const sound = `sound_${index}`;
+        graph[sound] = {
+          class_type: "LoadAudio",
+          inputs: { audio: scene.sound },
+          _meta: { title: `Load Audio (scene ${index + 1})` },
+        };
+        source = [sound, 0];
+      } else {
+        return;
+      }
       const trim = `sound_trim_${index}`;
-      graph[sound] = {
-        class_type: "LoadAudio",
-        inputs: { audio: scene.sound },
-        _meta: { title: `Load Audio (scene ${index + 1})` },
-      };
       graph[trim] = {
         class_type: "TrimAudioDuration",
-        inputs: { audio: [sound, 0], start_index: 0, duration: scene.seconds },
+        inputs: { audio: source, start_index: start, duration: scene.seconds },
         _meta: { title: `Trim Audio Duration (scene ${index + 1})` },
       };
       if (soundtrack === null) {

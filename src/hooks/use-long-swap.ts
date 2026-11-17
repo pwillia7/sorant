@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JobsController } from "@/hooks/use-jobs";
 import { api, ApiError, withToken } from "@/lib/client";
+import { isSilentClip } from "@/lib/audio-track";
 import type { Job, JobOutput, MusicVideoPart, MusicVideoTag } from "@/lib/jobs";
 import type { RunModes } from "@/lib/workflows/modes";
 import {
@@ -360,6 +361,38 @@ export function clipRef(job: Job | undefined): string | null {
   if (!saved) return null;
   const path = saved.subfolder ? `${saved.subfolder}/${saved.filename}` : saved.filename;
   return `${path} [output]`;
+}
+
+/**
+ * The clip the swap was made from, for its sound to run under the join: every
+ * segment is a stretch of it cut by time, and keeps its sound. Empty for a
+ * clip stored as having none, which LoadAudio could not read.
+ */
+function soundtrackOf(project: LongSwapProject): string {
+  const source = String(project.values.source_video ?? "");
+  return source && !isSilentClip(source) ? source : "";
+}
+
+/**
+ * How long a segment's take really is: what ComfyUI measured of it, or the
+ * segment's plan where that was not kept. They differ by a frame where a
+ * segment ends at a shot's exact cut, and a join that cuts each segment's
+ * sound from the clip has to cut it to the picture's length.
+ */
+function takeSeconds(job: Job | undefined, project: LongSwapProject, index: number): number {
+  const saved = job?.outputs.find((file) => clipRef(job) === `${file.subfolder ? `${file.subfolder}/` : ""}${file.filename} [output]`);
+  const measured = saved?.metadata?.duration;
+  if (typeof measured === "number" && measured > 0) return measured;
+  return segmentFrames(project.segments[index], project.seconds) / SLICE_FPS;
+}
+
+/** Where in the clip a segment's frames start, as its run cuts them: see `segmentStart` in the swap. */
+function soundFrom(project: LongSwapProject, index: number): number {
+  const segment = project.segments[index];
+  const grid = segment.start / SLICE_FPS;
+  // The swap takes an exact cut time only within a frame of the grid (`segmentOf`).
+  const exact = segment.startTime;
+  return exact !== undefined && Math.abs(exact - grid) <= 1 / SLICE_FPS ? exact : grid;
 }
 
 /**
@@ -749,10 +782,12 @@ export function useLongSwap({
       setError("The join workflow is not available, so the segments cannot be joined here.");
       return;
     }
+    const soundtrack = soundtrackOf(project);
     const clips = segmentJobs.map((job, index) => {
       const file = clipRef(job);
-      const frames = segmentFrames(project.segments[index], project.seconds);
-      return file ? { file, seconds: frames / SLICE_FPS } : null;
+      if (!file) return null;
+      const seconds = takeSeconds(job, project, index);
+      return soundtrack ? { file, seconds, from: soundFrom(project, index) } : { file, seconds };
     });
     if (clips.some((clip) => clip === null)) {
       setError("Every segment needs a finished take before they can be joined.");
@@ -763,7 +798,7 @@ export function useLongSwap({
     try {
       const promptId = await jobs.submit(
         stitchWorkflow,
-        { scenes: JSON.stringify(clips), prompt: `Character swap: ${project.title}` },
+        { scenes: JSON.stringify(clips), soundtrack: soundtrackOf(project), prompt: `Character swap: ${project.title}` },
         { derivedFrom: segmentJobs[0]?.promptId, musicVideo: tagFor(project, "join") },
       );
       if (!promptId) setError("The join was refused. See the message above.");
@@ -881,15 +916,18 @@ export function useLongSwap({
   const joiningUpscaled = useRef(false);
   const sendUpscaledJoin = useCallback(async () => {
     if (!project || !stitchWorkflow || !allUpscaled || joiningUpscaled.current) return;
+    // Under the clip's own sound or, with no sound in it, each segment's from
+    // the take it upscaled — never the upscale's copy, which comes back a few
+    // milliseconds short and stutters at every join. See multiSceneStitch.
+    const soundtrack = soundtrackOf(project);
     const clips = upscaleJobs.map((job, index) => {
       const file = soundtrackedRef(job);
-      // The sound from the take this upscaled, not the upscale's copy, which
-      // comes back a few milliseconds short and stutters at every join. See
-      // multiSceneStitch.
-      const sound = clipRef(segmentJobs[index]);
-      const frames = segmentFrames(project.segments[index], project.seconds);
-      // By time, so a segment at 48 fps trims the same as at 24.
-      return file && sound ? { file, seconds: frames / SLICE_FPS, sound } : null;
+      const take = segmentJobs[index];
+      const sound = clipRef(take);
+      if (!file || !sound) return null;
+      // The take's length by time: the upscale has its frames, at whatever rate.
+      const seconds = takeSeconds(take, project, index);
+      return soundtrack ? { file, seconds, from: soundFrom(project, index) } : { file, seconds, sound };
     });
     if (clips.some((clip) => clip === null)) {
       setError("Every segment needs a finished upscale before they can be joined.");
@@ -901,7 +939,7 @@ export function useLongSwap({
     try {
       const promptId = await jobs.submit(
         stitchWorkflow,
-        { scenes: JSON.stringify(clips), prompt: `Character swap, upscaled: ${project.title}` },
+        { scenes: JSON.stringify(clips), soundtrack, prompt: `Character swap, upscaled: ${project.title}` },
         { derivedFrom: segmentJobs[0]?.promptId, musicVideo: tagFor(project, "upscaled-join") },
       );
       if (!promptId) setError("The join of the upscaled segments was refused. See the message above.");

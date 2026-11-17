@@ -27,6 +27,11 @@ export interface JobOutput {
   filename: string;
   subfolder: string;
   type: string;
+  /**
+   * What ComfyUI measured of a saved video, passed through from its history
+   * as it is. Core's SaveVideo writes it; VHS's combine does not.
+   */
+  metadata?: { duration?: number; frame_count?: number; fps?: number };
 }
 
 export interface Job {

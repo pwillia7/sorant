@@ -296,6 +296,10 @@ const silentCopy = (output: JobOutput): JobOutput => ({
   filename: output.filename.replace(SOUNDTRACKED, "$1$2"),
 });
 
+/** A saved file as LoadVideo and LoadAudio name one in another of ComfyUI's folders. */
+const loaderName = (output: JobOutput): string =>
+  `${output.subfolder ? `${output.subfolder}/${output.filename}` : output.filename} [${output.type || "output"}]`;
+
 /**
  * The copy of a clip with its sound, for a multi-scene video, whose join
  * keeps every scene's own. An upscale reports the silent file and the one
@@ -1401,9 +1405,20 @@ export function useMusicVideo({
         const saved = story ? soundtracked(pick(scene)) : savedVideo(pick(scene));
         if (!saved) return null;
         const output = story ? saved : silentCopy(saved);
-        // As LoadVideo names a file in another of ComfyUI's folders.
-        const path = output.subfolder ? `${output.subfolder}/${output.filename}` : output.filename;
-        return { file: `${path} [${output.type || "output"}]`, seconds: keptFrames(scene) / FPS };
+        const seconds = keptFrames(scene) / FPS;
+        // An upscaled story takes each scene's sound from the take it
+        // upscaled: the upscale's copy comes back a few milliseconds short,
+        // which stutters at every join. See multiSceneStitch.
+        if (story && part === "upscaled-join") {
+          const take = savedVideo(jobFor(scene));
+          if (!take) return null;
+          // Its sound is trimmed to this, so the take's measured length where
+          // ComfyUI kept it: a scene's plan can run a few frames past its clip.
+          const measured = take.metadata?.duration;
+          const length = typeof measured === "number" && measured > 0 ? measured : seconds;
+          return { file: loaderName(output), seconds: length, sound: loaderName(take) };
+        }
+        return { file: loaderName(output), seconds };
       });
       if (clips.some((clip) => clip === null)) {
         setError("Every scene needs a finished clip before they can be joined.");
@@ -1424,7 +1439,7 @@ export function useMusicVideo({
         { derivedFrom: current.scenes[0]?.promptId, musicVideo: tagFor(current, part) },
       );
     },
-    [stitchWorkflow, jobs],
+    [stitchWorkflow, jobs, jobFor],
   );
 
   const stitch = useCallback(async () => {
