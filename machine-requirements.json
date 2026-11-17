@@ -1,9 +1,20 @@
 {
-  "fingerprint": "4d7dba2a4d56b2e0",
+  "fingerprint": "0617f8507a31a5e1",
   "comfyui": {
     "min": "0.38.0"
   },
   "classes": {
+    "AudioConcat": {
+      "inputs": [
+        "audio1",
+        "audio2",
+        "direction"
+      ],
+      "optional": true,
+      "workflows": [
+        "multi-scene-stitch"
+      ]
+    },
     "AudioConcatenate": {
       "inputs": [
         "audio1",
@@ -1032,6 +1043,7 @@
         "minimax-h3-ref (spectrum)",
         "minimax-h3-ref (style, vhs tape)",
         "minimax-h3-ref (turbo)",
+        "multi-scene-stitch",
         "music-video-stitch"
       ]
     },
@@ -1963,6 +1975,7 @@
         "minimax-h3-ref (spectrum)",
         "minimax-h3-ref (style, vhs tape)",
         "minimax-h3-ref (turbo)",
+        "multi-scene-stitch",
         "music-video-stitch"
       ]
     },
