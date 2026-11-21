@@ -43,7 +43,11 @@ export async function uploadToComfy(
   }
 
   const token = getToken();
-  const safeName = name.split(/[\\/]/).pop() || "upload";
+  // Both upload routes refuse any pathname containing "..", as a traversal
+  // guard, so "clip..mp4" or "wait...what.mp4" came back as a bare "Failed to
+  // retrieve the client token" — the Blob client drops the route's message.
+  const safeName =
+    (name.split(/[\\/]/).pop() || "").replace(/\.{2,}/g, ".") || "upload";
   const blob = await uploadToBlob(`${BLOB_UPLOAD_PREFIX}${safeName}`, file, {
     access: "private",
     handleUploadUrl: "/api/upload/token",
