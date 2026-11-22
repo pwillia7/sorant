@@ -310,7 +310,7 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
         heading: "Clips with cuts, and long clips",
         items: [
           "Split at camera cuts (on by default) finds the cuts before anything runs and lets you choose who to replace in each shot — by rule, by clicking on them, or no one. Each shot starts fresh, and each has its own Check who SAM picks.",
-          "Clips are made 5 seconds at a time, each window carrying on from the last frames of the one before. Over 20 seconds the swap runs as a chain and is joined at the end, so keep the tab open; closed, it waits, and Resume carries on.",
+          "Clips are made 5 seconds at a time, each window carrying on from the last frames of the one before. Over 6 seconds the swap runs as a chain and is joined at the end, so keep the tab open; closed, it waits, and Resume carries on.",
           "Clips can be up to 8 minutes. Time is the cost: about 13 minutes per 5 seconds at 1 MP on a 24 GB card, about a third of that at 0.5 MP. Try a short stretch at 0.5 MP first.",
           "Any finished segment can be redone on its own — with a new seed, or following someone else.",
         ],

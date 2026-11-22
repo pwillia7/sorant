@@ -240,12 +240,14 @@ swap.
   delivered frames. With *Keep the clip's sound* off, each window's H3 audio
   is decoded and appended instead. A clip with no sound is given silence as
   its audio reference.
-- **Up to 20 s, one run.** Its windows continue inside a single ComfyUI job.
-  That job holds the whole prepared clip, its masks and every finished frame
-  in the box's RAM until the end, which is why it stops there: a minute at
-  1 MP failed in `H3RelayExpandMask` asking for 17 GB more than a 64 GB
-  machine had left (2026-11-06).
-- **Over 20 s, a chain of runs** (`CHAIN_OVER_SECONDS`, use-long-swap.ts),
+- **Up to 6 s, one run.** About one window, in a single ComfyUI job. A
+  longer single run would hold the whole prepared clip, its masks and every
+  finished frame in the box's RAM until the end: a minute at 1 MP failed in
+  `H3RelayExpandMask` asking for 17 GB more than a 64 GB machine had left
+  (2026-11-06), and a clip under 20 s at 1 MP failed 16 minutes in when
+  Windows ran out of commit (2026-11-21). A chain holds one window at a time,
+  and a failed segment is resumed rather than the whole run redone.
+- **Over 6 s, a chain of runs** (`CHAIN_OVER_SECONDS`, use-long-swap.ts),
   like a music video's scenes. The clip is cut into segments
   (`chainSegments`): the first delivers 124 frames, every later one 123. Each
   is one run on Relay's `segment` schedule. Its source is its stretch of the
@@ -284,7 +286,7 @@ swap.
   shot's last segment is never under 24 frames: it takes frames from the one
   before it, so no window exceeds 124. A shot left as it is is sent as
   pass-throughs (`passedThrough`, with `shotChoices[i].original`), the clip's
-  own footage. A clip of 2–20 s goes through the planner too, and with no
+  own footage. A clip of 2–6 s goes through the planner too, and with no
   cuts in it is sent as the one ordinary run it would have been.
 - **Up to 8 minutes** (`MAX_SWAP_SECONDS`): the join is one
   `ConcatenateVideo`, which takes at most 100 clips. Past a minute the clip
@@ -337,7 +339,7 @@ swap.
   upscales are found by their history tags (`part: "upscale"`), each tied to
   the take it was made from by `derivedFrom`, so a segment swapped again
   needs its own upscale again. A size no bigger than the segments already are
-  is not offered. A swap of 20 s or less is one run, and its result's own
+  is not offered. A swap of 6 s or less is one run, and its result's own
   Upscale button does the same.
 
 It needs, on the ComfyUI machine: the H3 Relay pack, SAM 3.1

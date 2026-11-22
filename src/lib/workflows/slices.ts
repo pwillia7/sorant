@@ -49,13 +49,18 @@ export function estimateScale(
 
 /**
  * Clips longer than this are swapped as a chain of runs, one window each, and
- * joined at the end (use-long-swap.ts). Up to it, the whole clip is one run
- * whose windows continue inside it — but that run holds the whole prepared
- * clip, its masks and every finished frame in the box's RAM at once, and a
- * minute at 1 MP asked for 17 GB more than a 64 GB machine had left
- * (2026-11-06). A 12 s clip at 1 MP ran fine as one.
+ * joined at the end (use-long-swap.ts) — so anything past a single 5.2 s
+ * window. Up to it, the clip is one run.
+ *
+ * One run whose windows continue inside it holds the whole prepared clip, its
+ * masks and every finished frame in the box's RAM until the end. A minute at
+ * 1 MP asked for 17 GB more than a 64 GB machine had left (2026-11-06), and on
+ * 2026-11-21 a clip under 20 s at 1 MP failed 16 minutes in, when Windows ran
+ * out of commit (error 1450 reading the model) with a small pagefile and
+ * another program holding memory. A chain holds one window at a time, and a
+ * failure costs one segment rather than the run: Resume carries on.
  */
-export const CHAIN_OVER_SECONDS = 20;
+export const CHAIN_OVER_SECONDS = 6;
 
 /**
  * As long as a clip may be, at all. The join is one `ConcatenateVideo`, which
