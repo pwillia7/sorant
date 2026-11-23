@@ -17,6 +17,7 @@ import {
   Toggle,
 } from "@/components/ui/inputs";
 import { VideoUpload } from "@/components/ui/video-upload";
+import { countWords, parseScript } from "@/lib/workflows/script-lines";
 import {
   paramVisible,
   pinnedValue,
@@ -299,6 +300,13 @@ export function Control({
             disabled={readOnly}
             describedBy={describedBy}
           />
+          {param.wordBudget ? (
+            <WordMeter
+              text={String(value ?? param.default)}
+              seconds={Number(values?.[param.wordBudget.secondsParam] ?? 10)}
+              budget={param.wordBudget}
+            />
+          ) : null}
         </Field>
       );
 
@@ -594,4 +602,51 @@ export function Control({
       );
     }
   }
+}
+
+/**
+ * Words against the room the clip has for them, live under a script box. The
+ * same numbers the director is held to, so a warning here is a line the take
+ * would have slurred.
+ */
+function WordMeter({
+  text,
+  seconds,
+  budget,
+}: {
+  text: string;
+  seconds: number;
+  budget: { perFifteen: number; perLine: number; maxLines: number };
+}) {
+  const lines = parseScript(text);
+  if (lines.length === 0) return null;
+
+  const total = lines.reduce((sum, line) => sum + countWords(line.words), 0);
+  const room = Math.round((budget.perFifteen * seconds) / 15);
+  const long = lines
+    .map((line, index) => ({ n: index + 1, words: countWords(line.words) }))
+    .filter((line) => line.words > budget.perLine);
+
+  const warnings: string[] = [];
+  if (lines.length > budget.maxLines) {
+    warnings.push(`${budget.maxLines} lines at most.`);
+  }
+  for (const line of long) {
+    warnings.push(
+      `Line ${line.n} has ${line.words} words — split it into shorter sentences.`,
+    );
+  }
+
+  return (
+    <p className="text-[12px] leading-snug tabular-nums" aria-live="polite">
+      <span className={total > room ? "text-danger" : "text-fg-muted"}>
+        {total} {total === 1 ? "word" : "words"} · about {room} fit in {seconds} s
+      </span>
+      {warnings.map((warning) => (
+        <span key={warning} className="block text-danger">
+          {warning}
+        </span>
+      ))}
+    </p>
+  );
 }

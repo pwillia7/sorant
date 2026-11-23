@@ -1480,6 +1480,13 @@
       ],
       "optional": false,
       "workflows": [
+        "minimax-h3-ref",
+        "minimax-h3-ref (4-step)",
+        "minimax-h3-ref (reference weights)",
+        "minimax-h3-ref (sage)",
+        "minimax-h3-ref (spectrum)",
+        "minimax-h3-ref (style, vhs tape)",
+        "minimax-h3-ref (turbo)",
         "minimax-music3"
       ]
     },

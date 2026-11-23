@@ -233,6 +233,20 @@ export interface TextParam extends ParamBase {
   required?: boolean;
   /** Rows for a textarea. Ignored for single-line text. */
   rows?: number;
+  /**
+   * A live count under a script box: words against what the clip's length
+   * has room for, and any line too long to come out clean. Plain numbers, so
+   * it survives the trip to the browser. See script-lines.ts.
+   */
+  wordBudget?: {
+    /** The control holding the clip's length in seconds. */
+    secondsParam: string;
+    /** Words a 15-second clip holds, scaled to the actual length. */
+    perFifteen: number;
+    /** Words in one line past which it tends to slur. */
+    perLine: number;
+    maxLines: number;
+  };
 }
 
 export interface NumberParam extends ParamBase {

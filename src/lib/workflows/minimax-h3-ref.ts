@@ -8,10 +8,20 @@ import {
   rewriteModelParam,
   rewriteNode,
 } from "./rewrite-model";
+import {
+  MAX_SCRIPT_LINES,
+  SCRIPT_WORDS_PER_15S,
+  SCRIPT_WORDS_PER_LINE,
+  parseScript,
+  scriptDirectorBlock,
+  scriptNodes,
+  scriptTargets,
+} from "./script-lines";
 import { isSet } from "./types";
 import type { ParamDef, ParamValue, WorkflowDef, TextParam } from "./types";
 import {
   FRAME_EXPRESSION,
+  LITERAL_PROMPT,
   directorBypassFor,
   effectiveSeconds,
   directorTarget,
@@ -572,7 +582,12 @@ function voiceWindowFits(
 const refInput = (index: number) => `ref_images.ref_image_${index - 1}`;
 const batchInput = (index: number) => `images.image${index - 1}`;
 
+/** The user's lines, swapped in between the director and the model. */
+const SCRIPT_PARAM = "script_lines";
+const SCRIPT = scriptNodes(["145", 0]);
+
 const graph: ComfyGraph = {
+  ...SCRIPT.nodes,
   "92": {
     class_type: "SaveVideo",
     inputs: {
@@ -691,7 +706,10 @@ const graph: ComfyGraph = {
   "136": {
     class_type: "MiniMaxH3ReferenceToVideo",
     inputs: {
-      prompt: ["145", 0],
+      // Through the script's swaps rather than straight from the director, so
+      // the lines the user wrote out reach the model word for word. See
+      // script-lines.ts. With no script they change nothing.
+      prompt: SCRIPT.output,
       width: ["115", 0],
       height: ["115", 1],
       length: ["131", 1],
@@ -1103,6 +1121,9 @@ const director = directorTarget(ids, REFERENCE_DIRECTOR, [
       },
     },
   }),
+  // Very last of the appendices: it overrides anything above that has the
+  // director write or add dialogue of its own. Empty with no script.
+  (values) => scriptDirectorBlock(values, SCRIPT_PARAM),
 ]);
 
 /**
@@ -1606,6 +1627,28 @@ const params: ParamDef[] = [
     ) as TextParam),
     label: "What happens",
     hint: "Name your pictures as <Picture 1>, <Picture 2>… in the order you added them.",
+  },
+  {
+    id: SCRIPT_PARAM,
+    label: "Lines",
+    type: "textarea",
+    default: "",
+    placeholder: "Gordon: Hey, it's me, Gordon Ramsay.\nGordon: Wishing you both the very best.",
+    rows: 3,
+    maxLength: 1200,
+    hint: "Optional. What is said, one line per row — spoken exactly as written.",
+    help: `Optional. What is said, one line per row — spoken exactly as written. Put a name and a colon first to say who says it. The rewrite stages the lines but cannot change a word of them. Short, complete sentences come out cleanest: about ${SCRIPT_WORDS_PER_LINE} words a line and ${SCRIPT_WORDS_PER_15S} for a 15 s clip. Longer gets slurred. Up to ${MAX_SCRIPT_LINES} lines.`,
+    group: "Prompt",
+    // Only the rewrite knows where the placeholders go. Written as typed, the
+    // prompt is the script.
+    hiddenBy: LITERAL_PROMPT,
+    wordBudget: {
+      secondsParam: "duration",
+      perFifteen: SCRIPT_WORDS_PER_15S,
+      perLine: SCRIPT_WORDS_PER_LINE,
+      maxLines: MAX_SCRIPT_LINES,
+    },
+    targets: [director, ...scriptTargets(SCRIPT_PARAM)],
   },
   literalPromptParam(),
   rewriteModelParam(graph, [ids.director]),
@@ -2140,6 +2183,20 @@ export const minimaxH3Reference: WorkflowDef = {
       throw new ParamError(
         "Add a reference image, a reference clip, a reference track or a voice reference — this workflow needs at least one to build from.",
         "reference_image_1",
+      );
+    }
+
+    /**
+     * More lines than there are swaps. Refused rather than cut, because the
+     * ones past the last swap would reach the model as bare placeholders.
+     */
+    if (
+      !isSet(values[LITERAL_PROMPT]) &&
+      parseScript(String(values[SCRIPT_PARAM] ?? "")).length > MAX_SCRIPT_LINES
+    ) {
+      throw new ParamError(
+        `Lines holds ${MAX_SCRIPT_LINES} lines at most — and a clip this long has room for far fewer.`,
+        SCRIPT_PARAM,
       );
     }
 
