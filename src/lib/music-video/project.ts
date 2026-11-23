@@ -106,6 +106,17 @@ export interface MusicVideoProject {
    * reason: one scene at a different rate would stutter against the rest.
    */
   upscaleFrameRate?: number;
+  /**
+   * When the scenes were last sent to be upscaled again at another size or
+   * rate. An upscale from before it is of the earlier size, so picking a take
+   * back up does not bring one of those along.
+   */
+  upscalesSince?: number;
+  /**
+   * The upscaled joins made before the newest, newest first, with what each
+   * was made at — kept to download after "Upscale again".
+   */
+  earlierUpscaled?: Array<{ promptId: string; size: number; frameRate: number }>;
 }
 
 /**

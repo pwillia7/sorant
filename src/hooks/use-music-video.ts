@@ -198,6 +198,13 @@ export interface MusicVideoController {
    */
   upscaleAll: (size: number, frameRate: number) => Promise<void>;
   /**
+   * Upscale every scene again at another size or frame rate, from its take,
+   * then join them into another video. The one before stays to download.
+   */
+  upscaleAgain: (size: number, frameRate: number) => Promise<void>;
+  /** Finished upscaled videos from before the newest, newest first. */
+  earlierUpscaled: Array<{ job: Job; size: number; frameRate: number }>;
+  /**
    * Join the upscaled scenes. It happens on its own once every scene is
    * upscaled; this is for after that join failed.
    */
@@ -441,7 +448,12 @@ export function useMusicVideo({
       // An upscale made of this take before, if one is still good, so going
       // back to a take does not mean upscaling it again.
       const upscale = partRuns("upscale", index)
-        .filter((job) => job.derivedFrom === promptId && !failed(job))
+        .filter(
+          (job) =>
+            job.derivedFrom === promptId &&
+            !failed(job) &&
+            job.submittedAt >= (project.upscalesSince ?? 0),
+        )
         .at(-1);
       setProject({
         ...project,
@@ -1464,24 +1476,27 @@ export function useMusicVideo({
     frameRate: number,
     /** Send only these scenes, rather than every one without a good upscale. */
     only?: number[],
+    /** The project to start from, where the caller has just changed it. */
+    base?: MusicVideoProject,
   ) => {
-    if (!project || !upscaleWorkflow) return;
+    const start = base ?? project;
+    if (!start || !upscaleWorkflow) return;
     setError(null);
     let current: MusicVideoProject = {
-      ...project,
+      ...start,
       upscaleRequested: true,
-      upscaleSize: project.upscaleSize ?? size,
+      upscaleSize: start.upscaleSize ?? size,
       // A project upscaled before the choice existed kept the clip's own rate.
       upscaleFrameRate:
-        project.upscaleFrameRate ?? (project.upscaleSize ? 1 : frameRate),
+        start.upscaleFrameRate ?? (start.upscaleSize ? 1 : frameRate),
       upscaleResumed: only
-        ? [...new Set([...(project.upscaleResumed ?? []), ...only])]
-        : project.upscaleResumed,
+        ? [...new Set([...(start.upscaleResumed ?? []), ...only])]
+        : start.upscaleResumed,
     };
     setProject(current);
     for (let index = 0; index < current.scenes.length; index += 1) {
       const scene = current.scenes[index];
-      const existing = upscaleFor(scene);
+      const existing = scene.upscalePromptId ? byId.get(scene.upscalePromptId) : undefined;
       if (only ? !only.includes(index) : scene.upscalePromptId && !failed(existing)) continue;
       const output = savedVideo(jobFor(scene));
       if (!output) {
@@ -1523,11 +1538,53 @@ export function useMusicVideo({
         return;
       }
     }
-  }, [project, upscaleWorkflow, upscaleFor, jobFor, jobs]);
+  }, [project, upscaleWorkflow, byId, jobFor, jobs]);
   const upscaleAll = useCallback(
     (size: number, frameRate: number) => sendUpscales(size, frameRate),
     [sendUpscales],
   );
+
+  /**
+   * Upscale every scene again at another size or frame rate — 1080 first to
+   * look, then 4K — and join them into another video. Each scene goes from
+   * its own take, not from the earlier upscale, so nothing is upscaled twice;
+   * the earlier video stays to download.
+   */
+  const upscaleAgain = useCallback(
+    async (size: number, frameRate: number) => {
+      if (!project?.upscaledStitchPromptId || !project.upscaleSize) return;
+      const earlier = {
+        promptId: project.upscaledStitchPromptId,
+        size: project.upscaleSize,
+        frameRate: project.upscaleFrameRate ?? 1,
+      };
+      await sendUpscales(size, frameRate, undefined, {
+        ...project,
+        upscaleSize: size,
+        upscaleFrameRate: frameRate,
+        upscalesSince: Date.now(),
+        upscaledStitchPromptId: undefined,
+        upscaledJoinTried: undefined,
+        upscaleResumed: undefined,
+        earlierUpscaled: [earlier, ...(project.earlierUpscaled ?? [])],
+        scenes: project.scenes.map((scene) => ({ ...scene, upscalePromptId: undefined })),
+      });
+    },
+    [project, sendUpscales],
+  );
+
+  // Earlier upscaled videos still of the takes in use: finished, and made
+  // after the newest of them.
+  const newestTake = Math.max(
+    0,
+    ...(project?.scenes ?? []).map((scene) => jobFor(scene)?.submittedAt ?? 0),
+  );
+  const earlierUpscaled = (project?.earlierUpscaled ?? []).flatMap((entry) => {
+    const job = byId.get(entry.promptId);
+    return job?.phase === "done" && job.submittedAt >= newestTake
+      ? [{ job, size: entry.size, frameRate: entry.frameRate }]
+      : [];
+  });
 
   // Once every scene's upscale is done, join them — once. The person asked for
   // an upscaled video, not for forty upscaled clips. Once per set of upscales,
@@ -1702,6 +1759,8 @@ export function useMusicVideo({
       joining: Boolean(upscaledStitchJob && !upscaledFinal && !failed(upscaledStitchJob)),
     },
     upscaleAll,
+    upscaleAgain,
+    earlierUpscaled,
     joinUpscaled,
     stitch,
     lostCount,

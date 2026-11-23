@@ -147,6 +147,49 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
       ? `${Math.max(1, Math.round(hours * 60))} min`
       : `${hours.toFixed(1)} h`;
   };
+  /** The size and frame rate to upscale to, each labelled with roughly how long it takes. */
+  const upscaleChoices = (size: number, rate: number) => (
+    <>
+      <Segmented
+        label="Upscale size"
+        value={size}
+        onChange={setChosenSize}
+        options={MUSIC_VIDEO_UPSCALE_SIZES.map(({ px }) => ({
+          value: px,
+          disabled: !enlarges(px),
+          title: enlarges(px)
+            ? undefined
+            : `The scenes are already ${smallestSide} px on their shorter side`,
+          label: (
+            <>
+              {sizeName(px)}
+              <span className="ml-1.5 font-normal text-fg-subtle">~{upscaleTime(px, rate)}</span>
+            </>
+          ),
+        }))}
+      />
+      <Segmented
+        label="Upscale frame rate"
+        value={rate}
+        onChange={setChosenRate}
+        options={MUSIC_VIDEO_FRAME_RATES.map(({ multiplier, label }) => ({
+          value: multiplier,
+          label,
+          title:
+            multiplier > 1
+              ? "Makes a new frame between every pair with RIFE, for smoother motion. The sound is unchanged."
+              : "Keeps H3's own frames.",
+        }))}
+      />
+    </>
+  );
+  // Another size or rate once one upscale is done: every scene again from its
+  // take, and the earlier upscale stays to download.
+  const showUpscaleAgain = Boolean(upscaledUrl) && !video.upscale.active && !video.upscale.joining;
+  const againSize = enlarges(chosenSize) ? chosenSize : (offered[0]?.px ?? chosenSize);
+  const sameAsNewest =
+    againSize === project?.upscaleSize && chosenRate === (project?.upscaleFrameRate ?? 1);
+  const videoName = `${story ? "multi_scene" : "music_video"}_${project?.id ?? ""}`;
   const finished = jobs.filter((job) => job?.phase === "done").length;
   const unrendered = scenes.filter((scene, index) => {
     const job = jobs[index];
@@ -204,7 +247,7 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
       {upscaledUrl ? (
         <FinishedVideo
           url={upscaledUrl}
-          label="Upscaled"
+          label={upscaledName(project?.upscaleSize, project?.upscaleFrameRate)}
           download={`${story ? "multi_scene" : "music_video"}_${project?.id ?? ""}_upscaled.mp4`}
           took={totalRenderMs([
             ...scenes.map(video.jobFor),
@@ -213,6 +256,40 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
           ])}
         />
       ) : null}
+      {showUpscaleAgain ? (
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={sameAsNewest}
+            onClick={() => void video.upscaleAgain(againSize, chosenRate)}
+            title={
+              sameAsNewest
+                ? "That is the size and frame rate of the upscale above. Choose another."
+                : `Upscales every scene again from its take to ${againSize} px${chosenRate > 1 ? ` at ${24 * chosenRate} fps` : ""}, then joins them into another video. The one above stays to download. Roughly ${upscaleTime(againSize, chosenRate)}.`
+            }
+          >
+            Upscale again
+          </Button>
+          {upscaleChoices(againSize, chosenRate)}
+        </div>
+      ) : null}
+      {video.earlierUpscaled.map(({ job, size, frameRate }) => {
+        const url = joinedUrl(job);
+        if (!url) return null;
+        return (
+          <div key={job.promptId} className="mb-3 flex items-center gap-2 text-[13px] text-fg-muted">
+            <span>Earlier: {upscaledName(size, frameRate)}</span>
+            <a
+              href={withToken(url)}
+              download={`${videoName}_upscaled_${size}.mp4`}
+              className={buttonClasses({ variant: "secondary", size: "xs" })}
+            >
+              Download
+            </a>
+          </div>
+        );
+      })}
       {finalUrl ? (
         <FinishedVideo
           url={finalUrl}
@@ -373,39 +450,7 @@ export function MusicVideoPanel({ video }: { video: MusicVideoController }) {
                       {upscaleRate > 1 ? `, ${24 * upscaleRate} fps` : ""}, like the rest
                     </span>
                   ) : (
-                    <>
-                    <Segmented
-                      label="Upscale size"
-                      value={upscaleSize}
-                      onChange={setChosenSize}
-                      options={MUSIC_VIDEO_UPSCALE_SIZES.map(({ px }) => ({
-                        value: px,
-                        disabled: !enlarges(px),
-                        title: enlarges(px)
-                          ? undefined
-                          : `The scenes are already ${smallestSide} px on their shorter side`,
-                        label: (
-                          <>
-                            {px === 2160 ? "4K" : `${px} px`}
-                            <span className="ml-1.5 font-normal text-fg-subtle">~{upscaleTime(px)}</span>
-                          </>
-                        ),
-                      }))}
-                    />
-                    <Segmented
-                      label="Upscale frame rate"
-                      value={upscaleRate}
-                      onChange={setChosenRate}
-                      options={MUSIC_VIDEO_FRAME_RATES.map(({ multiplier, label }) => ({
-                        value: multiplier,
-                        label,
-                        title:
-                          multiplier > 1
-                            ? "Makes a new frame between every pair with RIFE, for smoother motion. The song is unchanged."
-                            : "Keeps H3's own frames.",
-                      }))}
-                    />
-                    </>
+                    upscaleChoices(upscaleSize, upscaleRate)
                   )}
                 </div>
               )
@@ -557,6 +602,14 @@ function TakePicker({
 /** A scene's rendered clip. */
 function sceneClip(job: Job | undefined) {
   return job?.outputs.find((file) => /\.(mp4|webm|mov)$/i.test(file.filename));
+}
+
+const sizeName = (px: number) => (px === 2160 ? "4K" : `${px} px`);
+
+/** What an upscaled video was made at, where that is known. */
+function upscaledName(size: number | undefined, frameRate: number | undefined): string {
+  if (!size) return "Upscaled";
+  return `Upscaled, ${sizeName(size)}${(frameRate ?? 1) > 1 ? ` at ${24 * frameRate!} fps` : ""}`;
 }
 
 /** The joined file a stitch saved, not the scene previews it also reports. */

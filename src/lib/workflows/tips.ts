@@ -373,9 +373,10 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
         ],
       },
       {
-        heading: "Long swaps",
+        heading: "Long videos",
         items: [
-          "A long Character swap can be upscaled segment by segment from its panel, then joined again — and after a redo, only the segments that changed need it.",
+          "A long Character swap, a Music video or a Multi-scene video is upscaled from its own panel, a segment or scene at a time, then joined again. After a redo, only the parts that changed need it.",
+          "Upscale again tries another size or frame rate, such as 1080 to look at first and then 4K. It starts again from the original takes, not from the earlier upscale, and the earlier one stays to download.",
         ],
       },
     ],
