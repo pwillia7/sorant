@@ -160,7 +160,7 @@ export function scriptDirectorBlock(
 
   const tight =
     total > budget
-      ? `\n\nThat is ${total} words against a budget of about ${budget} for this length. The lines are fixed, so do not drop or shorten any of them to fit — give them the room instead: one shot or very few, little action that competes with the speech, short beats, and the first line starting within the first second.`
+      ? `\n\nThat is ${total} words against a budget of about ${budget} for this length. The lines are fixed, so do not drop or shorten any of them to fit — give them the room instead: one shot or very few, little action that competes with the speech, and the first line starting within the first second.`
       : "";
 
   return `THE USER'S SCRIPT
@@ -179,5 +179,9 @@ and one without a voice reference simply leaves that part out. Every placeholder
 
 Nobody says anything that is not in the script — no greeting, reaction or extra line of your own, whatever any rule above says about adding one. Do not repeat or paraphrase the words anywhere else either: not in the summary, the soundscape or the action.
 
-Between two lines there is a beat — a breath, a nod, a glance — written as action. Never run two placeholders together in one sentence, and never join them with "followed immediately by" or "then continues". Shot cuts fall between lines, never across one. Time the scene to the word counts above.${tight}`;
+The speech has to sound like somebody talking, not a run of separate announcements. When one person says several lines in a row, that is one continuous stretch of talk. Describe how they talk once, at its first line — the energy, the pace, the register, as in "talking fast and casually, like a quick video message to friends" — and bring in the lines after it plainly, with "says", "adds" or "goes on", keeping any voice reference the rules above put on every line. A fresh emotion on each line makes the model perform each one as a separate take.
+
+Between lines from the same person there is a breath, not a held moment: at most a small gesture beside the next line. No silences, no long smiles before the next line, and no timestamps on lines inside a shot — times are for cuts, and a line pinned to a time spreads the talk across the clip with dead air between. Start talking within the first second. If the talk ends before the clip does, what follows the last line is a reaction or a gesture, not gaps between the lines. A real pause belongs only where a different person speaks next, where something happens, or where the user asks for one.
+
+Never run two placeholders together in one sentence, and never join them with "followed immediately by". Shot cuts fall between lines, never across one.${tight}`;
 }
