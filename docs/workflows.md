@@ -1329,27 +1329,29 @@ at 800 px on a 3090.
 ## Edit image
 
 Every picture control has an **Edit** button. Type what should change, press
-Enter, and about a minute later the edited picture is in the slot. The strip
-of versions under it is undo and redo, **Hold to compare** shows the original,
-and **Another take** re-rolls the last change.
+Enter, and about half a minute later the edited picture is in the slot. The
+strip of versions under it is undo and redo, **Hold to compare** shows the
+original, and **Another take** re-rolls the last change — about 9 seconds,
+because the encoded picture and instruction are reused.
 
-It is FLUX.1 Kontext dev on ComfyUI's core nodes, and it is not in the workflow
-picker. The choices behind it, all measured on a 3090:
+It is MiniMax H3 Image's edit mode on core nodes, laid out as Comfy-Org's
+template, and it is not in the workflow picker. It replaced FLUX.1 Kontext dev
+on 2026-11-23 after six edits on both engines (an outfit change, adding an
+object, a scene change, a relight, new chalkboard words): H3 held faces and hair
+where Kontext straightened curls and once changed the hair and the jacket
+colour, followed the instruction as well or better, and took about 28 seconds
+warm against Kontext's 49. It is also the model Text to Image already loads, so
+Edit no longer needs a 29 GB model of its own.
 
-- **20 steps of ER-SDE on the Beta schedule, guidance 2.5** — not the
-  template's Euler. In a same-seed grid on a portrait (2026-10-21), Euler at 8
-  or 20 steps redrew the man as somebody else with Kontext's smooth, contrasty
-  polish; ER-SDE kept his face, skin tone and texture. It costs about a minute
-  a run where 8 Euler steps took 18 seconds, plus 10–15 seconds cold. Guidance,
-  steps, sampler, schedule and **Redraw** (denoise) are adjustable behind the
-  settings button on the edit bar (`image-edit-settings.ts`).
-- **fp8 weights**, cast on load, so the model fits beside its T5 encoder on a
-  24 GB card.
-- **The picture keeps its shape.** It is scaled to 1 MP on a 16 px grid rather
-  than snapped to Kontext's preferred sizes, which would change the frame an
-  Image to Video run inherits.
-- **Your instruction goes in as typed.** No rewrite and no "keep the face"
-  suffix: faces held without one.
+- **6 steps of Euler, simple schedule, CFG 1** — what the distilled checkpoint
+  is made for. Steps are the one setting behind the settings button on the
+  edit bar (`image-edit-settings.ts`).
+- **The picture keeps its shape.** It is scaled to 1 MP on a 32 px grid, the
+  canvas is read off it, and it goes in as `<Picture 1>`. The template scales
+  to 16 MP; an Image to Video run inherits this frame, and 1 MP is where H3
+  video stops.
+- **Your instruction goes in as typed.** The template's prompt enhancer is off;
+  faces held without it.
 
 An edit is queued at the front, so it waits only for the video already
 rendering. The result is copied into ComfyUI's input folder and goes into the

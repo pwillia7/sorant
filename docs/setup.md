@@ -35,9 +35,9 @@ installing and downloading itself, and asks you only for passwords and keys.
 
 This is the part that takes effort; the app itself is a few minutes.
 
-You need a **recent ComfyUI**. MiniMax H3, SeedVR2, FLUX Kontext and the newer
-video nodes are all built in, but only on a new enough build — 0.38 is what
-this was tested on. If the checker later reports a built-in class such as
+You need a **recent ComfyUI**: **0.45 or newer**, tested on 0.46. MiniMax H3,
+MiniMax H3 Image, SeedVR2 and the newer video nodes are all built in, but only
+on a new enough build, and H3 Image arrived in 0.45. If the checker later reports a built-in class such as
 `MiniMaxH3ImageToVideo` or `CreateVideo` as missing, update ComfyUI rather than
 hunting for a pack.
 
@@ -187,9 +187,8 @@ in any folder your `extra_model_paths.yaml` adds, or under another name, which
 it hard-links rather than copying — resumes interrupted downloads, and checks
 every file's size. If you have a file with the right name but a different size,
 it stops without downloading and asks you: `--replace <file>` to get the
-version these workflows use, or `--skip <file>` to keep yours. The FLUX Kontext model for the Edit
-button is gated: accept its licence on Hugging Face, then set `HF_TOKEN` to a
-read token from that account. The tables below say what each file is for.
+version these workflows use, or `--skip <file>` to keep yours. No file needs a
+Hugging Face account. The tables below say what each file is for.
 
 Download only what you will use. **Text to Video alone needs the five files in
 the first block**, about 43 GB. The filenames must match exactly, because they
@@ -203,7 +202,7 @@ are values inside the graphs rather than choices in the UI.
 | `minimax_h3_audio_vae_fp32.safetensors` | `vae/` | 0.6 GB | every H3 video workflow |
 | `minimax_h3_turbo_v4_step600_ema.safetensors` | `loras/` | 0.8 GB | the Turbo switch (on by default) |
 | | | | |
-| `minimax_h3_image_pruned_int8_convrot.safetensors` | `diffusion_models/` | 21.0 GB | Text to Image, **Create one** on a picture, Picture character swap |
+| `minimax_h3_image_pruned_int8_convrot.safetensors` | `diffusion_models/` | 21.0 GB | Text to Image, the Edit button, **Create one** on a picture, Picture character swap |
 | `minimax_h3_image_vae_fp16.safetensors` | `vae/` | 1.2 GB | the same |
 | `h3_image_character_swap_v1.safetensors` | `loras/` | 0.2 GB | Picture character swap ([source](https://huggingface.co/akatz-ai/MiniMax-H3-Image-Character-Swap-LoRA)) |
 | | | | |
@@ -216,11 +215,6 @@ are values inside the graphs rather than choices in the UI.
 | `minimax_music3_dav.safetensors` | `vae/` | 0.2 GB | Music |
 | | | | |
 | `rife_v4.26.safetensors` | `frame_interpolation/` | <0.1 GB | Upscale's **Frame rate: Double it** |
-| | | | |
-| `flux1-kontext-dev.safetensors` | `diffusion_models/` | 23.8 GB | the Edit button |
-| `clip_l.safetensors` | `text_encoders/` | 0.2 GB | the Edit button |
-| `t5xxl_fp8_e4m3fn.safetensors` | `text_encoders/` | 4.9 GB | the Edit button |
-| `ae.safetensors` | `vae/` | 0.3 GB | the Edit button |
 
 Optional — nothing fails without these until you choose them:
 
@@ -246,7 +240,6 @@ Where to get them:
 | Music 3 | [Comfy-Org/MiniMax-Music-3](https://huggingface.co/Comfy-Org/MiniMax-Music-3) |
 | SeedVR2 | [Comfy-Org/SeedVR2](https://huggingface.co/Comfy-Org/SeedVR2) |
 | RIFE / FILM | [Comfy-Org/frame_interpolation](https://huggingface.co/Comfy-Org/frame_interpolation) |
-| FLUX Kontext | ComfyUI's [Kontext tutorial](https://docs.comfy.org/tutorials/flux/flux-1-kontext-dev). The diffusion model is gated: accept its licence on Hugging Face first |
 | Local rewrite models | [beycanai/Qwen-LM](https://huggingface.co/beycanai/Qwen-LM) (Qwen 3.8 27B), [radiatingreverberations/Gemma-4-12B-It-Uncensored-Heretic-INT8-ConvRot-ComfyUI](https://huggingface.co/radiatingreverberations/Gemma-4-12B-It-Uncensored-Heretic-INT8-ConvRot-ComfyUI) |
 
 **Is your copy named differently?** The download script finds it by size and
@@ -590,7 +583,7 @@ README for the prompt to paste.
 | 12 GB card on Linux: `illegal memory access`, Xid errors, a ComfyUI that hangs on to its port | Add `--disable-dynamic-vram` to the launch line, and use `--reserve-vram 1.5` rather than `--lowvram` |
 | 12 GB card: the local rewrite takes an hour, or fails `Expected a cuda device, but got: cpu` | `--lowvram` put Gemma on the CPU. Drop it, or use the gateway rewrite |
 | "The local director is chosen but … is not in" | That model's file is not in `models/text_encoders/`: download it, pick the other local model, or switch the rewrite back to the gateway |
-| Only the **Edit** button fails | One of the four FLUX Kontext files — `pnpm check:nodes` names it |
+| Only the **Edit** button, Create one or Text to Image fails | An H3 Image file, or ComfyUI older than 0.45 — `pnpm check:nodes` names it |
 | Large uploads fail when deployed | No Blob store — see [step 4](#4-deploy-to-vercel) |
 | The Windows machine restarts during step 1 | [The GPU timeout](#on-windows-raise-the-gpu-timeout-first). Display event 4101 in the System log confirms it |
 | A job shows as **Lost** | ComfyUI restarted and forgot its history |

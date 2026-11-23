@@ -50,8 +50,8 @@ can be claimed by whoever finds it first.
   restarts ComfyUI while it may be rendering, and anything outward-facing:
   a system service, a firewall rule, a router port forward, Tailscale Funnel,
   Vercel projects, environment variables, deploys, filing an issue.
-- **Never handle their secrets in chat.** The ComfyUI password, the AI Gateway
-  key and the Hugging Face token are typed by the person — into a browser, the
+- **Never handle their secrets in chat.** The ComfyUI password and the AI
+  Gateway key are typed by the person — into a browser, the
   app, or their own shell. You may read the ComfyUI token from its file and
   write it into `.env.local` or Vercel, but never print it.
 - **Keep a running list of what went wrong.** Every error, every place this
@@ -137,18 +137,20 @@ director — the latter only after the 12 GB rows in the troubleshooting table. 
 Apple: say it is unsupported. The full table is in
 [`setup.md`](setup.md#how-much-vram).
 
-A ComfyUI older than 0.45 should be updated first — the H3, H3 Image, SeedVR2
-and FLUX Kontext nodes are built in, but only on a recent build: H3 Image (Text
-to Image, and Create one on a picture) arrived in 0.45, and the local director
-needs 0.38's `TextGenerate`. Ask before updating a working install.
+A ComfyUI older than 0.45 should be updated first — the H3, H3 Image and
+SeedVR2 nodes are built in, but only on a recent build: H3 Image (Text to
+Image, the Edit button, Create one on a picture, Picture character swap)
+arrived in 0.45, and the local director needs 0.38's `TextGenerate`. Ask before updating a working install.
 
 **Then ask two things:**
 
 1. **Which workflows they want.** Text to Video, Image to Video and Extend share
-   one 43 GB set; Reference to Video and Remix add 21 GB, and 118 GB more for a
-   song, voice or clip as a reference; Music 14 GB; Upscale nothing to speak of
-   (but an NVIDIA RTX card), or 9 GB more with SeedVR2; the Edit button
-   29 GB. Phase 3 checks these against what is already on disk. Recommend
+   one 43 GB set; Text to Image, the Edit button, Create one and Picture
+   character swap share 22 GB more (H3 Image); Reference to Video and Remix add
+   21 GB, and 118 GB more for a song, voice or clip as a reference; Music
+   14 GB; Upscale nothing to speak of (but an NVIDIA RTX card), or 9 GB more
+   with SeedVR2. The Edit button and Create one sit on every picture slot, so
+   recommend H3 Image to anyone who uses pictures. Phase 3 checks these against what is already on disk. Recommend
    starting with Text to Video if disk or time is short: a narrower first pass
    that works beats a complete one that takes a day.
 2. **Local only, or deployed to Vercel** so they can use it from their phone or
@@ -164,9 +166,6 @@ the person can do them while downloads run. Tell them which apply:
   (<https://login.tailscale.com/start>) with **DNS → MagicDNS**, **DNS → HTTPS
   Certificates**, and in **Access Controls**
   `"nodeAttrs": [{ "target": ["autogroup:member"], "attr": ["funnel"] }]`.
-- **The Edit button:** a Hugging Face account, the FLUX Kontext licence accepted
-  at <https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev>, and a read
-  token from <https://huggingface.co/settings/tokens> (Phase 3).
 - **Nothing else is required.** The prompt rewrite can run on this machine with
   no account (Phase 7); an AI Gateway key is optional.
 
@@ -296,10 +295,9 @@ verifies each file's size. It exits 0 when everything chosen is in place, so
 re-run it until it does. These are tens of gigabytes — hours on a home
 connection: run it in the background and carry on with Phase 4.
 
-**The Edit button's FLUX Kontext model is gated.** The person accepts the
-licence and creates a token (Phase 0), then sets `HF_TOKEN` in the shell that
-runs the script. The script stops and says so if it is missing;
-`--skip flux1-kontext-dev.safetensors` downloads the rest.
+**No file is gated.** Nothing needs a Hugging Face account or `HF_TOKEN`.
+Before 0.28 the Edit button ran FLUX Kontext, which did: do not download it,
+nothing uses it any more.
 
 **Someone who already runs H3 in ComfyUI** usually downloads nothing. A file
 already in a models folder under another name, or in a subfolder, is found by
@@ -845,7 +843,13 @@ On the ComfyUI machine:
    names, since its main branch moves ahead of what was tested.
 3. Models: `pnpm models:download` for the workflows the person uses — it fetches
    only what is missing, and says how much before it starts. Ask before a large
-   download.
+   download. Then the files a release stopped using: if the release notes name
+   any, offer to delete them, and ask first — they may be used outside this
+   app. From 0.28 the Edit button runs H3 Image, so the four FLUX Kontext files
+   are unused: `diffusion_models/flux1-kontext-dev.safetensors`,
+   `text_encoders/clip_l.safetensors`, `text_encoders/t5xxl_fp8_e4m3fn.safetensors`
+   and `vae/ae.safetensors` (29 GB). `clip_l` and `ae` are shared by other FLUX
+   models, so keep them if the person runs FLUX elsewhere.
 4. ComfyUI itself, if the release notes say so, or if `pnpm check:nodes` reports
    the version as OLDER: the new version's `machine-requirements.json` names the
    oldest ComfyUI it is tested on (`comfyui.min`, from src/lib/comfy-version.ts),
@@ -893,7 +897,7 @@ On the ComfyUI machine:
 | `check:nodes` says `COMFY_URL is not set` but `.env.local` sets it | An old copy of the scripts reading a CRLF file; pull, or save `.env.local` with LF endings |
 | `check:workflows` says `machine-requirements.json` is stale on a fresh clone | An old copy reading CRLF; pull. Do not commit a regenerated file to fix it |
 | A run fails naming a node class | `pnpm check:nodes` — a pack is missing |
-| Only the **Edit** button fails | One of the FLUX Kontext files; `models:download --workflows image-edit` |
+| Only the **Edit** button, Create one or Text to Image fails | H3 Image files, or ComfyUI older than 0.45; `models:download --workflows image-edit` and `check:nodes` |
 | Fails at the rewrite, no key | Set up a rewrite — Phase 7. Either a gateway key, or the local director chosen in the app |
 | Fails at the rewrite, no reason | Usually a refusal. Change **Rewrite model** behind the header's **Rewrite** button, or use the local director |
 | Rewrite refused: model not in the list | The gateway retired it. Redeploy: the build runs `pnpm sync:models`. Never commit the regenerated file in a person's clone — it blocks the next `git pull` |

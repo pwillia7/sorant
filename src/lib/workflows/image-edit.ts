@@ -1,47 +1,42 @@
 import type { ComfyGraph } from "@/lib/comfy";
 import { ParamError } from "@/lib/params";
 import {
-  EDIT_GUIDANCE_NODE,
   EDIT_SAMPLER_NODE,
   IMAGE_EDIT_SETTINGS,
 } from "./image-edit-settings";
 import type { ParamDef, WorkflowDef } from "./types";
 
 /**
- * FLUX.1 Kontext dev: a reference picture, changed by a sentence.
+ * MiniMax H3 Image's edit mode: a reference picture, changed by a sentence.
  *
  * Not a generator — the Edit button on an image control queues it and writes
- * the result back into that control. Core nodes only, laid out the way
- * Comfy-Org's Kontext template wires them, with these choices measured on the
- * 3090 before they went in:
+ * the result back into that control. Laid out as Comfy-Org's template
+ * (image_minimax_h3_image_edit): the picture is <Picture 1>, anchored as a
+ * reference latent through the VAE, and the canvas is its own size; the
+ * CFG-distilled checkpoint runs 6 steps of Euler on the simple schedule at
+ * CFG 1, with a zeroed negative CFG 1 never reads.
  *
- * 1. **20 steps of ER-SDE on the Beta schedule, guidance 2.5.** Chosen from a
- *    same-seed grid on a portrait (2026-10-21): the template's Euler/Simple —
- *    at 8 steps or 20, guidance 1.5 to 2.5 — redrew the man as somebody else,
- *    darker-skinned and bearded, with Kontext's smooth, contrasty polish.
- *    ER-SDE kept his face, skin tone and stubble, with pores and freckles
- *    rather than plastic. About a minute a run where 8 Euler steps took 18 s
- *    warm. Cold — straight after a free, or after an H3 run evicted it — adds
- *    10 to 15 s. An H3 run straight after an edit took about 18 s longer than
- *    a warm one, which is the swap, and nothing worse: the box stayed up.
- * 2. **fp8 weights.** The file is bf16 and would not leave the T5 room on a
- *    24 GB card; cast on load, it does.
- * 3. **The picture's own shape.** `ImageScaleToTotalPixels` to 1 MP on a 16 px
- *    grid, rather than the template's `FluxKontextImageScale`, which snaps to
- *    Kontext's preferred sizes and would change the frame an image-to-video run
- *    inherits. 1 MP is also where H3 stops, so nothing past it would be used.
- * 4. **No identity suffix.** The instruction goes in as typed — no rewrite, no
- *    boilerplate. At the defaults above an outfit change kept the face without
- *    being told to.
+ * It replaced FLUX.1 Kontext dev on 2026-11-23, after six edits on both, two
+ * seeds each for three of them: an outfit change, adding an object, a scene
+ * change, a relight, new words on a chalkboard. H3 held faces and hair where
+ * Kontext straightened curls and once changed the hair and the jacket colour,
+ * followed the instruction as closely or closer, and took about 28 s warm
+ * where Kontext took 49 — 9 s for another take of the same edit, since the
+ * encoded picture and instruction are reused. It is also the model Text to
+ * Image already loads, so the Edit button no longer needs a 29 GB model of its
+ * own.
  *
- * Guidance, steps, sampler, schedule and how much of the picture is redrawn
- * are the user's from the settings button on the edit bar — see
- * image-edit-settings.ts, which holds the defaults. The graph's own values
- * below are the template's and are always overwritten.
+ * Choices kept from the Kontext graph:
+ * 1. **The picture's own shape.** `ImageScaleToTotalPixels` to 1 MP on a 32 px
+ *    grid. The template upscales to 16 MP; an image-to-video run inherits this
+ *    frame, and 1 MP is where H3 video stops, so nothing past it would be used.
+ * 2. **No rewrite.** The template's prompt enhancer is off: the instruction
+ *    goes in as typed, which is what the comparison ran.
  */
 
 const IMAGE_NODE = "10";
-const PROMPT_NODE = "4";
+const SCALE_NODE = "11";
+const COND_NODE = "4";
 const SAMPLER_NODE = EDIT_SAMPLER_NODE;
 const SAVE_NODE = "9";
 const INSTRUCTION_PARAM = "instruction";
@@ -50,70 +45,66 @@ const graph: ComfyGraph = {
   "1": {
     class_type: "UNETLoader",
     inputs: {
-      unet_name: "flux1-kontext-dev.safetensors",
-      weight_dtype: "fp8_e4m3fn",
+      unet_name: "minimax_h3_image_pruned_int8_convrot.safetensors",
+      weight_dtype: "default",
     },
   },
   "2": {
-    class_type: "DualCLIPLoader",
+    class_type: "CLIPLoader",
     inputs: {
-      clip_name1: "clip_l.safetensors",
-      clip_name2: "t5xxl_fp8_e4m3fn.safetensors",
-      type: "flux",
+      clip_name: "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      type: "minimax",
+      device: "default",
     },
   },
   "3": {
     class_type: "VAELoader",
-    inputs: { vae_name: "ae.safetensors" },
+    inputs: { vae_name: "minimax_h3_image_vae_fp16.safetensors" },
   },
   [IMAGE_NODE]: {
     class_type: "LoadImage",
     inputs: { image: "example.png" },
   },
-  "11": {
+  [SCALE_NODE]: {
     class_type: "ImageScaleToTotalPixels",
     inputs: {
       image: [IMAGE_NODE, 0],
       upscale_method: "lanczos",
       megapixels: 1,
-      resolution_steps: 16,
+      resolution_steps: 32,
     },
   },
   "12": {
-    class_type: "VAEEncode",
-    inputs: { pixels: ["11", 0], vae: ["3", 0] },
+    class_type: "GetImageSize",
+    inputs: { image: [SCALE_NODE, 0] },
   },
-  [PROMPT_NODE]: {
-    class_type: "CLIPTextEncode",
-    inputs: { clip: ["2", 0], text: "" },
-  },
-  "13": {
-    class_type: "ReferenceLatent",
-    inputs: { conditioning: [PROMPT_NODE, 0], latent: ["12", 0] },
-  },
-  [EDIT_GUIDANCE_NODE]: {
-    class_type: "FluxGuidance",
-    inputs: { conditioning: ["13", 0], guidance: 2.5 },
+  [COND_NODE]: {
+    class_type: "MiniMaxH3ImageConditioning",
+    inputs: {
+      clip: ["2", 0],
+      vae: ["3", 0],
+      prompt: "",
+      width: ["12", 0],
+      height: ["12", 1],
+      "images.image_1": [SCALE_NODE, 0],
+    },
   },
   "5": {
     class_type: "ConditioningZeroOut",
-    inputs: { conditioning: [PROMPT_NODE, 0] },
+    inputs: { conditioning: [COND_NODE, 0] },
   },
   [SAMPLER_NODE]: {
     class_type: "KSampler",
     inputs: {
       model: ["1", 0],
       seed: 0,
-      steps: 8,
+      steps: 6,
       cfg: 1,
       sampler_name: "euler",
       scheduler: "simple",
-      positive: ["14", 0],
+      positive: [COND_NODE, 0],
       negative: ["5", 0],
-      // The picture's own latent. At full denoise only its size survives,
-      // which is what sizes the output to match the input; below it, the
-      // picture itself is where sampling starts. See `redraw`.
-      latent_image: ["12", 0],
+      latent_image: [COND_NODE, 1],
       denoise: 1,
     },
   },
@@ -142,7 +133,7 @@ const params: ParamDef[] = [
     type: "text",
     default: "",
     maxLength: 1000,
-    targets: [{ node: PROMPT_NODE, input: "text" }],
+    targets: [{ node: COND_NODE, input: "prompt" }],
   },
   {
     id: "seed",
@@ -158,13 +149,13 @@ export const imageEdit: WorkflowDef = {
   id: "image-edit",
   name: "Edit image",
   description: "Changes a reference picture by a sentence.",
-  estimatedSeconds: 60,
+  estimatedSeconds: 30,
   graph,
   params,
   tool: true,
   finalize: (graph, values) => {
-    // An empty instruction, which Kontext would answer with a lightly redrawn
-    // copy of the picture — 20 seconds for nothing.
+    // An empty instruction, which the model would answer with a lightly
+    // redrawn copy of the picture — half a minute for nothing.
     if (!String(values[INSTRUCTION_PARAM] ?? "").trim()) {
       throw new ParamError("Say what should change.", INSTRUCTION_PARAM);
     }
@@ -185,11 +176,7 @@ export const imageEdit: WorkflowDef = {
       values: {
         image: "example.png",
         [INSTRUCTION_PARAM]: "make it night",
-        guidance: 1.8,
-        steps: 20,
-        redraw: 0.8,
-        sampler: "deis",
-        scheduler: "beta",
+        steps: 10,
       },
     },
     {

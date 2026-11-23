@@ -16,7 +16,7 @@ import type { ParamValue } from "@/lib/workflows/types";
 /** Must match the graph's id in src/lib/workflows/image-edit.ts. */
 const WORKFLOW_ID = "image-edit";
 /**
- * The edit settings, one set for the whole app: they describe how Kontext
+ * The edit settings, one set for the whole app: they describe how the model
  * should draw, which is a taste rather than a fact about any one slot.
  */
 const SETTINGS_KEY = "sorant-edit-settings";
@@ -186,7 +186,7 @@ export function ImageEditBar({
           <span className="min-w-0 flex-1" aria-live="polite">
             {stage === "waiting"
               ? `Waiting for the video that is rendering to finish — your edit is next. ${seconds}s`
-              : `Editing… ${seconds}s — usually about a minute`}
+              : `Editing… ${seconds}s — usually under half a minute`}
           </span>
           <Button variant="quiet" size="xs" onClick={() => void cancel()}>
             Cancel
@@ -222,7 +222,7 @@ export function ImageEditBar({
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         title="Edit settings"
-        subtitle="How FLUX Kontext redraws the picture. Kept for every edit."
+        subtitle="How MiniMax H3 Image redraws the picture. Kept for every edit."
         footer={
           <div className="flex items-center justify-between gap-3">
             <Button

@@ -25,9 +25,9 @@
  *   where it is. `--replace <file>` downloads it anyway, into this install's
  *   own models folder: a copy of theirs in that folder is kept as <file>.old,
  *   and copies in other installs' folders are not touched. A partial download is
- * resumed from where it stopped, so an interrupted run is safe to repeat. Set
- * HF_TOKEN for the gated FLUX Kontext file, after accepting its licence on
- * Hugging Face with the same account.
+ * resumed from where it stopped, so an interrupted run is safe to repeat. No
+ * file in use is gated today; a source marked `gated` would need HF_TOKEN from
+ * an account that accepted its licence, and the script says so.
  */
 import {
   createWriteStream,

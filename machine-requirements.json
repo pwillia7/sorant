@@ -1,5 +1,5 @@
 {
-  "fingerprint": "62517b6a41ed2035",
+  "fingerprint": "09cc29ff6597be36",
   "comfyui": {
     "min": "0.45.0"
   },
@@ -173,6 +173,7 @@
       ],
       "optional": false,
       "workflows": [
+        "image-edit",
         "minimax-h3",
         "minimax-h3 (4-step)",
         "minimax-h3 (sage)",
@@ -220,7 +221,6 @@
       ],
       "optional": false,
       "workflows": [
-        "image-edit",
         "minimax-h3-swap",
         "swap-mask-check"
       ]
@@ -363,17 +363,6 @@
         "swap-mask-check"
       ]
     },
-    "DualCLIPLoader": {
-      "inputs": [
-        "clip_name1",
-        "clip_name2",
-        "type"
-      ],
-      "optional": false,
-      "workflows": [
-        "image-edit"
-      ]
-    },
     "EmptyAudio": {
       "inputs": [
         "channels",
@@ -441,16 +430,6 @@
         "minimax-h3-swap"
       ]
     },
-    "FluxGuidance": {
-      "inputs": [
-        "conditioning",
-        "guidance"
-      ],
-      "optional": false,
-      "workflows": [
-        "image-edit"
-      ]
-    },
     "FrameInterpolate": {
       "inputs": [
         "images",
@@ -477,6 +456,7 @@
       ],
       "optional": false,
       "workflows": [
+        "image-edit",
         "minimax-h3-extend",
         "minimax-h3-extend (4-step)",
         "minimax-h3-extend (sage)",
@@ -1148,6 +1128,7 @@
       ],
       "optional": false,
       "workflows": [
+        "image-edit",
         "minimax-h3-image",
         "minimax-h3-image-swap"
       ]
@@ -1485,16 +1466,6 @@
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-ref2v (turbo)",
         "minimax-h3-swap"
-      ]
-    },
-    "ReferenceLatent": {
-      "inputs": [
-        "conditioning",
-        "latent"
-      ],
-      "optional": false,
-      "workflows": [
-        "image-edit"
       ]
     },
     "RegexReplace": {
@@ -2117,7 +2088,6 @@
       ],
       "optional": false,
       "workflows": [
-        "image-edit",
         "minimax-h3-swap"
       ]
     },
@@ -2395,36 +2365,12 @@
     }
   },
   "models": {
-    "ae.safetensors": {
-      "loader": "VAELoader",
-      "input": "vae_name",
-      "optional": false,
-      "workflows": [
-        "image-edit"
-      ]
-    },
-    "clip_l.safetensors": {
-      "loader": "DualCLIPLoader",
-      "input": "clip_name1",
-      "optional": false,
-      "workflows": [
-        "image-edit"
-      ]
-    },
     "film_net_fp16.safetensors": {
       "loader": "FrameInterpolationModelLoader",
       "input": "model_name",
       "optional": true,
       "workflows": [
         "upscale"
-      ]
-    },
-    "flux1-kontext-dev.safetensors": {
-      "loader": "UNETLoader",
-      "input": "unet_name",
-      "optional": false,
-      "workflows": [
-        "image-edit"
       ]
     },
     "h3_character_swap_v1.5.safetensors": {
@@ -2540,6 +2486,7 @@
       "input": "unet_name",
       "optional": false,
       "workflows": [
+        "image-edit",
         "minimax-h3-image",
         "minimax-h3-image-swap"
       ]
@@ -2549,6 +2496,7 @@
       "input": "vae_name",
       "optional": false,
       "workflows": [
+        "image-edit",
         "minimax-h3-image",
         "minimax-h3-image-swap"
       ]
@@ -2680,6 +2628,7 @@
       "input": "clip_name",
       "optional": false,
       "workflows": [
+        "image-edit",
         "minimax-h3",
         "minimax-h3 (4-step)",
         "minimax-h3 (sage)",
@@ -2748,14 +2697,6 @@
       "optional": true,
       "workflows": [
         "upscale"
-      ]
-    },
-    "t5xxl_fp8_e4m3fn.safetensors": {
-      "loader": "DualCLIPLoader",
-      "input": "clip_name2",
-      "optional": false,
-      "workflows": [
-        "image-edit"
       ]
     },
     "vh5tape-comfyui.safetensors": {

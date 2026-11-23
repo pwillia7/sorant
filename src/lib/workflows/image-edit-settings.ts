@@ -7,95 +7,27 @@ import type { ParamDef, ParamValue } from "./types";
  *
  * Node ids are the image-edit graph's. `pnpm check:workflows` holds every
  * target to that graph, so a renumbered node fails there rather than here.
+ *
+ * One control. H3 Image is CFG-distilled: guidance is fixed at 1, and Euler on
+ * the simple schedule is what it was distilled for. Kontext's guidance,
+ * sampler, schedule and redraw went with Kontext (2026-11-23); a browser that
+ * stored them keeps nothing it sends, because the edit bar drops any stored
+ * id no longer declared here.
  */
 
-export const EDIT_GUIDANCE_NODE = "14";
 export const EDIT_SAMPLER_NODE = "7";
 
 export const IMAGE_EDIT_SETTINGS: ParamDef[] = [
   {
-    id: "guidance",
-    label: "Guidance",
-    help: "Lower looks less contrasty and plastic; higher follows the change more strictly.",
-    type: "slider",
-    default: 2.5,
-    min: 1,
-    max: 5,
-    step: 0.1,
-    targets: [{ node: EDIT_GUIDANCE_NODE, input: "guidance" }],
-  },
-  {
     id: "steps",
     label: "Steps",
-    help: "More steps keep finer texture such as skin and hair, and take about 2 s each.",
+    help: "6 is what the model is made for. More rarely helps and takes longer.",
     type: "slider",
-    default: 20,
+    default: 6,
     min: 4,
-    max: 40,
+    max: 16,
     step: 1,
     targets: [{ node: EDIT_SAMPLER_NODE, input: "steps" }],
-  },
-  {
-    id: "redraw",
-    label: "Redraw",
-    help: "Below 1 starts from the picture instead of noise: keeps its grain, colour and light, but allows smaller changes.",
-    type: "slider",
-    default: 1,
-    min: 0.5,
-    max: 1,
-    step: 0.05,
-    targets: [{ node: EDIT_SAMPLER_NODE, input: "denoise" }],
-  },
-  {
-    id: "sampler",
-    label: "Sampler",
-    type: "select",
-    default: "er_sde",
-    options: [
-      {
-        value: "euler",
-        label: "Euler",
-        help: "Kontext's template. Smooth, and apt to redraw a face as someone else.",
-      },
-      {
-        value: "dpmpp_2m",
-        label: "DPM++ 2M",
-        help: "A little more fine detail than Euler.",
-      },
-      {
-        value: "deis",
-        label: "DEIS",
-        help: "Sharper texture; pairs well with the Beta schedule.",
-      },
-      {
-        value: "er_sde",
-        label: "ER-SDE",
-        help: "The default. Keeps faces and skin texture; wants 16 steps or more.",
-      },
-      {
-        value: "res_multistep",
-        label: "RES multistep",
-        help: "Holds detail at low step counts.",
-      },
-    ],
-    targets: [{ node: EDIT_SAMPLER_NODE, input: "sampler_name" }],
-  },
-  {
-    id: "scheduler",
-    label: "Schedule",
-    type: "select",
-    default: "beta",
-    options: [
-      {
-        value: "beta",
-        label: "Beta",
-        help: "The default. Spends more steps on fine detail at the end.",
-      },
-      { value: "simple", label: "Simple", help: "Kontext's template." },
-      { value: "sgm_uniform", label: "SGM uniform" },
-      { value: "normal", label: "Normal" },
-    ],
-    targets: [{ node: EDIT_SAMPLER_NODE, input: "scheduler" }],
   },
 ];
 

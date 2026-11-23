@@ -60,11 +60,6 @@ export const MODEL_SOURCES: Record<string, ModelSource> = {
   "rife_v4.26.safetensors": { repo: INTERP, path: "frame_interpolation/rife_v4.26.safetensors", folder: "frame_interpolation", bytes: 22674688 },
   "film_net_fp16.safetensors": { repo: INTERP, path: "frame_interpolation/film_net_fp16.safetensors", folder: "frame_interpolation", bytes: 68882302 },
 
-  // Edit image (FLUX.1 Kontext dev)
-  "flux1-kontext-dev.safetensors": { repo: "black-forest-labs/FLUX.1-Kontext-dev", path: "flux1-kontext-dev.safetensors", folder: "diffusion_models", bytes: 23802947360, gated: true },
-  "clip_l.safetensors": { repo: "comfyanonymous/flux_text_encoders", path: "clip_l.safetensors", folder: "text_encoders", bytes: 246144152 },
-  "t5xxl_fp8_e4m3fn.safetensors": { repo: "comfyanonymous/flux_text_encoders", path: "t5xxl_fp8_e4m3fn.safetensors", folder: "text_encoders", bytes: 4893934904 },
-  "ae.safetensors": { repo: "Comfy-Org/Lumina_Image_2.0_Repackaged", path: "split_files/vae/ae.safetensors", folder: "vae", bytes: 335304388 },
 
   // The local director (found by pattern, not named in a graph)
   "gemma4_12b_uncensored_heretic_int8_convrot.safetensors": { repo: "radiatingreverberations/Gemma-4-12B-It-Uncensored-Heretic-INT8-ConvRot-ComfyUI", path: "gemma4_12b_uncensored_heretic_int8_convrot.safetensors", folder: "text_encoders", bytes: 12055235716 },
