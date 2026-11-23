@@ -958,8 +958,27 @@ Then restart ComfyUI and rerun the check above, which should print
   and NVIDIA's own services keep working. The services use a separate telemetry
   plugin (`NvTelemetry\plugin\`), which is untouched.
 - **To undo it:** rename the file back.
-- **An NVIDIA App update may put the file back.** If Upscale starts freezing
-  again after one, check for it first.
+- **NVIDIA updates put the file back.** One did on 2026-11-22, without a
+  reboot, and the next Upscale froze. To keep it renamed, offer a scheduled
+  task that renames it whenever it reappears. Run this elevated, and ask first,
+  the same as for the rename:
+
+  ```powershell
+  $dir = 'C:\ProgramData\Sorant'; New-Item -ItemType Directory -Force $dir | Out-Null
+  Set-Content "$dir\telemetry-guard.ps1" @'
+  $dll = 'C:\Program Files\NVIDIA Corporation\NvTelemetry\NvTelemetryAPI64.dll'
+  if (Test-Path $dll) {
+    Rename-Item $dll "NvTelemetryAPI64.dll.restored-$(Get-Date -Format yyyyMMdd-HHmmss)"
+    "$(Get-Date -Format s) renamed" | Add-Content 'C:\ProgramData\Sorant\telemetry-guard.log'
+  }
+  '@
+  $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$dir\telemetry-guard.ps1`""
+  $every15 = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 15)
+  Register-ScheduledTask -Force -TaskName 'Sorant telemetry guard' -Action $action -Trigger $every15, (New-ScheduledTaskTrigger -AtStartup) -User 'SYSTEM' -RunLevel Highest
+  ```
+
+  To undo it: `Unregister-ScheduledTask 'Sorant telemetry guard'`, then rename
+  the file back.
 
 ## Done when
 
