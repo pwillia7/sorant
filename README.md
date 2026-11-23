@@ -6,7 +6,7 @@ app runs on Vercel (or your laptop); the models and the rendering stay on your
 machine.
 
 [![Watch the Soran’t trailer on YouTube: a 90-second tour of every
-workflow](docs/sizzle-reel.jpg)](https://www.youtube.com/watch?v=ncpg6Nl_Q0g)
+workflow](docs/sizzle-reel.jpg)](https://www.youtube.com/watch?v=MYE2afstz_A)
 
 ## Contents
 
