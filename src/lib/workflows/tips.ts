@@ -332,17 +332,21 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
   },
 
   "minimax-h3-image": {
-    source: H3_GUIDE,
+    source: {
+      href: "https://huggingface.co/Comfy-Org/MiniMax-H3-Image",
+      label: "MiniMax H3 Image on Hugging Face ↗",
+    },
     quickStart: [
       "Describe the picture in one line in the prompt bar: the subject, where they are, the light. A director fills in framing and detail.",
-      "Choose an Aspect ratio. Image size 2.5 MP is where stills look best; 1 MP is quicker for trying ideas.",
+      "Choose an Aspect ratio. Image size 4 MP takes about 16 s and suits most uses; 16 MP is the model's native size, about 50 s, and the sharpest.",
       "Generate. Reuse a seed to keep a composition while you change the words.",
     ],
     sections: [
       {
         heading: "How it works",
         items: [
-          "It is the video model making a very short clip and keeping its first frame, so everything about writing a video prompt applies — minus the motion and sound.",
+          "It is MiniMax H3 Image, a still-image model, at 6 steps. It renders lettering well: put the exact words in quotes and say where they go.",
+          "The director is told the canvas shape, so pick the aspect ratio before you write — a portrait subject in a 16:9 frame gets composed for 16:9.",
           "Look: Natural asks for real-world light and muted colour, which avoids the over-contrasted AI look. Cinematic leaves the grade to the director.",
           LITERAL_NOTE,
         ],
@@ -351,7 +355,36 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
         heading: "Using the result",
         items: [
           "A still makes a good first frame for Image to Video, or a reference picture for Reference to Video or Character swap.",
+          "Any picture slot can make its own: Create one, then describe it. It uses this model and your director, queued ahead of anything rendering, at 2 MP.",
           "In any picture slot, Edit changes a picture by a sentence — “make it night”, “give him a red cap” — without starting over.",
+        ],
+      },
+    ],
+  },
+
+  "minimax-h3-image-swap": {
+    source: {
+      href: "https://huggingface.co/akatz-ai/MiniMax-H3-Image-Character-Swap-LoRA",
+      label: "Built on akatz-ai’s H3 Image Character Swap LoRA ↗",
+    },
+    quickStart: [
+      "Add The picture — the one to change — and The character: a portrait, full-body shot or character sheet of who they become.",
+      "Say Who to replace by position, clothes or what they are doing: “the man on the left in the grey suit”.",
+      "Generate. About 40 s at 1 MP; reuse a seed to try the same swap with different words.",
+    ],
+    sections: [
+      {
+        heading: "What carries over",
+        items: [
+          "The character's face, hair, costume, materials and style come across; the picture's pose, framing, light, background and everyone else stay.",
+          "The character's outfit replaces the original one. To keep the original clothes, say so in Anything else, or lower Swap strength — 0 is the plain model, which swaps little more than the face.",
+          "It is for people and humanoid characters. Check small or half-hidden figures, hands near props, and clothes that blend into the background.",
+        ],
+      },
+      {
+        heading: "Stills, not clips",
+        items: [
+          "Character swap does the same for a video clip, with a different model. A swapped still also makes a good photoreal reference for it, or a first frame for Image to Video.",
         ],
       },
     ],

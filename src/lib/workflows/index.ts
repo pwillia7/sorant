@@ -2,6 +2,7 @@ import { imageEdit } from "./image-edit";
 import { minimaxH3 } from "./minimax-h3";
 import { minimaxH3Extend } from "./minimax-h3-extend";
 import { minimaxH3Image } from "./minimax-h3-image";
+import { minimaxH3ImageSwap } from "./minimax-h3-image-swap";
 import { minimaxH3ImageToVideo } from "./minimax-h3-i2v";
 import { minimaxH3Reference } from "./minimax-h3-ref";
 import { minimaxH3ReferenceVideo } from "./minimax-h3-ref2v";
@@ -24,13 +25,15 @@ import type { WorkflowDef, WorkflowSummary } from "./types";
  */
 export const WORKFLOWS: WorkflowDef[] = [
   minimaxH3,
-  // The same graph stopped at its first frame. See the file for why.
+  // MiniMax H3 Image, the still model — not the video graph. See the file.
   minimaxH3Image,
   minimaxH3ImageToVideo,
   minimaxH3Reference,
   minimaxH3ReferenceVideo,
   // Remix's graph with a picture beside the clip and a LoRA under the model.
   minimaxH3Swap,
+  // The still model's edit mode with a swap LoRA: a picture, not a clip.
+  minimaxH3ImageSwap,
   minimaxH3Extend,
   // Plan a whole video and run Reference to Video once per scene. After the
   // graphs they run, which they name by id.

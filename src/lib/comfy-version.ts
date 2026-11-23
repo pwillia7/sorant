@@ -19,7 +19,7 @@
  * After testing a new ComfyUI (the update check), move `testedThrough` and the
  * "Tested on" line in docs/agent-setup.md together.
  */
-export const COMFY_TESTED = { min: "0.38.0", testedThrough: "0.44.0" } as const;
+export const COMFY_TESTED = { min: "0.45.0", testedThrough: "0.46.0" } as const;
 
 /** "0.44.0" → [0, 44, 0]; null for anything that is not a version. */
 export function parseVersion(value: unknown): number[] | null {

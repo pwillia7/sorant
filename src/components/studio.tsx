@@ -12,6 +12,7 @@ import {
   ConnectionPill,
   useHealth,
 } from "@/components/connection-pill";
+import { RunDirectorProvider } from "@/components/run-director";
 import { NotifyToggle } from "@/components/notify-toggle";
 import { RewriteKeyButton } from "@/components/rewrite-key";
 import { MusicVideoPanel } from "@/components/music-video-panel";
@@ -430,6 +431,12 @@ function Workbench({
     );
     return candidate ?? rewritePicker.options[0]?.value;
   }, [rewritePicker, chosenRewriteModel]);
+  // For runs started inside a control — the Create bar on a picture — so they
+  // go out on the director a run from the form would. See run-director.tsx.
+  const runDirectorContext = useMemo(
+    () => ({ localDirector: runDirector, rewriteModel }),
+    [runDirector, rewriteModel],
+  );
   const onRewriteModelChange = useCallback((id: string) => {
     setChosenRewriteModel(id);
     writeStoredRewriteModel(id);
@@ -1377,6 +1384,7 @@ function Workbench({
     ) : null;
 
   return (
+    <RunDirectorProvider value={runDirectorContext}>
     <div className="relative min-h-dvh">
       <header className="sticky top-0 z-50 flex h-12 items-center gap-2 border-b border-border-default bg-bg/90 px-3 backdrop-blur-md sm:gap-3 sm:px-5">
         <SorantMark aria-hidden="true" className="size-6 shrink-0 text-fg" />
@@ -1650,6 +1658,7 @@ function Workbench({
         />
       ) : null}
     </div>
+    </RunDirectorProvider>
   );
 }
 

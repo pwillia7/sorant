@@ -197,11 +197,15 @@ are values inside the graphs rather than choices in the UI.
 
 | File | Folder under `models/` | Size | Needed by |
 | --- | --- | ---: | --- |
-| `minimax_h3_fl2va_pruned_int8_convrot.safetensors` | `diffusion_models/` | 21.0 GB | Text to Video, Text to Image, Image to Video, Extend |
+| `minimax_h3_fl2va_pruned_int8_convrot.safetensors` | `diffusion_models/` | 21.0 GB | Text to Video, Image to Video, Extend |
 | `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` | `text_encoders/` | 15.7 GB | every H3 workflow |
-| `minimax_h3_video_vae_fp16.safetensors` | `vae/` | 5.2 GB | every H3 workflow |
-| `minimax_h3_audio_vae_fp32.safetensors` | `vae/` | 0.6 GB | every H3 video workflow (not Text to Image) |
+| `minimax_h3_video_vae_fp16.safetensors` | `vae/` | 5.2 GB | every H3 video workflow |
+| `minimax_h3_audio_vae_fp32.safetensors` | `vae/` | 0.6 GB | every H3 video workflow |
 | `minimax_h3_turbo_v4_step600_ema.safetensors` | `loras/` | 0.8 GB | the Turbo switch (on by default) |
+| | | | |
+| `minimax_h3_image_pruned_int8_convrot.safetensors` | `diffusion_models/` | 21.0 GB | Text to Image, **Create one** on a picture, Picture character swap |
+| `minimax_h3_image_vae_fp16.safetensors` | `vae/` | 1.2 GB | the same |
+| `h3_image_character_swap_v1.safetensors` | `loras/` | 0.2 GB | Picture character swap ([source](https://huggingface.co/akatz-ai/MiniMax-H3-Image-Character-Swap-LoRA)) |
 | | | | |
 | `minimax_h3_ref2va_pruned_int8_convrot.safetensors` | `diffusion_models/` | 21.0 GB | Reference to Video, Remix, Music video |
 | `minimax_h3_ref2va_bf16.safetensors` | `diffusion_models/` | 66.3 GB | Reference to Video with a soundtrack, voice or clip attached; Music video; Remix at 4 steps |
@@ -237,6 +241,7 @@ Where to get them:
 | Files | From |
 | --- | --- |
 | MiniMax H3 | [Comfy-Org/MiniMax-H3](https://huggingface.co/Comfy-Org/MiniMax-H3), and ComfyUI's [H3 tutorial](https://docs.comfy.org/tutorials/video/minimax/minimax-h3) |
+| MiniMax H3 Image | [Comfy-Org/MiniMax-H3-Image](https://huggingface.co/Comfy-Org/MiniMax-H3-Image) (needs ComfyUI 0.45+); its text encoder is H3's nvfp4 one above. Note its licence differs from H3's: hosting it as a service for others needs MiniMax's written permission |
 | Turbo LoRA | [larryvrh/MiniMax-H3-Turbo-Lora](https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora) |
 | Music 3 | [Comfy-Org/MiniMax-Music-3](https://huggingface.co/Comfy-Org/MiniMax-Music-3) |
 | SeedVR2 | [Comfy-Org/SeedVR2](https://huggingface.co/Comfy-Org/SeedVR2) |

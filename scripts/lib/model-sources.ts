@@ -23,8 +23,14 @@ const H3 = "Comfy-Org/MiniMax-H3";
 const MUSIC = "Comfy-Org/MiniMax-Music-3";
 const SEEDVR2 = "Comfy-Org/SeedVR2";
 const INTERP = "Comfy-Org/frame_interpolation";
+const H3_IMAGE = "Comfy-Org/MiniMax-H3-Image";
 
 export const MODEL_SOURCES: Record<string, ModelSource> = {
+  // MiniMax H3 Image — the still model. Its text encoder is the video graphs'
+  // nvfp4 Qwen3-VL, listed under MiniMax H3 below.
+  "minimax_h3_image_pruned_int8_convrot.safetensors": { repo: H3_IMAGE, path: "diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors", folder: "diffusion_models", bytes: 20979314802 },
+  "minimax_h3_image_vae_fp16.safetensors": { repo: H3_IMAGE, path: "vae/minimax_h3_image_vae_fp16.safetensors", folder: "vae", bytes: 1168505312 },
+  "h3_image_character_swap_v1.safetensors": { repo: "akatz-ai/MiniMax-H3-Image-Character-Swap-LoRA", path: "h3_image_character_swap_v1.safetensors", folder: "loras", bytes: 155110448 },
   // MiniMax H3
   "minimax_h3_fl2va_pruned_int8_convrot.safetensors": { repo: H3, path: "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors", folder: "diffusion_models", bytes: 20970379616 },
   "minimax_h3_ref2va_pruned_int8_convrot.safetensors": { repo: H3, path: "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors", folder: "diffusion_models", bytes: 20970379616 },

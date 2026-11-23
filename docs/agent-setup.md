@@ -127,7 +127,7 @@ On Linux, `git clone https://github.com/comfyanonymous/ComfyUI`, a venv, and its
 `requirements.txt` with the PyTorch build for their CUDA. Run it once to prove it
 starts, then carry on.
 
-**Hardware.** Tested on Windows, ComfyUI 0.38 through 0.44, an RTX 3090 (24 GB) and
+**Hardware.** Tested on Windows, ComfyUI 0.45 through 0.46 (Text to Image needs 0.45 or newer), an RTX 3090 (24 GB) and
 64 GB of RAM. ComfyUI's Dynamic VRAM (NVIDIA, Windows and Linux, not WSL)
 streams weights from RAM, so VRAM limits speed and frame size rather than
 whether a model loads: 16 GB should run the default 0.5 MP frame size. 12 GB
@@ -137,8 +137,9 @@ director — the latter only after the 12 GB rows in the troubleshooting table. 
 Apple: say it is unsupported. The full table is in
 [`setup.md`](setup.md#how-much-vram).
 
-A ComfyUI older than 0.38 should be updated first — the H3, SeedVR2 and FLUX
-Kontext nodes are built in, but only on a recent build, and the local director
+A ComfyUI older than 0.45 should be updated first — the H3, H3 Image, SeedVR2
+and FLUX Kontext nodes are built in, but only on a recent build: H3 Image (Text
+to Image, and Create one on a picture) arrived in 0.45, and the local director
 needs 0.38's `TextGenerate`. Ask before updating a working install.
 
 **Then ask two things:**

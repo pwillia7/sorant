@@ -30,14 +30,16 @@ with the overview table, then jump to the one you are using.
 
 ## Overview
 
-Six target **MiniMax H3** and produce a video with a generated audio track;
-Text to Image runs the same model and stops at a still. They share sampling,
-timing and encoding controls via `minimax-common.ts`.
+Six target **MiniMax H3** and produce a video with a generated audio track.
+Text to Image and Picture character swap run **MiniMax H3 Image**, the still
+model. They share sampling, timing and encoding controls via
+`minimax-common.ts`.
 
 | Workflow | Output size comes from |
 | --- | --- |
 | `minimax-h3` — text to video | Aspect ratio + megapixels (`ResolutionSelector`) |
-| `minimax-h3-image` — text to image | Aspect ratio + megapixels, 2.5 MP by default and up to 4 |
+| `minimax-h3-image` — text to image | Aspect ratio + megapixels, 4 MP by default and up to 16 |
+| `minimax-h3-image-swap` — picture character swap | The picture's own shape, at 1 MP by default |
 | `minimax-h3-i2v` — image to video | The uploaded image, rescaled by `ImageScaleToTotalPixels` |
 | `minimax-h3-ref` — reference to video | Aspect ratio + megapixels (`ResolutionSelector`) |
 | `minimax-h3-ref2v` — remix | The source clip's frames, measured by `GetImageSizeAndCount` — length included |
@@ -449,20 +451,38 @@ Two consequences worth knowing before changing anything:
 
 ## Text to Image
 
-`minimax-h3-image` is the Text to Video graph made to stop at a still. H3 has
-no image mode, so a still is the **first frame of the shortest clip it makes**
-— five frames, two latents. One latent would be a true single frame, but H3's
-VAE decodes one on its own dark and banded on builds before ComfyUI 0.40, and
-the core latent nodes still floor the length at five frames; two decode
-cleanly on any version for a second or two more.
+`minimax-h3-image` runs **MiniMax H3 Image** (ComfyUI 0.45+), laid out as
+Comfy-Org's template: the CFG-distilled checkpoint at 6 steps of Euler on the
+simple schedule, CFG 1. The template's negative is a zeroed conditioning CFG 1
+never reads, so the graph samples with a `BasicGuider` instead — identical
+pixels at the same seed and size. The text encoder is the video graphs' nvfp4
+Qwen3-VL.
 
-The sampling is its own, not Text to Video's. Turbo at full strength gives a
-still an oversaturated, crunchy look, so it runs the Turbo LoRA at **0.38,
-`er_sde`, 20 steps** — about 50 seconds at 2.5 MP on a 3090. A still also
-wants more pixels than a frame of video: past H3's ~1 MP video canvas it keeps
-gaining detail, so the size control defaults to 2.5 MP and goes to 4. Its director,
-`STILL_DIRECTOR`, writes H3's three fields for one static frame with silence
-for the sound.
+Until 0.45 the only H3 in core was the video model, and a still was the first
+frame of its shortest clip (Turbo LoRA at 0.38, `er_sde`, 20 steps, about a
+minute at 2.5 MP). H3 Image replaced it after a same-seed comparison on four
+prompts: much finer texture, exact lettering, and three to four times faster —
+16 s at 4 MP, 24 s at 8, 47 s at the model's native 16 MP on a 3090.
+
+Its director, `STILL_DIRECTOR`, is MiniMax's own prompt enhancer system prompt
+for this model (MiniMax-H3-Image-PE, `prompt/t2i`) cut down to a plain caption.
+The official one also picks the aspect ratio; here the form does, and the
+director is told the canvas shape instead.
+
+**Create one**, on every picture control, runs this graph with the hidden
+`for_reference` switch: 2 MP, the app's director, queued ahead of anything
+rendering, saved under a name of its own and copied into the input directory
+like an Edit. See `image-create.tsx`.
+
+## Picture character swap
+
+`minimax-h3-image-swap` is H3 Image's edit mode with akatz-ai's
+character-swap LoRA, as the author's example workflow lays it out: `<Picture
+1>` is the picture to change and sets the canvas, `<Picture 2>` is the
+character, and the instruction is the author's with the target filled in.
+Defaults are the author's tested ones — LoRA 1.0, 6 steps, Euler/simple, about
+1 MP. Without the LoRA the base model swaps the face and keeps the old clothes;
+with it the costume comes across too. About 40 s at 1 MP.
 
 ## Music video
 

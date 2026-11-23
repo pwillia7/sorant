@@ -6,7 +6,7 @@ import { Control } from "@/components/param-form";
 import { Button, Spinner } from "@/components/ui/button";
 import { CONTROL_BASE } from "@/components/ui/inputs";
 import { Modal } from "@/components/ui/modal";
-import { api, ApiError } from "@/lib/client";
+import { useToolRun } from "@/hooks/use-tool-run";
 import {
   IMAGE_EDIT_DEFAULTS,
   IMAGE_EDIT_SETTINGS,
@@ -15,13 +15,6 @@ import type { ParamValue } from "@/lib/workflows/types";
 
 /** Must match the graph's id in src/lib/workflows/image-edit.ts. */
 const WORKFLOW_ID = "image-edit";
-const POLL_MS = 1000;
-/**
- * Polls that find the prompt in neither the queue nor the history before the
- * edit is given up on. A just-queued prompt can miss both for a moment; this
- * long means ComfyUI restarted and forgot it.
- */
-const UNKNOWN_GRACE = 20;
 /**
  * The edit settings, one set for the whole app: they describe how Kontext
  * should draw, which is a taste rather than a fact about any one slot.
@@ -56,25 +49,6 @@ function saveSettings(settings: Record<string, ParamValue>) {
   }
 }
 
-interface StatusPayload {
-  state: "queued" | "running" | "done" | "error" | "unknown";
-  outputs: Array<{ filename: string; subfolder?: string; type: string }>;
-  error?: string;
-}
-
-/**
- * What the status line says. Kept apart from the run itself (`job` below):
- * the poll belongs to the prompt for as long as it lives, and the status moving
- * on to "saving" must not be what stops it.
- */
-type Stage = "idle" | "starting" | "waiting" | "editing" | "saving";
-
-function messageOf(cause: unknown, fallback: string): string {
-  return cause instanceof ApiError || cause instanceof Error
-    ? cause.message
-    : fallback;
-}
-
 /**
  * The sentence box under a picture, and the run it starts.
  *
@@ -100,12 +74,6 @@ export function ImageEditBar({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [instruction, setInstruction] = useState("");
-  const [stage, setStage] = useState<Stage>("idle");
-  const [job, setJob] = useState<{ promptId: string; startedAt: number } | null>(
-    null,
-  );
-  const [error, setError] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
   /** The last edit that finished, so another take of it is one click. */
   const [last, setLast] = useState<{ source: string; instruction: string } | null>(
     null,
@@ -125,132 +93,30 @@ export function ImageEditBar({
       return next;
     });
   };
-  // Read through a ref so the poll below does not restart whenever the parent
-  // renders a new callback.
-  const onEditedRef = useRef(onEdited);
-  useEffect(() => {
-    onEditedRef.current = onEdited;
-  }, [onEdited]);
-
-  const busy = stage !== "idle";
+  const { stage, busy, error, seconds, start, cancel } = useToolRun({
+    noun: "edit",
+    onDone: (ref) => {
+      onEdited(ref);
+      setInstruction("");
+    },
+  });
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
   useEffect(() => inputRef.current?.focus(), []);
-
-  // The elapsed counter. Only while a run is going: a second's tick is all it
-  // needs, and nothing at all when idle.
-  useEffect(() => {
-    if (!job) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [job]);
-
-  const promptId = job?.promptId ?? null;
-
-  useEffect(() => {
-    if (!promptId) return;
-    let stopped = false;
-    let unknown = 0;
-
-    const finish = (message: string | null) => {
-      if (stopped) return;
-      setJob(null);
-      setStage("idle");
-      setError(message);
-    };
-
-    const poll = async () => {
-      if (stopped) return;
-      try {
-        const status = await api<StatusPayload>(
-          `/api/status?${new URLSearchParams({ promptId })}`,
-        );
-        if (stopped) return;
-
-        if (status.state === "done") {
-          const output = status.outputs[0];
-          if (!output) return finish("The edit finished without a picture.");
-          setStage("saving");
-          const { ref } = await api<{ ref: string }>("/api/remix", {
-            method: "POST",
-            body: JSON.stringify({
-              filename: output.filename,
-              subfolder: output.subfolder ?? "",
-              type: output.type,
-            }),
-          });
-          if (stopped) return;
-          onEditedRef.current(ref);
-          setInstruction("");
-          return finish(null);
-        }
-        if (status.state === "error") {
-          return finish(status.error ?? "The edit failed.");
-        }
-        if (status.state === "unknown" && ++unknown > UNKNOWN_GRACE) {
-          return finish("ComfyUI lost track of the edit. Try again.");
-        }
-        // Queued means something was already rendering when this arrived: it
-        // went in at the front, so the only thing ahead of it is that run.
-        setStage(status.state === "queued" ? "waiting" : "editing");
-        setTimeout(poll, POLL_MS);
-      } catch (cause) {
-        finish(messageOf(cause, "Lost touch with the server during the edit."));
-      }
-    };
-
-    void poll();
-    return () => {
-      stopped = true;
-    };
-  }, [promptId]);
 
   const run = async (from: string, text: string) => {
     const trimmed = text.trim();
     if (!trimmed || busy) return;
-    setError(null);
-    setStage("starting");
     setLast({ source: from, instruction: trimmed });
-    try {
-      const { promptId: queued } = await api<{ promptId: string }>(
-        "/api/generate",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            workflowId: WORKFLOW_ID,
-            params: {
-              ...settings,
-              image: from,
-              instruction: trimmed,
-              seed: -1,
-            },
-          }),
-        },
-      );
-      const startedAt = Date.now();
-      setNow(startedAt);
-      setStage("editing");
-      setJob({ promptId: queued, startedAt });
-    } catch (cause) {
-      setStage("idle");
-      setError(messageOf(cause, "Could not start the edit."));
-    }
+    await start({
+      workflowId: WORKFLOW_ID,
+      params: {
+        ...settings,
+        image: from,
+        instruction: trimmed,
+        seed: -1,
+      },
+    });
   };
-
-  const cancel = async () => {
-    if (!promptId) return;
-    // Back to idle straight away: the poll stops with the job, and whether
-    // the cancel reached ComfyUI or not, nothing will be written to the slot.
-    setJob(null);
-    setStage("idle");
-    await api("/api/cancel", {
-      method: "POST",
-      body: JSON.stringify({ promptId }),
-    }).catch(() => undefined);
-  };
-
-  const seconds = job
-    ? Math.max(0, Math.round((now - job.startedAt) / 1000))
-    : 0;
 
   return (
     <div className="flex flex-col gap-2 border-t border-border-default px-3 py-2.5">
@@ -314,7 +180,7 @@ export function ImageEditBar({
         </Button>
       </div>
 
-      {stage === "waiting" || stage === "editing" ? (
+      {stage === "waiting" || stage === "working" ? (
         <div className="flex items-center gap-2 text-[12px] text-fg-muted">
           <Spinner className="size-3.5 shrink-0" />
           <span className="min-w-0 flex-1" aria-live="polite">

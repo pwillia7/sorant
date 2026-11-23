@@ -53,7 +53,10 @@ soundtrack:
   people sounding the same across scenes. Pictures and voices can be set per
   scene.
 
-And **Text to Image**, an H3 still from a prompt.
+And **Text to Image** (MiniMax H3 Image, a still from a prompt, up to 16 MP —
+and a **Create one** button on every picture slot that makes a reference the
+same way) and **Picture character swap** (one person in a picture becomes the
+character in another).
 
 Plus **Music** (MiniMax Music 3, a song from a description), **Upscale**
 (NVIDIA RTX Video Super Resolution: a sharper copy of a finished clip, up to 4K,
@@ -87,8 +90,8 @@ It is only a front end: no model weights, no database, nothing expensive.
 | --- | --- |
 | **GPU** | NVIDIA. **24 GB** runs everything at full size (tested, RTX 3090). **16 GB** should work at the default frame size; **12 GB** has been shown to work at small sizes by others. [Details](docs/setup.md#how-much-vram). |
 | **System RAM** | **64 GB.** Model weights that do not fit on the card wait in RAM, so the less VRAM you have, the more this matters. |
-| **Disk** | **43 GB** for Text to Video alone; **225.7 GB** for every workflow; **337.4 GB** with every optional extra. See below. |
-| **ComfyUI** | A recent build — tested on 0.38 — plus seven custom node packs. |
+| **Disk** | **43 GB** for Text to Video alone; **251.8 GB** for every workflow; **363.5 GB** with every optional extra. See below. |
+| **ComfyUI** | 0.45 or newer — tested on 0.46 — plus seven custom node packs. |
 | **OS** | Windows or Linux for ComfyUI. Built and tested on Windows, which needs [one registry fix](docs/setup.md#on-windows-raise-the-gpu-timeout-first); others have set it up on Linux. macOS and AMD cards are untested and unlikely to manage the models. |
 | **For the app** | Node 20.9+ and pnpm. A free Vercel account to deploy it. To reach your ComfyUI from Vercel, a free DuckDNS name and a router you can forward a port on (Tailscale Funnel works without the router, but is too slow for long videos). An AI Gateway key is optional: the prompt rewrite can run on your own machine instead. |
 
@@ -96,16 +99,17 @@ Disk space by what you want to run — download only what you will use:
 
 | To run | Disk |
 | --- | ---: |
-| Text to Video, Text to Image, Image to Video, Extend | 43 GB |
+| Text to Video, Image to Video, Extend | 43 GB |
+| + Text to Image, **Create one** on pictures, Picture character swap | +22.3 GB |
 | + Reference to Video and Remix (pictures as references) | +21 GB |
 | + a song, voice or clip as a reference, Music video, or Remix at 4 steps | +118 GB |
 | + Music | +14 GB |
 | + Character swap (after Reference to Video) | +3.9 GB |
 | + Upscale (needs an NVIDIA RTX card) | +0.1 GB |
 | + the Edit button | +29 GB |
-| **Every workflow** | **229.5 GB** |
+| **Every workflow** | **251.8 GB** |
 | Optional extras (local prompt rewriting, the VHS tape look, SeedVR2 for Upscale) | +111.7 GB |
-| **Everything, extras included** | **341.2 GB** |
+| **Everything, extras included** | **363.5 GB** |
 
 Each file and where it comes from is listed in the
 [setup guide](docs/setup.md#model-files).

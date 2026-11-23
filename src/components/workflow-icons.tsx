@@ -6,6 +6,7 @@ import {
   Image,
   ImagePlay,
   Music,
+  Replace,
   Scaling,
   Shuffle,
   Type,
@@ -27,6 +28,7 @@ const ICONS: Record<string, LucideIcon> = {
   "minimax-h3-ref": UserRound,
   "minimax-h3-ref2v": Shuffle,
   "minimax-h3-swap": Drama,
+  "minimax-h3-image-swap": Replace,
   "minimax-h3-extend": FastForward,
   upscale: Scaling,
   "music-video": Disc3,
@@ -45,7 +47,13 @@ export const WORKFLOW_GROUPS: Array<{ title: string; short: string; ids: string[
   {
     title: "Make something new",
     short: "New",
-    ids: ["minimax-h3", "minimax-h3-image", "minimax-h3-i2v", "minimax-h3-ref"],
+    ids: [
+      "minimax-h3",
+      "minimax-h3-image",
+      "minimax-h3-i2v",
+      "minimax-h3-ref",
+      "minimax-h3-image-swap",
+    ],
   },
   {
     title: "Work on a clip you made",

@@ -1,7 +1,7 @@
 {
-  "fingerprint": "0617f8507a31a5e1",
+  "fingerprint": "62517b6a41ed2035",
   "comfyui": {
-    "min": "0.38.0"
+    "min": "0.45.0"
   },
   "classes": {
     "AudioConcat": {
@@ -61,11 +61,7 @@
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -112,11 +108,7 @@
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -203,11 +195,7 @@
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -503,6 +491,7 @@
         "minimax-h3-i2v (style, vhs tape)",
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-swap",
         "swap-mask-check"
       ]
@@ -763,12 +752,6 @@
         "minimax-h3-extend (style, vhs tape)",
         "minimax-h3-extend (style, vhs tape, lighter base)",
         "minimax-h3-extend (turbo)",
-        "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
         "minimax-h3-swap",
         "swap-mask-check",
         "upscale"
@@ -791,6 +774,7 @@
         "minimax-h3-i2v (style, vhs tape)",
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -856,11 +840,7 @@
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref",
         "minimax-h3-ref (reference weights)",
         "minimax-h3-ref (sage)",
@@ -1061,6 +1041,7 @@
         "minimax-h3-i2v (style, vhs tape)",
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -1114,8 +1095,7 @@
         "minimax-h3-extend (style, vhs tape, lighter base)",
         "minimax-h3-i2v (style, vhs tape)",
         "minimax-h3-i2v (style, vhs tape, lighter base)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref (style, vhs tape)",
         "minimax-h3-ref2v (style, vhs tape)",
         "minimax-h3-swap"
@@ -1156,6 +1136,22 @@
         "minimax-h3-swap"
       ]
     },
+    "MiniMaxH3ImageConditioning": {
+      "inputs": [
+        "clip",
+        "height",
+        "images.image_1",
+        "images.image_2",
+        "prompt",
+        "vae",
+        "width"
+      ],
+      "optional": false,
+      "workflows": [
+        "minimax-h3-image",
+        "minimax-h3-image-swap"
+      ]
+    },
     "MiniMaxH3ImageToVideo": {
       "inputs": [
         "clip",
@@ -1188,13 +1184,7 @@
         "minimax-h3-i2v (spectrum)",
         "minimax-h3-i2v (style, vhs tape)",
         "minimax-h3-i2v (style, vhs tape, lighter base)",
-        "minimax-h3-i2v (turbo)",
-        "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)"
+        "minimax-h3-i2v (turbo)"
       ]
     },
     "MiniMaxH3ReferenceToVideo": {
@@ -1259,7 +1249,6 @@
         "minimax-h3-extend",
         "minimax-h3-extend (turbo)",
         "minimax-h3-i2v (turbo)",
-        "minimax-h3-image (turbo)",
         "minimax-h3-ref",
         "minimax-h3-ref (turbo)",
         "minimax-h3-ref2v",
@@ -1315,7 +1304,6 @@
         "minimax-h3 (sage)",
         "minimax-h3-extend (sage)",
         "minimax-h3-i2v (sage)",
-        "minimax-h3-image (sage)",
         "minimax-h3-ref (sage)",
         "minimax-h3-ref2v (sage)"
       ]
@@ -1327,6 +1315,7 @@
       "optional": true,
       "workflows": [
         "minimax-h3-extend",
+        "minimax-h3-image",
         "minimax-h3-ref",
         "minimax-h3-ref2v",
         "multi-scene",
@@ -1397,11 +1386,6 @@
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -1486,11 +1470,7 @@
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -1570,11 +1550,6 @@
         "minimax-h3 (style, vhs tape, lighter base)",
         "minimax-h3 (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -1659,11 +1634,7 @@
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -1701,11 +1672,7 @@
       "workflows": [
         "image-edit",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-swap"
       ]
     },
@@ -1917,7 +1884,6 @@
         "minimax-h3 (spectrum)",
         "minimax-h3-extend (spectrum)",
         "minimax-h3-i2v (spectrum)",
-        "minimax-h3-image (spectrum)",
         "minimax-h3-ref (spectrum)",
         "minimax-h3-ref2v (spectrum)"
       ]
@@ -1947,8 +1913,6 @@
         "minimax-h3-extend (style, vhs tape, lighter base)",
         "minimax-h3-i2v (style, vhs tape)",
         "minimax-h3-i2v (style, vhs tape, lighter base)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
         "minimax-h3-ref (style, vhs tape)",
         "minimax-h3-ref2v (style, vhs tape)"
       ]
@@ -2009,11 +1973,7 @@
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -2062,11 +2022,7 @@
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -2224,11 +2180,7 @@
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -2411,11 +2363,6 @@
         "minimax-h3 (style, vhs tape, lighter base)",
         "minimax-h3 (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
         "minimax-h3-ref",
         "minimax-music3",
         "multi-scene",
@@ -2488,6 +2435,14 @@
         "minimax-h3-swap"
       ]
     },
+    "h3_image_character_swap_v1.safetensors": {
+      "loader": "LoraLoaderModelOnly",
+      "input": "lora_name",
+      "optional": false,
+      "workflows": [
+        "minimax-h3-image-swap"
+      ]
+    },
     "minimax_h3_audio_vae_fp32.safetensors": {
       "loader": "VAELoader",
       "input": "vae_name",
@@ -2545,8 +2500,7 @@
       "workflows": [
         "minimax-h3 (style, vhs tape)",
         "minimax-h3-extend (style, vhs tape)",
-        "minimax-h3-i2v (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape)"
+        "minimax-h3-i2v (style, vhs tape)"
       ]
     },
     "minimax_h3_fl2va_pruned_fp8_scaled.safetensors": {
@@ -2556,8 +2510,7 @@
       "workflows": [
         "minimax-h3 (style, vhs tape, lighter base)",
         "minimax-h3-extend (style, vhs tape, lighter base)",
-        "minimax-h3-i2v (style, vhs tape, lighter base)",
-        "minimax-h3-image (style, vhs tape, lighter base)"
+        "minimax-h3-i2v (style, vhs tape, lighter base)"
       ]
     },
     "minimax_h3_fl2va_pruned_int8_convrot.safetensors": {
@@ -2579,11 +2532,25 @@
         "minimax-h3-i2v (4-step)",
         "minimax-h3-i2v (sage)",
         "minimax-h3-i2v (spectrum)",
-        "minimax-h3-i2v (turbo)",
+        "minimax-h3-i2v (turbo)"
+      ]
+    },
+    "minimax_h3_image_pruned_int8_convrot.safetensors": {
+      "loader": "UNETLoader",
+      "input": "unet_name",
+      "optional": false,
+      "workflows": [
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (turbo)"
+        "minimax-h3-image-swap"
+      ]
+    },
+    "minimax_h3_image_vae_fp16.safetensors": {
+      "loader": "VAELoader",
+      "input": "vae_name",
+      "optional": false,
+      "workflows": [
+        "minimax-h3-image",
+        "minimax-h3-image-swap"
       ]
     },
     "minimax_h3_ref2va_bf16.safetensors": {
@@ -2625,7 +2592,6 @@
         "minimax-h3-extend",
         "minimax-h3-extend (turbo)",
         "minimax-h3-i2v (turbo)",
-        "minimax-h3-image (turbo)",
         "minimax-h3-ref",
         "minimax-h3-ref (turbo)",
         "minimax-h3-ref2v",
@@ -2658,12 +2624,6 @@
         "minimax-h3-i2v (style, vhs tape)",
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
-        "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (reference weights)",
@@ -2742,11 +2702,7 @@
         "minimax-h3-i2v (style, vhs tape, lighter base)",
         "minimax-h3-i2v (turbo)",
         "minimax-h3-image",
-        "minimax-h3-image (sage)",
-        "minimax-h3-image (spectrum)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
-        "minimax-h3-image (turbo)",
+        "minimax-h3-image-swap",
         "minimax-h3-ref",
         "minimax-h3-ref (4-step)",
         "minimax-h3-ref (sage)",
@@ -2813,8 +2769,6 @@
         "minimax-h3-extend (style, vhs tape, lighter base)",
         "minimax-h3-i2v (style, vhs tape)",
         "minimax-h3-i2v (style, vhs tape, lighter base)",
-        "minimax-h3-image (style, vhs tape)",
-        "minimax-h3-image (style, vhs tape, lighter base)",
         "minimax-h3-ref (style, vhs tape)",
         "minimax-h3-ref2v (style, vhs tape)"
       ]

@@ -1,7 +1,7 @@
 "use client";
 
 import { AddFileRow } from "@/components/ui/add-file-row";
-import { ImagePlus, WandSparkles } from "lucide-react";
+import { ImagePlus, Sparkles, WandSparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Spinner } from "@/components/ui/button";
 import {
@@ -9,6 +9,7 @@ import {
   CameraIcon,
   cameraAvailable,
 } from "@/components/ui/camera-capture";
+import { ImageCreateBar } from "@/components/ui/image-create";
 import { ImageEditBar } from "@/components/ui/image-edit";
 import { api, ApiError, withToken } from "@/lib/client";
 
@@ -89,6 +90,10 @@ async function prepareForUpload(file: File): Promise<Prepared> {
   );
 }
 
+function CreateIcon() {
+  return <Sparkles className="size-3.5" aria-hidden="true" />;
+}
+
 function WandIcon() {
   return (
     <WandSparkles className="size-3.5" aria-hidden="true" />
@@ -161,6 +166,8 @@ export function ImageUpload({
    */
   const [versions, setVersions] = useState<string[]>(value ? [value] : []);
   const [editOpen, setEditOpen] = useState(false);
+  /** The description box that makes a picture for this slot. See image-create.tsx. */
+  const [createOpen, setCreateOpen] = useState(false);
   /** Opened by asking, when compact. See the audio control, which does the same. */
   const [expanded, setExpanded] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
@@ -316,14 +323,17 @@ export function ImageUpload({
               className={`mx-auto block h-auto max-h-64 w-auto max-w-full object-contain
                 transition-opacity ${editBusy ? "opacity-60" : ""}`}
             />
-            {!editOpen && !disabled && !uploading ? (
+            {!editOpen && !createOpen && !disabled && !uploading ? (
               <Button
                 variant="secondary"
                 size="xs"
                 icon={<WandIcon />}
                 className="absolute right-2 top-2 shadow-sm"
                 title="Change something in this picture"
-                onClick={() => setEditOpen(true)}
+                onClick={() => {
+                  setCreateOpen(false);
+                  setEditOpen(true);
+                }}
               >
                 Edit
               </Button>
@@ -411,6 +421,18 @@ export function ImageUpload({
                     labelled buttons in a 320px column squeeze the filename
                     beside them down to nothing, and the filename is the part
                     that says which image this is. */}
+                <Button
+                  variant="quiet"
+                  size="xs"
+                  icon={<CreateIcon />}
+                  aria-label="Create a new picture from a description"
+                  title="Create a new picture from a description"
+                  disabled={disabled || uploading || editBusy || createOpen}
+                  onClick={() => {
+                    setEditOpen(false);
+                    setCreateOpen(true);
+                  }}
+                />
                 {canUseCamera ? (
                   <Button
                     variant="quiet"
@@ -473,24 +495,49 @@ export function ImageUpload({
               )}
             </button>
 
-            {canUseCamera ? (
+            {createOpen ? null : (
               <div
-                className="flex justify-center border-t border-border-default
+                className="flex justify-center gap-2 border-t border-border-default
                   px-3 py-2"
               >
                 <Button
                   variant="quiet"
                   size="xs"
-                  icon={<CameraIcon />}
+                  icon={<CreateIcon />}
+                  title="Make a picture from a description"
                   disabled={disabled || uploading || editBusy}
-                  onClick={() => setCameraOpen(true)}
+                  onClick={() => setCreateOpen(true)}
                 >
-                  Take a photo
+                  Create one
                 </Button>
+                {canUseCamera ? (
+                  <Button
+                    variant="quiet"
+                    size="xs"
+                    icon={<CameraIcon />}
+                    disabled={disabled || uploading || editBusy}
+                    onClick={() => setCameraOpen(true)}
+                  >
+                    Take a photo
+                  </Button>
+                ) : null}
               </div>
-            ) : null}
+            )}
           </>
         )}
+        {/* One place for both states, after the branch rather than in it, so
+            the bar is the same instance when the first picture lands in an
+            empty slot — and still has the description for another take. */}
+        {createOpen ? (
+          <div className="border-t border-border-default">
+            <ImageCreateBar
+              id={`${id}-create`}
+              onCreated={edited}
+              onBusyChange={setEditBusy}
+              onClose={() => setCreateOpen(false)}
+            />
+          </div>
+        ) : null}
       </div>
       )}
 
