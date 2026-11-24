@@ -135,9 +135,9 @@ above:
   value, takes no input, and submits that value whatever was stored under it —
   `applyParams` writes it over the submission after coercion, so a number left
   over from an earlier run cannot get past what the form is showing. Reference
-  to Video's steps control is pinned to 4 by its reference track, because that
-  is the only step count the graph takes one at. The stored value is untouched
-  and comes back when the pin lifts.
+  to Video's trim length is pinned to the video's length while the track is
+  locked to it. The stored value is untouched and comes back when the pin
+  lifts.
 - **`makes`** is the noun the Generate button uses — `"video"` unless you say
   `"music"`.
 

@@ -121,7 +121,7 @@ const REFERENCE_TRACK: TipSection = {
   items: [
     "A piece of music can be a reference too. Press Create video on a finished track and it arrives in the Reference track slot here, ready to generate.",
     "It goes to the model as a reference audio, alongside whatever pictures you attach — the two are separate references and neither replaces the other. A track and no picture is allowed; so is a picture and no track. One of the two is required, and with no picture everything on screen comes from your prompt.",
-    "A loaded track pins Steps to 4. That is the step count this workflow takes a track at: at 4 it loads the bf16 diffusion model and text encoder, which is the pair that accepts a track and pictures together, and leaves Spectrum out. Remove the track and the control is yours again. Turbo has to stay on at 4 — the run is refused rather than wasted on a take the distilled LoRA is missing from.",
+    "A track runs at any step count, on the same weights as a picture-only run. 4 with Turbo on is the quick take; 8 is the better one.",
     "It is the music slot, not the voice slot. A recording of somebody speaking or singing goes in Voice reference below it, which is a different kind of reference and is described in its own section.",
     "The video is still the length of the Duration control. A four-minute song attached to a five-second clip is a reference to five seconds of music, not an instruction to make a four-minute video — nothing here can generate one.",
     "So only the opening of the track is sent, as many seconds of it as the video is long. How much of the track changes that: a set length if you want a fixed number of seconds, all of it if you really want the whole file. MiniMax documents a reference track at 2–15 seconds, and a three-minute one is thousands of latent frames of sequence for a five-second video.",
@@ -264,7 +264,7 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
       {
         heading: "Steps, and what four of them means",
         items: [
-          "Four is where this ships, with Turbo on. At 4 the graph becomes the node pack's own four-step form — its dedicated four-step sampler, the bf16 diffusion model and text encoder in place of the quantised pair, and no Spectrum. That is the same swap Reference to Video makes, for the same reason: it runs the same ref2va model through the same reference node.",
+          "Four is where this ships, with Turbo on. At 4 the graph becomes the node pack's own four-step form — its dedicated four-step sampler and no Spectrum, on the same quantised weights as every other step count. Reference to Video does the same at 4: it runs the same ref2va model through the same reference node.",
           "Leave Turbo on at that setting. The four-step sampler is built to be paired with the distilled LoRA, and four steps without one is not a usable take — which is the whole reason this workflow carries the switch.",
           "Eight is a drag of the control away, for a take worth the extra minutes: it samples the quantised weights with the ordinary sampler and brings Spectrum back. Higher than that only helps with Turbo off, where a remix holds to a source rather than inventing from noise and still needs fewer steps than the generating workflows.",
         ],
@@ -548,7 +548,7 @@ export const WORKFLOW_TIPS: Record<string, WorkflowTips> = {
       {
         heading: "What to do with a finished track",
         items: [
-          "Create video sends it to Reference to Video as a reference track, the same way Remix and Extend send a clip. The picture is then yours to supply — a reference image, a prompt, or both — and that run is pinned to 4 steps, which is where the track works.",
+          "Create video sends it to Reference to Video as a reference track, the same way Remix and Extend send a clip. The picture is then yours to supply — a reference image, a prompt, or both.",
           "The whole song goes across, but only the first few seconds of it reach the model: as much as the video is long, unless you say otherwise there. A song is a reference for those seconds rather than a length to fill.",
           "The video is as long as that workflow's own Duration control, which tops out at 20 seconds. A finished song is a reference for those seconds rather than a length to fill.",
           "The file never goes through your browser: it is copied between ComfyUI's own directories, so the upload size limit does not apply to it.",

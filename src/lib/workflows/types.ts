@@ -142,8 +142,8 @@ interface ParamBase {
    * Unlike those two this is *not* presentation only: `applyParams` overwrites
    * the submitted value with the pinned one after coercion, so what runs is the
    * pinned value whatever the form did. It has to be, because the things that
-   * read a value downstream — the step sampler, the model swap that comes with
-   * it — would otherwise act on a number the user cannot see and did not pick.
+   * read a value downstream — the step sampler, say — would otherwise act on
+   * a number the user cannot see and did not pick.
    * The form shows the pinned value and disables the control so that the two
    * agree.
    *
@@ -206,11 +206,9 @@ export interface ParamPin {
   /**
    * The run is refused unless turbo is on, and this is what it is refused with.
    *
-   * For a pin whose value only makes sense with the distilled LoRA applied.
-   * Reference to Video's is: a reference that is not a still pins the steps to
-   * four, four steps swaps in the pack's four-step sampler and the bf16
-   * weights, and none of that is a usable take without the LoRA the sampler was
-   * built to be paired with. Turbo is a mode rather than a param, so no
+   * For a pin whose value only makes sense with the distilled LoRA applied —
+   * a pin to four steps, say, where the pack's four-step sampler is no usable
+   * take without the LoRA it was built to be paired with. Turbo is a mode rather than a param, so no
    * `revealedBy` or `hiddenBy` can express the dependency and the pin has to
    * carry it.
    *
@@ -768,9 +766,9 @@ export interface WorkflowDef {
      * The modes to build the case under, for a combination that only exists in
      * one of them.
      *
-     * Reference to Video's references pin the steps to four and four steps
-     * needs turbo, so every case carrying one has to declare it — otherwise the
-     * check would be proving that `finalize` survives a run the app refuses.
+     * Four steps needs turbo, so a case at four has to declare it — otherwise
+     * the check would be proving that `finalize` survives a run the app
+     * refuses.
      * Defaults to standard mode, which is what every case ran under before any
      * of them needed a switch.
      */
