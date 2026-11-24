@@ -617,33 +617,22 @@ the IMAGE its consumer asked for. `referenceFacets` says so in words as well,
 because `REFERENCE_DIRECTOR` otherwise writes the `<Picture 1>` citations its
 format calls for at a model that was given none.
 
-**A track pins the run to four steps, and four steps loads different weights.**
-The pair used to fail: a track with pictures came back from ComfyUI as
-`RuntimeError: The size of tensor a (3) must match the size of tensor b (2) at
-non-singleton dimension 0`, and nothing documented why it should — the node's
-own docs allow up to 9 images, 3 videos and 3 standalone audios with no
-exclusion stated, and reading `nodes_minimax_h3.py`, `ldm/minimax/model.py` and
-`text_encoders/minimax.py` turns up no path that treats the combination
-differently. It was the quantised weights. At four steps this graph loads
-`minimax_h3_ref2va_bf16` and `qwen3vl_32b_minimax_h3_bf16` in place of
-`minimax_h3_ref2va_pruned_int8_convrot` and `qwen3vl_32b_minimax_h3_nvfp4_awq`,
-and that pair takes references of both kinds together.
+**A track runs on the same int8 weights as a picture.** A track with pictures
+used to come back from ComfyUI as `RuntimeError: The size of tensor a (3) must
+match the size of tensor b (2) at non-singleton dimension 0`. That was the turbo
+pack's AdaLN injection on a *pruned* base miscounting the timestep rows a
+reference block adds, not the model; the pack now reads them off the model's own
+`adaln_t_table` ([Larryvrh/ComfyUI-MiniMax-H3-Turbo#16](https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo/pull/16)).
+For a while this graph worked around it by loading `minimax_h3_ref2va_bf16` and
+`qwen3vl_32b_minimax_h3_bf16` — 118 GB, streamed from RAM on every step of a
+24 GB card, so a 20 s take ran for hours. On 2026-11-24 the int8 pair took a
+voice, a track, a clip and a clip's soundtrack with turbo on, in minutes each,
+and the swap was removed. If the error comes back, update the turbo pack.
 
-Two declarations do it, both in `minimax-h3-ref.ts`. `FOUR_STEP_MODELS` hangs
-off the workflow's `stepSampler` — the same trigger that already swaps in the
-pack's four-step sampler, so there is one form of this graph at four steps
-rather than two rules that could disagree, and `check:nodes` asks ComfyUI about
-the bf16 files because `stepSamplerGraph` produces them. `TRACK_PINS_STEPS` is a
-`pinnedBy` on the steps control: while a track is loaded the control shows 4,
-takes no input, and submits 4 whatever was stored — `applyParams` overwrites the
-submitted value after coercion, so a stored 12 from an earlier run cannot sail
-past it. Removing the track hands the control back with that number still in it.
-
-Leave **Turbo** on for those runs. Four steps swaps the sampler but not the
-distilled LoRA, which is a switch of its own, and four steps without it is not a
-usable take — see the note under the control. **Spectrum** goes the other way:
-this graph refuses it at four steps, so a run with a track never has the
-forecaster in it. That is `suppresses` on the same `stepSampler`, and the switch
+Leave **Turbo** on. At four steps the graph swaps in the pack's four-step
+sampler but not the distilled LoRA, which is a switch of its own, and four steps
+without it is not a usable take — see the note under the control. **Spectrum**
+goes the other way: this graph refuses it at four steps. That is `suppresses` on the same `stepSampler`, and the switch
 shows as off with the reason under it rather than being silently dropped.
 
 Three further things are deliberately *not* true of it:
@@ -828,14 +817,11 @@ Three further things about it:
   **Start at** to move past a silent or noisy opening — and the same
   measure-and-reject safety the track's start has, since it is the same
   `TrimAudioDuration` failing the same way.
-- **A voice pins the steps to four like everything else that is not a still**,
-  and four steps is now *refused* without Turbo rather than run. The pin swapped
-  the sampler and the weights but never the distilled LoRA, which is a mode
-  rather than a param — so turning Turbo off and attaching a reference produced
-  the one combination this graph has always described as not a usable take, and
-  it finished, took the time, and came back wrong. `ParamPin.requiresTurbo`
-  carries the rule now; `applyParams` throws it as an ordinary `ParamError`
-  against the steps control, where the pin's own note already sits.
+- **A voice runs at whatever step count you choose, on the int8 weights.** It
+  used to pin the steps to four and swap in the bf16 pair; neither survives —
+  see "A track runs on the same int8 weights as a picture" above. Four steps is
+  still refused without Turbo, which is about the sampler rather than the
+  voice: `h3StepSampler.requiresTurbo`.
 
 `REFERENCE_DIRECTOR` gained the audio half of H3's format along with it, which
 it had never had. `subject_definitions` described only "reusable visible
@@ -1002,12 +988,8 @@ get backwards.
 
 Three limits worth knowing:
 
-- **A clip pins the steps to 4**, on the same `pinnedBy` as a track — which now
-  names both controls, since a pin describes what the run needs rather than what
-  one control implies. The reason is the same quantised-weights failure: it was
-  a batch-dimension mismatch on a run carrying more than one kind of reference
-  block, and a clip is that as much as a track is. Remix, which is nothing but a
-  video reference through this same node class, already runs on the bf16 pair.
+- **A clip runs on the int8 weights**, like a track and a voice. It hit the same
+  turbo-pack failure a track did, and the same pack update fixed it; see above.
 - **Fifteen seconds reach the model; twenty may be uploaded.** MiniMax documents
   a reference video at 2–15s, and that fifteen is a budget shared with reference
   audio rather than a per-file limit, so `frame_load_cap` stops there and

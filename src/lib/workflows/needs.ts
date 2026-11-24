@@ -1,8 +1,8 @@
 /**
  * What the registered workflows need from a ComfyUI install: every node class
  * and every model file, across every form a graph can take — turbo, each
- * patch, the step-count swap and the reference weights — since those name
- * classes and files no stored graph does.
+ * patch and the step-count swap — since those name classes and files no stored
+ * graph does.
  *
  * Shared by `check:nodes`, which asks a live install whether it has them,
  * `models:download`, which fetches the files, and the machine requirements
@@ -15,7 +15,6 @@ import { WORKFLOWS } from "./index";
 import { patchVariants } from "./patches";
 import { promptConsumer } from "./director";
 import { stepSamplerGraph } from "./step-sampler";
-import { modelSwapGraph } from "./model-swap";
 import { turboGraph } from "./turbo";
 
 /** Loader class -> the inputs naming files, for checking models are present. */
@@ -124,15 +123,6 @@ export function collect(ids?: readonly string[]) {
       graphs.push({
         label: `${workflow.id} (${workflow.stepSampler.atValue}-step)`,
         graph: stepSamplerGraph(workflow.graph, workflow.stepSampler),
-      });
-    }
-    // And the form it takes with a reference attached, which names model files
-    // no stored graph does — so without this the bf16 pair would go unasked
-    // about until a run needed it.
-    if (workflow.modelSwap) {
-      graphs.push({
-        label: `${workflow.id} (reference weights)`,
-        graph: modelSwapGraph(workflow.graph, workflow.modelSwap),
       });
     }
     // And each combination `finalize` declares it builds. It is the one part

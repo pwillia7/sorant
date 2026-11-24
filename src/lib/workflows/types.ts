@@ -3,7 +3,6 @@ import { toClientPatch, type ClientPatch, type PatchDef } from "./patches";
 import type { DirectorBypass } from "./director";
 import type { RunModes } from "./modes";
 import type { StepSampler } from "./step-sampler";
-import type { ModelSwap } from "./model-swap";
 import type { ClientTurbo, TurboSpec } from "./turbo";
 
 /**
@@ -669,13 +668,6 @@ export interface WorkflowDef {
    */
   stepSampler?: StepSampler;
   /**
-   * Set when this graph loads different weights for a run carrying a reference
-   * the stored pair cannot take. Follows from the reference controls rather
-   * than from the step count, and has no entry in `RunModes`. See
-   * model-swap.ts.
-   */
-  modelSwap?: ModelSwap;
-  /**
    * Set when this graph's prompt-rewrite stage can be skipped, sending what the
    * user typed to the model unedited. A control rather than a mode, because it
    * is about what this particular prompt is rather than how the run is made —
@@ -810,7 +802,6 @@ export type WorkflowSummary = Omit<
   | "turbo"
   | "patches"
   | "stepSampler"
-  | "modelSwap"
   | "directorBypass"
 > & {
   params: ClientParam[];
@@ -818,9 +809,9 @@ export type WorkflowSummary = Omit<
   turbo?: ClientTurbo;
   /** Always present, empty where the workflow offers none. Minus their nodes. */
   patches: ClientPatch[];
-  // No `stepSampler`, no `modelSwap` and no `directorBypass`. All the browser
-  // needs of the first two is their notes, which land on the controls they
-  // belong to below; the rest of all three is node ids and model filenames.
+  // No `stepSampler` and no `directorBypass`. All the browser needs of the
+  // first is its note, which lands on the control it belongs to below; the
+  // rest of both is node ids and model filenames.
 };
 
 export function toSummary(workflow: WorkflowDef): WorkflowSummary {
@@ -830,10 +821,6 @@ export function toSummary(workflow: WorkflowDef): WorkflowSummary {
     turbo,
     patches,
     stepSampler,
-    // Withheld for the same reason as turbo's node: it names model files that
-    // exist on the ComfyUI box and nowhere else. Its note reaches the form on
-    // the controls that trigger it, below.
-    modelSwap,
     // Withheld like the graph itself: which node the switch unwires is server
     // wiring, and the form needs only the toggle, which is a param like any
     // other.
@@ -888,16 +875,6 @@ export function toSummary(workflow: WorkflowDef): WorkflowSummary {
           value: stepSampler.atValue,
           text: stepSampler.note,
         };
-      }
-      // And the weights note onto every control that would swap them. Appended
-      // to the help rather than given a field of its own: it is a standing fact
-      // about attaching this reference, true before the control is touched, so
-      // it reads as part of what the control is rather than as a consequence
-      // that appears once it has been used.
-      if (modelSwap?.whenSet.includes(param.id)) {
-        clientParam.help = [clientParam.help, modelSwap.note]
-          .filter(Boolean)
-          .join(" ");
       }
       return clientParam as ClientParam;
     }),

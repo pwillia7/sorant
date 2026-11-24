@@ -2,7 +2,6 @@ import type { DirectorBypass } from "./director";
 import type { SpliceId } from "./model-chain";
 import type { PatchChoice, PatchDef } from "./patches";
 import type { StepSampler } from "./step-sampler";
-import type { SwappedModel } from "./model-swap";
 import type { TurboSpec } from "./turbo";
 import { isSet } from "./types";
 import type {
@@ -444,7 +443,7 @@ export function h3Turbo(
    * 8 on the `fl2va` graphs, where 4 is a fast setting to iterate at. The two
    * `ref2va` ones start at 4, because there that count is not a cheaper version
    * of the graph — it is the node pack's own complete form, with a sampler built
-   * for exactly four steps and the bf16 weights to go with it.
+   * for exactly four steps.
    */
   steps = 8,
 ): TurboSpec {
@@ -531,51 +530,10 @@ export function h3Turbo(
  * no loss in practice, since a four-step run without the LoRA is not a usable
  * take either way.
  */
-/**
- * The weights the `ref2va` graphs load at four steps, in place of the quantised
- * pair their stored graphs name.
- *
- * The evidence is in minimax-h3-ref.ts, where the swap was worked out: the
- * quantised pair failed on a reference track and pictures together, the bf16
- * pair takes them, and the ComfyUI export that produced a working four-step take
- * loads exactly these two files. It is shared because the fact is about the
- * model rather than about that graph — both `ref2va` workflows here run the same
- * UNET through the same node class — and because two copies of a pair of
- * filenames is two chances to update one of them.
- *
- * The loader ids are passed rather than assumed. Both graphs happen to number
- * them 127 and 128, and a coincidence between two exports is not something to
- * build on silently: a re-export that renumbered one would otherwise point this
- * at whatever now held the old id.
- */
-export function h3Bf16Models({
-  unet,
-  clip,
-}: {
-  unet: string;
-  clip: string;
-}): SwappedModel[] {
-  return [
-    { node: unet, input: "unet_name", value: "minimax_h3_ref2va_bf16.safetensors" },
-    {
-      node: clip,
-      input: "clip_name",
-      value: "qwen3vl_32b_minimax_h3_bf16.safetensors",
-    },
-  ];
-}
-
 export function h3StepSampler({
-  models,
   suppresses,
   note = "",
 }: {
-  /**
-   * Loaders this graph points at different files at four steps — see `models`
-   * on StepSampler. Only Remix has any; Reference to Video's follow its
-   * references instead, through `modelSwap`.
-   */
-  models?: SwappedModel[];
   /**
    * Switches this graph will not take at four steps — see `suppresses`. Only
    * Reference to Video refuses any; the rule is about that graph's four-step
@@ -589,7 +547,6 @@ export function h3StepSampler({
     param: "steps",
     atValue: 4,
     replaces: "KSamplerSelect",
-    models,
     node: {
       class_type: "MiniMaxH3TurboSampler",
       // Empty, as exported. The schedule is the node.
@@ -721,10 +678,11 @@ const H3_CONTENT_LORAS: PatchChoice[] = [
          * mechanism is sound; whether the *look* is worth having on a graph
          * whose job is holding a likeness is a judgement to make from takes.
          *
-         * No alternate: there is no scaled fp8 `ref2va` checkpoint to offer,
-         * and the 4-step form already loads exactly this file — see
-         * `stepSamplerAgreesWithLoraBases`, which is what keeps the two from
-         * silently disagreeing.
+         * No alternate: there is no scaled fp8 `ref2va` checkpoint to offer.
+         * That makes this switch the one thing left on the reference graphs
+         * that loads the 66 GB bf16 checkpoint — opt-in, and slow on a 24 GB
+         * card, where it streams from RAM every step. Everything else on those
+         * graphs runs on the quantised pair; see minimax-h3-ref.ts.
          */
         forModel: ["minimax_h3_ref2va"],
         value: "minimax_h3_ref2va_bf16.safetensors",

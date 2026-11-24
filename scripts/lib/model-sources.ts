@@ -38,7 +38,6 @@ export const MODEL_SOURCES: Record<string, ModelSource> = {
   "minimax_h3_fl2va_bf16.safetensors": { repo: H3, path: "diffusion_models/minimax_h3_fl2va_bf16.safetensors", folder: "diffusion_models", bytes: 66280487368 },
   "minimax_h3_fl2va_pruned_fp8_scaled.safetensors": { repo: H3, path: "diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors", folder: "diffusion_models", bytes: 20958205608 },
   "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors": { repo: H3, path: "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors", folder: "text_encoders", bytes: 15687142551 },
-  "qwen3vl_32b_minimax_h3_bf16.safetensors": { repo: H3, path: "text_encoders/qwen3vl_32b_minimax_h3_bf16.safetensors", folder: "text_encoders", bytes: 51506295256 },
   "minimax_h3_video_vae_fp16.safetensors": { repo: H3, path: "vae/minimax_h3_video_vae_fp16.safetensors", folder: "vae", bytes: 5207808496 },
   "minimax_h3_audio_vae_fp32.safetensors": { repo: H3, path: "vae/minimax_h3_audio_vae_fp32.safetensors", folder: "vae", bytes: 605254808 },
   "minimax_h3_turbo_v4_step600_ema.safetensors": { repo: "larryvrh/MiniMax-H3-Turbo-Lora", path: "minimax_h3_turbo_v4_step600_ema.safetensors", folder: "loras", bytes: 779849816 },
@@ -87,6 +86,10 @@ export const EXTRAS: Record<string, { files: string[]; what: string }> = {
   "vhs-tape-lighter": {
     files: ["vh5tape-comfyui.safetensors", "minimax_h3_fl2va_pruned_fp8_scaled.safetensors"],
     what: "the VHS tape look on the fp8 Lighter base, a third the size of bf16",
+  },
+  "vhs-tape-reference": {
+    files: ["vh5tape-comfyui.safetensors", "minimax_h3_ref2va_bf16.safetensors"],
+    what: "the VHS tape look on Reference to Video and Remix, on the bf16 base it needs there — slow on a 24 GB card",
   },
   seedvr2: {
     files: ["seedvr2_7b_sharp_int8_convrot.safetensors", "seedvr2_ema_vae_fp16.safetensors"],

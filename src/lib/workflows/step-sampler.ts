@@ -1,7 +1,6 @@
 import type { ComfyGraph, ComfyNode } from "@/lib/comfy";
 import type { SpliceId } from "./model-chain";
 import type { ParamValue } from "./types";
-import type { SwappedModel } from "./model-swap";
 
 /**
  * The form a graph takes at one particular step count: which sampler it uses,
@@ -49,21 +48,6 @@ export interface StepSampler {
    * run at four with the switch off. Declared here, it covers all of them.
    */
   requiresTurbo?: string;
-  /**
-   * Loaders this step count also rewrites — a graph whose four-step form loads
-   * different weights from its standard one.
-   *
-   * Remix is the only graph left with any. Its reference is the clip it is
-   * rebuilding, which is required, so "with a reference" and "always" are the
-   * same statement there and the step count is the only thing that varies —
-   * which makes this the honest place for it.
-   *
-   * Reference to Video used to declare its bf16 pair here too, and that was
-   * wrong: its references are optional, so the swap had to follow them rather
-   * than the count, and hanging it here forced the count to be pinned. It has
-   * moved to `modelSwap`. See model-swap.ts for the whole of that reasoning.
-   */
-  models?: SwappedModel[];
   /**
    * Switches this step count refuses, by patch id.
    *
@@ -149,43 +133,7 @@ export function applyStepSampler(
 
   graph[target] = { ...spec.node };
 
-  // The loaders keep their nodes and change one input each: everything wired to
-  // them is wired to the same node whichever weights it loads, so there is
-  // nothing here to rewire. Anything missing is a mistake in the spec rather
-  // than a graph that declined the swap, and `modelProblems` catches it before
-  // a run does — this throws for the same reason the sampler above does.
-  for (const model of spec.models ?? []) {
-    const loader = graph[model.node];
-    if (!loader || !(model.input in loader.inputs)) {
-      throw new Error(
-        `The ${spec.atValue}-step form loads ${model.value} into node ${model.node}.${model.input}, ` +
-          `which ${loader ? `${loader.class_type} does not accept` : "this graph does not have"}.`,
-      );
-    }
-    loader.inputs[model.input] = model.value;
-  }
-
   return true;
-}
-
-/** What is wrong with the model swaps, if anything. Read by `check:workflows`. */
-export function modelProblems(spec: StepSampler, graph: ComfyGraph): string[] {
-  const problems: string[] = [];
-  for (const model of spec.models ?? []) {
-    const loader = graph[model.node];
-    if (!loader) {
-      problems.push(
-        `The ${spec.atValue}-step form loads ${model.value} into node ${model.node}, which is not in the graph.`,
-      );
-      continue;
-    }
-    if (!(model.input in loader.inputs)) {
-      problems.push(
-        `The ${spec.atValue}-step form loads ${model.value} into "${model.input}", which ${loader.class_type} (node ${model.node}) does not accept.`,
-      );
-    }
-  }
-  return problems;
 }
 
 /**

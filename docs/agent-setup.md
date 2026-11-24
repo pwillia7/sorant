@@ -147,7 +147,7 @@ arrived in 0.45, and the local director needs 0.38's `TextGenerate`. Ask before 
 1. **Which workflows they want.** Text to Video, Image to Video and Extend share
    one 43 GB set; Text to Image, the Edit button, Create one and Picture
    character swap share 22 GB more (H3 Image); Reference to Video and Remix add
-   21 GB, and 118 GB more for a song, voice or clip as a reference; Music
+   21 GB, with songs, voices and clips as references included; Music
    14 GB; Upscale nothing to speak of (but an NVIDIA RTX card), or 9 GB more
    with SeedVR2. The Edit button and Create one sit on every picture slot, so
    recommend H3 Image to anyone who uses pictures. Phase 3 checks these against what is already on disk. Recommend
@@ -278,9 +278,7 @@ install's own `models/`, every folder its `extra_model_paths.yaml` adds, and
 any further `--models-dir <path>`. New files go into the install's own
 `models/`. `--workflows all` takes everything required; `--extras` adds optional
 sets (`local-director`, `local-director-27b`, `vhs-tape`, `vhs-tape-lighter`, `seedvr2`, `upscale-3b`, `film`);
-`--skip <file>` leaves one out — the usual one is the bf16 pair,
-`minimax_h3_ref2va_bf16.safetensors,qwen3vl_32b_minimax_h3_bf16.safetensors`, if
-they will use only pictures as references. Lists take commas or spaces.
+`--skip <file>` leaves one out. Lists take commas or spaces.
 
 **Another ComfyUI on this machine already has the files?** Do not download them
 twice. Add that install's models folder to this one's `extra_model_paths.yaml`
@@ -323,7 +321,10 @@ it.
   break on the int8 *rotated* base the graphs ship on (warped faces, melting
   limbs, no error), so the switch swaps to a non-rotated checkpoint while on:
   bf16 (66 GB) or the fp8 **Lighter base** (21 GB). One of the two, not both.
-  Reference to Video and Remix use the `ref2va` bf16 file for it.
+- **`vhs-tape-reference`** — the same look on Reference to Video and Remix,
+  which needs the 66 GB `ref2va` bf16 checkpoint. No 24 GB card holds it, so
+  every step streams from RAM and a take runs for hours. Offer it only if they
+  ask, and say so.
 - **`seedvr2`** (9 GB), **`upscale-3b`** (4 GB) — Upscale's SeedVR2 choices,
   which invent fine texture where the default only sharpens, and take about a
   hundred times as long. Offer `seedvr2` only if they ask for it, or the
@@ -849,7 +850,14 @@ On the ComfyUI machine:
    are unused: `diffusion_models/flux1-kontext-dev.safetensors`,
    `text_encoders/clip_l.safetensors`, `text_encoders/t5xxl_fp8_e4m3fn.safetensors`
    and `vae/ae.safetensors` (29 GB). `clip_l` and `ae` are shared by other FLUX
-   models, so keep them if the person runs FLUX elsewhere.
+   models, so keep them if the person runs FLUX elsewhere. From 0.30, a song,
+   voice or clip reference and Remix at 4 steps run on the int8 `ref2va` pair,
+   so `text_encoders/qwen3vl_32b_minimax_h3_bf16.safetensors` (52 GB) is unused,
+   and `diffusion_models/minimax_h3_ref2va_bf16.safetensors` (66 GB) is only for
+   the VHS tape look on those graphs. That needs the turbo pack from 2026-08-14
+   or later (PR #16): `git pull` `ComfyUI-MiniMax-H3-Turbo` before deleting
+   anything, or a reference run fails with `The size of tensor a (3) must match
+   the size of tensor b (2)`.
 4. ComfyUI itself, if the release notes say so, or if `pnpm check:nodes` reports
    the version as OLDER: the new version's `machine-requirements.json` names the
    oldest ComfyUI it is tested on (`comfyui.min`, from src/lib/comfy-version.ts),

@@ -37,15 +37,10 @@ import {
 import type { SpliceId } from "@/lib/workflows/model-chain";
 import {
   applyStepSampler,
-  modelProblems,
   samplerNodeIn,
   stepSamplerApplies,
   suppressedPatches,
 } from "@/lib/workflows/step-sampler";
-import {
-  applyModelSwap,
-  modelSwapProblems,
-} from "@/lib/workflows/model-swap";
 import {
   applyTurbo,
   TURBO_STRENGTH,
@@ -473,15 +468,6 @@ export function applyParams(
     }
   }
 
-  // And the weights the references need, which is a separate question from the
-  // step count and asked separately. After the patches for the same reason the
-  // sampler is: a content LoRA that named a different base would be overridden
-  // here, which `modelSwapBaseProblems` refuses at declaration time so it can
-  // never happen at run time.
-  if (workflow.modelSwap) {
-    applyModelSwap(graph, workflow.modelSwap, resolved);
-  }
-
   // Runs last so it sees the resolved values and can prune anything they made
   // redundant — an unused optional input, and the node that fed it.
   workflow.finalize?.(graph, resolved);
@@ -591,8 +577,6 @@ export function validateWorkflow(workflow: WorkflowDef): string[] {
   problems.push(...pinProblems(workflow));
   problems.push(...turboProblems(workflow));
   problems.push(...patchProblems(workflow));
-  problems.push(...modelSwapBaseProblems(workflow));
-  problems.push(...workflowModelSwapProblems(workflow));
   problems.push(...stepSamplerProblems(workflow));
   problems.push(...directorProblems(workflow));
   problems.push(...rewriteModelProblems(workflow));
@@ -730,7 +714,6 @@ function stepSamplerProblems(workflow: WorkflowDef): string[] {
 
   const problems: string[] = [];
 
-  problems.push(...modelProblems(spec, workflow.graph));
 
   // A refused switch this workflow does not offer would refuse nothing, and the
   // form would say nothing either — `suppressedAt` lands on the patch it names,
@@ -847,78 +830,6 @@ function patchProblems(workflow: WorkflowDef): string[] {
     for (const patch of patches) applyPatch(graph, patch, { promptInput });
   });
 
-  return problems;
-}
-
-/**
- * Whether the step sampler's weight swap and a content LoRA's base agree.
- *
- * Both write the same input. The splices run before the step sampler does, so
- * at the swapping step count the sampler's file wins — and if the two named
- * different checkpoints, a run at that count would load the one the LoRA was
- * not made for while the form said otherwise. Nothing would fail; the take
- * would just come out wrong in the way the whole `base` declaration exists to
- * prevent.
- *
- * Checked rather than fixed by reordering, because the two agreeing is the
- * honest state: the four-step form loads the non-rotated weights *because* they
- * are the ones that work, which is the same reason the LoRA asks for them. A
- * disagreement means one of the two declarations is wrong, and that is a
- * question for whoever wrote it rather than something to paper over.
- */
-function modelSwapBaseProblems(workflow: WorkflowDef): string[] {
-  // Both sources of a weight swap, because either would override a LoRA's base
-  // the same way and the check is about the override rather than about what
-  // triggered it. Remix declares one on its step sampler; Reference to Video
-  // declares one on its references.
-  const swaps = [
-    ...(workflow.stepSampler?.models ?? []),
-    ...(workflow.modelSwap?.models ?? []),
-  ].filter((model) => model.input === "unet_name");
-  if (!swaps.length) return [];
-
-  const problems: string[] = [];
-  for (const patch of workflow.patches ?? []) {
-    for (const option of patch.choices?.options ?? []) {
-      const base = patchBaseFor(option.bases, workflow.graph);
-      if (!base) continue;
-      const named = base.alternate
-        ? [base.value, base.alternate.value]
-        : [base.value];
-      for (const swap of swaps) {
-        for (const file of named) {
-          if (file === swap.value) continue;
-          problems.push(
-            `This graph loads ${swap.value} for some runs, which would override ${option.label}'s ${file}.`,
-          );
-        }
-      }
-    }
-  }
-  return problems;
-}
-
-/**
- * Whether the swap would actually fire, and land where it says it does.
- *
- * The same reasoning as `stepSamplerProblems`: a declaration naming a control
- * this workflow does not offer would never trigger, and every reference run
- * would quietly go through the quantised pair that fails on them — which is at
- * least a loud failure, but a swap naming a loader that is not there is a graph
- * ComfyUI rejects, and neither should wait for a render to be found.
- */
-function workflowModelSwapProblems(workflow: WorkflowDef): string[] {
-  const spec = workflow.modelSwap;
-  if (!spec) return [];
-
-  const problems = modelSwapProblems(spec, workflow.graph);
-  for (const id of spec.whenSet) {
-    if (!workflow.params.some((param) => param.id === id)) {
-      problems.push(
-        `The model swap is triggered by "${id}", which this workflow has no control for.`,
-      );
-    }
-  }
   return problems;
 }
 

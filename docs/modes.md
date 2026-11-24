@@ -36,18 +36,16 @@ that the graph already samples at 8, the top of the LoRA's range, so the LoRA
 would spend quality per step and save no time. That was only ever an argument
 about the number that workflow ships at, and it left the other end of the
 control broken: at 4 steps the graph takes the pack's four-step form — distilled
-sampler, bf16 weights, no Spectrum — and *that sampler exists to be paired with
+sampler, no Spectrum — and *that sampler exists to be paired with
 this LoRA*. Four steps without one is not a usable take, so the cheap end of the
 range was reachable and worthless.
 
 **Both `ref2va` workflows ship at four steps**, in turbo, which is the whole of
 the point above. Four there is not a cheaper version of the graph — it is the
-node pack's complete form, the four-step sampler and the bf16 pair, with the
-distilled LoRA under it. Reference to Video was already doing exactly that
-whenever a reference track was attached, since a track pins the control to 4; the
-default now says so for every other run too. Eight is one drag away for a take
-worth the minutes, and brings back the quantised weights, the ordinary sampler
-and Spectrum with it.
+node pack's complete form, the four-step sampler with the distilled LoRA under
+it. Eight is one drag away for a take worth the minutes, and brings back the
+ordinary sampler and Spectrum with it. The weights are the same int8 pair at
+every step count.
 
 The turbo estimates are scaled to match: 140 seconds on reference to video and
 270 on Remix. Both come off the fit the old numbers already implied — 300 at
@@ -155,10 +153,10 @@ without it differs. Whether the look is worth having on a graph whose job is
 holding a likeness is a judgement to make from takes, so compare one before
 trusting it, exactly as with Turbo on those graphs.
 
-`minimax_h3_ref2va_bf16` is also what both those graphs already load at 4 steps,
-which is not a coincidence to rely on silently: `validateWorkflow` refuses a
-declaration where the step count's own weight swap would override a LoRA's base,
-because that run would load the wrong checkpoint while the form said otherwise.
+It is also the one thing on those graphs that loads a 66 GB checkpoint, and no
+24 GB card holds it: every step streams it from RAM, so a take with VHS tape on
+a reference graph runs for hours. It is an extra (`--extras
+vhs-tape-reference`) for that reason.
 
 **It has a trigger, and the LoRA is inert without it.** `vh5tape` has to be the
 first thing in the prompt, followed by a damage-tier phrase, then the scene —
@@ -239,15 +237,13 @@ to be applied, because any other arrangement would fail nothing and quietly
 sample something none of the nodes was meant to produce.
 
 **The two `ref2va` graphs refuse Spectrum at 4 steps.** That four-step form is
-the ComfyUI export that actually works — distilled sampler, bf16 weights, no
-forecaster — so the switch is left out of the run rather than spliced into a
+the ComfyUI export that actually works — distilled sampler, no forecaster — so
+the switch is left out of the run rather than spliced into a
 chain it was never part of. It is refused, not turned off: the setting is kept,
 the switch shows as off with the reason under it, and it comes back the moment
-the step count moves. On Reference to Video a reference track pins the steps to
-4, so a track means no Spectrum without a second rule saying so. The declaration
-is `suppresses` on the workflow's `stepSampler`, beside the sampler swap and the
-model swap it belongs with, and `check:workflows` rejects a name the workflow
-does not offer.
+the step count moves. The declaration is `suppresses` on the workflow's
+`stepSampler`, beside the sampler swap it belongs with, and `check:workflows`
+rejects a name the workflow does not offer.
 
 Remix carries the same declaration, and got it later than Reference to Video
 did. It is the same model — `minimax_h3_ref2va` through
@@ -307,16 +303,11 @@ wrong, so the form says what happened rather than asking: a short accented line
 appears under the steps slider at 4 and goes away at every other value. Nothing
 is remembered between runs — the control is the whole state.
 
-**On Reference to Video, four steps is a whole form of the graph rather than one
-node.** The same trigger also loads the bf16 diffusion model and text encoder in
-place of the quantised pair, and refuses the Spectrum switch — which is the
-ComfyUI export that actually works there, node for node. All three hang off the
-one `stepSampler` declaration, so there is one trigger and one note rather than
-three rules that could disagree about which four-step graph this is; `models`
-and `suppresses` are covered under [the reference workflow](workflows.md#create-video-from-a-finished-track)
-and [the patches](#the-patches). It is also why a reference track pins the steps
-control to 4: that is the only form of the graph a track survives, and pinning
-the number is what makes the rest of it follow.
+**On the two reference workflows, four steps also refuses the Spectrum
+switch** — which is the ComfyUI export that actually works there, node for
+node. Both hang off the one `stepSampler` declaration, so there is one trigger
+and one note rather than two rules that could disagree about which four-step
+graph this is; `suppresses` is covered under [the patches](#the-patches).
 
 It fires on the value alone rather than on the value *and* Turbo, even though
 four steps is only really useful with the LoRA applied. "Four steps uses the

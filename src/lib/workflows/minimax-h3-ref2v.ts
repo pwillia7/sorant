@@ -13,7 +13,6 @@ import {
   audioKeepParam,
   audioKeepReusesWords,
   clipDurationParam,
-  h3Bf16Models,
   h3ContentLora,
   h3Patches,
   h3StepSampler,
@@ -487,14 +486,14 @@ export const minimaxH3ReferenceVideo: WorkflowDef = {
    * samples at 8, the top of the LoRA's range, so the LoRA would spend quality
    * per step and save no time. That was only ever an argument about the number
    * this workflow ships at, and it left the other end of the range broken: at 4
-   * steps the graph takes the pack's four-step form — distilled sampler, bf16
-   * weights, no Spectrum — and the sampler in that form exists to be paired with
+   * steps the graph takes the pack's four-step form — distilled sampler, no
+   * Spectrum — and the sampler in that form exists to be paired with
    * the distilled LoRA. Four steps without one is not a usable take, so the
    * cheap end of the control was reachable and worthless.
    *
    * **It starts at four steps**, not at the eight this graph ships at with the
    * switch off. Four is where the node pack's own form is complete — its
-   * four-step sampler, the bf16 pair, no Spectrum — and with the LoRA under it
+   * four-step sampler, no Spectrum — and with the LoRA under it
    * that form is the fast one and the intended one at once. Eight is still a
    * drag of the control away for a take worth the extra minutes.
    *
@@ -519,26 +518,21 @@ export const minimaxH3ReferenceVideo: WorkflowDef = {
    * `MiniMaxH3ReferenceToVideo`, given a reference to work over — pictures and a
    * track there, a clip and its audio here.
    *
-   * So at four steps this graph is the pack's four-step form and nothing else:
-   * the distilled sampler, the bf16 diffusion model and text encoder in place of
-   * the quantised pair, and no Spectrum. The evidence for each is in
-   * minimax-h3-ref.ts, where it was worked out; carried across on the strength
-   * of the model rather than of a failure seen here, which is the honest account
-   * — nothing has run *this* graph at four steps on the quantised pair to find
-   * out whether it breaks the same way. If it turns out to run fine on them,
-   * that is an argument for dropping the swap here, not for having guessed.
+   * So at four steps this graph is the pack's four-step form: the distilled
+   * sampler, and no Spectrum.
    *
-   * What is *not* carried across is the pin. On Reference to Video a track holds
-   * the steps at four, because the bf16 pair is loaded only there and the
-   * quantised one failed on a track. This graph has audio on every run and ships
-   * at eight steps, which is evidence the quantised pair takes a clip's audio
-   * perfectly well — so pinning it here would fix a problem this workflow does
-   * not have, at the cost of every remix it makes.
+   * It stays on the quantised pair the stored graph names. It used to load the
+   * bf16 diffusion model and text encoder at four steps — 118 GB between them,
+   * streamed from RAM on a 24 GB card, which turned a 20 s render into hours —
+   * on the strength of a tensor-size failure the quantised pair had with
+   * references. That failure was the turbo pack's AdaLN injection on a pruned
+   * base, fixed upstream (Larryvrh/ComfyUI-MiniMax-H3-Turbo #16), and on
+   * 2026-11-24 this graph ran at four steps on the quantised pair with a clip
+   * and its soundtrack, cleanly. See minimax-h3-ref.ts for the rest.
    */
   stepSampler: h3StepSampler({
-    models: h3Bf16Models({ unet: "127", clip: "128" }),
     suppresses: ["spectrum"],
-    note: "It also loads the bf16 diffusion model and text encoder, and leaves Spectrum out, which the four-step form does not use.",
+    note: "It also leaves Spectrum out, which the four-step form does not use.",
   }),
   /**
    * The prompt is the one thing the clip cannot supply, so it comes across

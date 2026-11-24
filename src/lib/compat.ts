@@ -34,7 +34,7 @@ export interface CompatProblem {
 export interface WorkflowCompat {
   /** Problems with the graph every run of the workflow uses. */
   blocking: CompatProblem[];
-  /** Problems that only stop one mode — Turbo, a patch, the reference weights. */
+  /** Problems that only stop one mode — Turbo, a patch, the four-step sampler. */
   modes: { mode: string; problems: CompatProblem[] }[];
 }
 

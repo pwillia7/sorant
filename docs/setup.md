@@ -64,10 +64,10 @@ What helps on a smaller card:
   32 GB will push weights out to disk, which is far slower.
 - **Keep Turbo on.** Four to eight steps instead of twenty is the biggest time
   saving there is, and it changes nothing about memory.
-- **Mind the bf16 pair.** A Reference to Video run with a song, voice or clip
-  attached, or Remix at 4 steps, loads 118 GB of weights. That cannot sit in
-  64 GB of RAM, so part of it streams from disk on any card. A fast NVMe drive
-  matters there.
+- **Keep the VHS tape look off Reference to Video and Remix.** On those two
+  it needs the 66 GB bf16 checkpoint, which no 24 GB card holds: every step
+  streams it from RAM, and a take runs for hours. Everything else on them runs
+  on the 21 GB int8 model.
 - **Upscale** needs under 2 GB with its default RTX Video; SeedVR2's 3B needs
   less than its 7B.
 - **Music, both upscales and the Edit button are much smaller** than the H3
@@ -206,9 +206,7 @@ are values inside the graphs rather than choices in the UI.
 | `minimax_h3_image_vae_fp16.safetensors` | `vae/` | 1.2 GB | the same |
 | `h3_image_character_swap_v1.safetensors` | `loras/` | 0.2 GB | Picture character swap ([source](https://huggingface.co/akatz-ai/MiniMax-H3-Image-Character-Swap-LoRA)) |
 | | | | |
-| `minimax_h3_ref2va_pruned_int8_convrot.safetensors` | `diffusion_models/` | 21.0 GB | Reference to Video, Remix, Music video |
-| `minimax_h3_ref2va_bf16.safetensors` | `diffusion_models/` | 66.3 GB | Reference to Video with a soundtrack, voice or clip attached; Music video; Remix at 4 steps |
-| `qwen3vl_32b_minimax_h3_bf16.safetensors` | `text_encoders/` | 51.5 GB | the same runs as the file above |
+| `minimax_h3_ref2va_pruned_int8_convrot.safetensors` | `diffusion_models/` | 21.0 GB | Reference to Video, Remix, Music video — pictures, songs, voices and clips alike |
 | | | | |
 | `minimax_music3_dit_fp16.safetensors` | `diffusion_models/` | 4.9 GB | Music |
 | `minimax_music3_text_encoder_pruned_int8_convrot.safetensors` | `text_encoders/` | 9.2 GB | Music |
@@ -229,6 +227,7 @@ Optional — nothing fails without these until you choose them:
 | `vh5tape-comfyui.safetensors` | `loras/` | 0.1 GB | the **VHS tape** look ([source](https://huggingface.co/KennethFal/vh5tape-vhs-lora-minimax-h3)) |
 | `minimax_h3_fl2va_bf16.safetensors` | `diffusion_models/` | 66.3 GB | what VHS tape runs on (a LoRA cannot use the int8 base) |
 | `minimax_h3_fl2va_pruned_fp8_scaled.safetensors` | `diffusion_models/` | 21.0 GB | VHS tape on **Lighter base**, instead of the bf16 |
+| `minimax_h3_ref2va_bf16.safetensors` | `diffusion_models/` | 66.3 GB | VHS tape on Reference to Video and Remix (`--extras vhs-tape-reference`) — slow on a 24 GB card |
 
 Where to get them:
 
@@ -248,11 +247,14 @@ a *different* build — the low-VRAM int8 Music 3 DiT, say — change `unet_name
 in the matching `src/lib/workflows/*.ts` file, and expect to redo it after an
 update.
 
-**Why two `ref2va` checkpoints?** Reference to Video normally runs on the int8
-model, but the int8 build fails on a soundtrack, voice or clip reference, so
-attaching one switches to the bf16 model and text encoder — 118 GB more.
-Remix makes the same switch at 4 steps. If disk is tight, skip those two files,
-use pictures only as references, and keep Remix above 4 steps.
+**A song, voice or clip as a reference fails with `The size of tensor a (3)
+must match the size of tensor b (2)`?** The turbo node pack is out of date.
+`git pull` it in `custom_nodes/ComfyUI-MiniMax-H3-Turbo` and restart ComfyUI.
+Older versions of this app worked around that error by switching to 118 GB of
+bf16 weights; the fixed pack needs nothing but the int8 model, so if you have
+`minimax_h3_ref2va_bf16.safetensors` and `qwen3vl_32b_minimax_h3_bf16.safetensors`
+from then, you can delete them — unless you use the VHS tape look on Reference
+to Video or Remix, which still needs the first.
 
 ### On Windows, raise the GPU timeout first
 

@@ -34,7 +34,6 @@ import {
   audioKeepHidesWords,
   audioKeepReusesWords,
   audioLabels,
-  h3Bf16Models,
   h3ContentLora,
   h3Patches,
   h3StepSampler,
@@ -97,12 +96,11 @@ import {
  *   how long the video runs says nothing about how much recording it takes to
  *   establish how somebody sounds — and because a long one crowds out the
  *   audio being generated. See that constant.
- * - **Any of the three loads a different diffusion model and text encoder**,
- *   the bf16 pair, because the quantised one the graph stores fails on a
- *   reference block it does not expect. That is independent of the step count:
- *   see `REFERENCE_MODELS` and `modelSwap`. Four steps, wherever it is chosen,
- *   still swaps in the pack's distilled sampler and is still refused without
- *   the LoRA that sampler assumes — see `h3StepSampler`.
+ * - **None of the three changes the weights.** Every run is on the quantised
+ *   pair the stored graph names — see the note headed "Why a track, a voice
+ *   or a clip runs on the same quantised pair" for why that is worth saying. Four steps, wherever it is chosen, swaps in the pack's
+ *   distilled sampler and is refused without the LoRA that sampler assumes —
+ *   see `h3StepSampler`.
  */
 const ids: MinimaxNodeIds = {
   prompt: { node: "138", input: "value" },
@@ -450,31 +448,27 @@ const labelsFor = (values: Record<string, ParamValue>) =>
   });
 
 /**
- * The weights this graph loads for a reference that is not a still, in place of
- * the ones the stored graph names.
+ * Why a track, a voice or a clip runs on the same quantised pair as a picture —
+ * `minimax_h3_ref2va_pruned_int8_convrot` with
+ * `qwen3vl_32b_minimax_h3_nvfp4_awq` — and not on the bf16 pair.
  *
- * A track and reference images together used to come back from ComfyUI as
- * `RuntimeError: The size of tensor a (3) must match the size of tensor b (2)
- * at non-singleton dimension 0`, and the pair was fenced off in the form
- * because nothing in the reference path — nodes_minimax_h3.py,
- * ldm/minimax/model.py, text_encoders/minimax.py — said it should fail. It was
- * the quantised pair: `minimax_h3_ref2va_pruned_int8_convrot` with
- * `qwen3vl_32b_minimax_h3_nvfp4_awq`. The bf16 diffusion model and the bf16
- * text encoder take the same references, so that is what a run carrying one
- * loads.
+ * Until 2026-11-24 any of the three swapped in `minimax_h3_ref2va_bf16` and
+ * `qwen3vl_32b_minimax_h3_bf16`, 118 GB between them, because the quantised
+ * pair had come back with `RuntimeError: The size of tensor a (3) must match
+ * the size of tensor b (2) at non-singleton dimension 0`. That error was never
+ * the model's. It was the turbo pack's AdaLN injection on a *pruned* base
+ * counting one timestep row too few for a reference block; the bf16 base is not
+ * pruned, so it never took that path. The pack now reads the rows off the
+ * model's own `adaln_t_table` (Larryvrh/ComfyUI-MiniMax-H3-Turbo #16), and the
+ * quantised pair takes a voice, a track, a clip and a clip's soundtrack with
+ * turbo on — each run on a 3090 that day, minutes apiece.
  *
- * Every reference that is not a still triggers it. A voice reference is a
- * standalone audio on the same variadic input the track uses, so it is the same
- * conditioning block; a reference video is a different block but the same kind
- * of failure, and Remix — nothing but a video reference through this same node
- * class — already runs on the bf16 pair.
- *
- * The graphs on `fl2va` do not swap. They have never had the failure, so
- * pointing them at weights nobody here has tested would be a change with no
- * evidence behind it — and one more pair of files a fresh install has to
- * download. See `h3Bf16Models`, which is where the pair lives.
+ * The swap cost far more than the download. Neither file fits a 24 GB card, so
+ * every step streamed the weights over PCIe: a 20 s take with a voice ran at
+ * 27–42 minutes a step and was cancelled after two hours at step four of
+ * eight. Most cards this app runs on are 24 GB or less. If the error comes
+ * back, the fix is the turbo pack — `git pull` it — not bigger weights.
  */
-const REFERENCE_MODELS = h3Bf16Models({ unet: "127", clip: "128" });
 
 /**
  * How many seconds of the track the model is given.
@@ -1717,10 +1711,7 @@ export const minimaxH3Reference: WorkflowDef = {
    *
    * **It starts at four steps**, which is the fast end of the range and also the
    * only end of it the node pack has a complete form for: the four-step sampler,
-   * the bf16 pair, no Spectrum. Eight is still there for a take worth spending
-   * the time on, and a reference track pins the control to four in any case —
-   * so four as the shipped number is what the graph was already doing whenever
-   * a track was attached, made the default for everything else too.
+   * no Spectrum. Eight is still there for a take worth spending the time on.
    *
    * 140s is scaled from this graph's own 300s rather than measured, on the fit
    * the old 220s implied: 300 at twelve steps and 220 at eight puts a step at
@@ -1744,24 +1735,12 @@ export const minimaxH3Reference: WorkflowDef = {
      * export — distilled sampler, no forecaster — and the switch is refused
      * rather than quietly left on.
      *
-     * The weights are no longer part of this. They follow the reference now,
-     * at whatever step count the run uses — see `modelSwap` below.
+     * The weights are not part of this, at four steps or any other count —
+     * see "Why a track, a voice or a clip runs on the same quantised pair".
      */
     suppresses: ["spectrum"],
     note: "It also leaves Spectrum out, which the four-step form does not use.",
   }),
-
-  /**
-   * The pair that takes a reference that is not a still, at any step count.
-   *
-   * See model-swap.ts for why this is keyed to the references rather than to
-   * four steps, and what that used to cost.
-   */
-  modelSwap: {
-    whenSet: [AUDIO_PARAM, VOICE_PARAM, VIDEO_PARAM],
-    models: REFERENCE_MODELS,
-    note: "Loads the bf16 diffusion model and text encoder, which are slower than the quantised pair but the only ones that take a reference like this.",
-  },
 
   /**
    * Where a finished track goes when you press Create video on it.
@@ -2017,9 +1996,9 @@ export const minimaxH3Reference: WorkflowDef = {
      *
      * This used to be declared as refused: a voice pinned the steps to four and
      * four steps without the distilled LoRA was thrown out. It is the run that
-     * change exists to allow — the bf16 pair now follows the reference rather
-     * than the step count, so a voice at the standard count with no LoRA under
-     * it is an ordinary run and has to queue like one. Kept as a case in the
+     * change exists to allow — nothing about a reference touches the step
+     * count, so a voice at the standard count with no LoRA under it is an
+     * ordinary run and has to queue like one. Kept as a case in the
      * other direction, because a rule that quietly came back would otherwise
      * only show up as a rejected submission.
      */

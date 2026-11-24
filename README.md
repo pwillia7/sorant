@@ -90,7 +90,7 @@ It is only a front end: no model weights, no database, nothing expensive.
 | --- | --- |
 | **GPU** | NVIDIA. **24 GB** runs everything at full size (tested, RTX 3090). **16 GB** should work at the default frame size; **12 GB** has been shown to work at small sizes by others. [Details](docs/setup.md#how-much-vram). |
 | **System RAM** | **64 GB.** Model weights that do not fit on the card wait in RAM, so the less VRAM you have, the more this matters. |
-| **Disk** | **43 GB** for Text to Video alone; **222.6 GB** for every workflow; **334.3 GB** with every optional extra. See below. |
+| **Disk** | **43 GB** for Text to Video alone; **104.7 GB** for every workflow; **300.1 GB** with every optional extra. See below. |
 | **ComfyUI** | 0.45 or newer — tested on 0.46 — plus seven custom node packs. |
 | **OS** | Windows or Linux for ComfyUI. Built and tested on Windows, which needs [one registry fix](docs/setup.md#on-windows-raise-the-gpu-timeout-first); others have set it up on Linux. macOS and AMD cards are untested and unlikely to manage the models. |
 | **For the app** | Node 20.9+ and pnpm. A free Vercel account to deploy it. To reach your ComfyUI from Vercel, a free DuckDNS name and a router you can forward a port on (Tailscale Funnel works without the router, but is too slow for long videos). An AI Gateway key is optional: the prompt rewrite can run on your own machine instead. |
@@ -101,14 +101,13 @@ Disk space by what you want to run — download only what you will use:
 | --- | ---: |
 | Text to Video, Image to Video, Extend | 43 GB |
 | + Text to Image, **Edit** and **Create one** on pictures, Picture character swap | +22.3 GB |
-| + Reference to Video and Remix (pictures as references) | +21 GB |
-| + a song, voice or clip as a reference, Music video, or Remix at 4 steps | +118 GB |
+| + Reference to Video, Remix and Music video (pictures, songs, voices and clips as references) | +21 GB |
 | + Music | +14 GB |
 | + Character swap (after Reference to Video) | +3.9 GB |
 | + Upscale (needs an NVIDIA RTX card) | +0.1 GB |
-| **Every workflow** | **222.6 GB** |
-| Optional extras (local prompt rewriting, the VHS tape look, SeedVR2 for Upscale) | +111.7 GB |
-| **Everything, extras included** | **334.3 GB** |
+| **Every workflow** | **104.7 GB** |
+| Optional extras (local prompt rewriting, the VHS tape look, SeedVR2 for Upscale) | +195.4 GB |
+| **Everything, extras included** | **300.1 GB** |
 
 Each file and where it comes from is listed in the
 [setup guide](docs/setup.md#model-files).

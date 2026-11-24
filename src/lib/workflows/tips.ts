@@ -622,7 +622,7 @@ const TURBO: TipSection = {
     "Remix offers it too, and it is what makes that workflow's default of 4 steps worth having: 4 there is the pack's four-step form, and the sampler in it was built to be paired with this LoRA. With the switch off, that workflow samples the quantised weights at 8.",
     "On the two workflows that run the reference model — Reference to Video and Remix — compare a turbo take against a standard one before trusting it for a likeness. The LoRA's author does not officially support that model yet, and identity is the first thing to suffer if it drifts.",
     "Steps stop at 8 here rather than 60. Past that the LoRA is being asked for something it was not distilled to do, and the extra time buys nothing.",
-    "On the two reference workflows — Reference to Video and Remix — 4 is where they ship, because there it is a complete form rather than a cheap one: the pack's own four-step sampler and the bf16 weights that go with it. Elsewhere 4 is the setting to iterate at, and 8 is the take you keep.",
+    "On the two reference workflows — Reference to Video and Remix — 4 is where they ship, because there it is a complete form rather than a cheap one: the pack's own four-step sampler, which the LoRA was distilled for. Elsewhere 4 is the setting to iterate at, and 8 is the take you keep.",
     "At exactly 4, the graph swaps in the pack's dedicated 4-step sampler in place of the usual one. Nothing to turn on: the steps control decides it, and the note under that control says so while it is in effect. It comes from the same pack as the LoRA.",
     "This is the one thing in the app that needs a node pack and a model file the base workflows do not. If every run fails with the switch on and succeeds with it off, that is what to check.",
     "Low VRAM, under the switch, applies the LoRA the memory-sparing way the pack offers. It is slower and changes nothing about the video, so leave it off unless a turbo run dies out of memory. It stays where you set it for every workflow, since it is your card it is about.",
@@ -674,7 +674,7 @@ const PATCHES: Record<string, TipSection> = {
       "It is offered on every workflow, Remix included. Remix skips Turbo because it already samples at 8 steps, which is no argument here.",
       "Like Turbo, this needs a node pack the base workflows do not. If every run fails with the switch on and succeeds with it off, that is what to check — `pnpm check:nodes` names the pack.",
       "Forecast steps are approximations of computed ones. If a take comes out mushier than the same seed without it, that is the trade showing, and the switch is where to look first.",
-      "Reference to Video refuses it at 4 steps, and shows the switch as off there. That graph's four-step form is the pack's own — distilled sampler, bf16 weights, no forecaster — and a reference track pins the run to 4, so a track means no Spectrum. The switch keeps its setting and comes back the moment the step count does.",
+      "Reference to Video and Remix refuse it at 4 steps, and show the switch as off there. Their four-step form is the pack's own — distilled sampler, no forecaster. The switch keeps its setting and comes back the moment the step count does.",
     ],
   },
 };
