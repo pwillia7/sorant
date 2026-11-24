@@ -624,10 +624,12 @@ pack's AdaLN injection on a *pruned* base miscounting the timestep rows a
 reference block adds, not the model; the pack now reads them off the model's own
 `adaln_t_table` ([Larryvrh/ComfyUI-MiniMax-H3-Turbo#16](https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo/pull/16)).
 For a while this graph worked around it by loading `minimax_h3_ref2va_bf16` and
-`qwen3vl_32b_minimax_h3_bf16` — 118 GB, streamed from RAM on every step of a
-24 GB card, so a 20 s take ran for hours. On 2026-11-24 the int8 pair took a
-voice, a track, a clip and a clip's soundtrack with turbo on, in minutes each,
-and the swap was removed. If the error comes back, update the turbo pack.
+`qwen3vl_32b_minimax_h3_bf16` — 118 GB, streamed from system RAM on every step
+of a 24 GB card. On a 64 GB box with RAM free that ran at about 4 minutes a step
+(15 s, 1 MP), close to the int8 model; with RAM short it fell to 27–42 minutes a
+step. On 2026-11-24 the int8 pair took a voice, a track, a clip and a clip's
+soundtrack with turbo on, and the swap was removed: same results without 118 GB
+of downloads or the dependence on free RAM. If the error comes back, update the turbo pack.
 
 Leave **Turbo** on. At four steps the graph swaps in the pack's four-step
 sampler but not the distilled LoRA, which is a switch of its own, and four steps

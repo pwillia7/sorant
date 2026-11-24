@@ -89,7 +89,7 @@ export const EXTRAS: Record<string, { files: string[]; what: string }> = {
   },
   "vhs-tape-reference": {
     files: ["vh5tape-comfyui.safetensors", "minimax_h3_ref2va_bf16.safetensors"],
-    what: "the VHS tape look on Reference to Video and Remix, on the bf16 base it needs there — slow on a 24 GB card",
+    what: "the VHS tape look on Reference to Video and Remix, on the bf16 base it needs there — streams from system RAM on a 24 GB card, very slow if RAM is short",
   },
   seedvr2: {
     files: ["seedvr2_7b_sharp_int8_convrot.safetensors", "seedvr2_ema_vae_fp16.safetensors"],

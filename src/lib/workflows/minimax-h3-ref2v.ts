@@ -523,7 +523,8 @@ export const minimaxH3ReferenceVideo: WorkflowDef = {
    *
    * It stays on the quantised pair the stored graph names. It used to load the
    * bf16 diffusion model and text encoder at four steps — 118 GB between them,
-   * streamed from RAM on a 24 GB card, which turned a 20 s render into hours —
+   * streamed from system RAM on a 24 GB card, which is slow whenever RAM runs
+   * short —
    * on the strength of a tensor-size failure the quantised pair had with
    * references. That failure was the turbo pack's AdaLN injection on a pruned
    * base, fixed upstream (Larryvrh/ComfyUI-MiniMax-H3-Turbo #16), and on

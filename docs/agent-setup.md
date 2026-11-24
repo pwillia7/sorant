@@ -323,8 +323,10 @@ it.
   bf16 (66 GB) or the fp8 **Lighter base** (21 GB). One of the two, not both.
 - **`vhs-tape-reference`** — the same look on Reference to Video and Remix,
   which needs the 66 GB `ref2va` bf16 checkpoint. No 24 GB card holds it, so
-  every step streams from RAM and a take runs for hours. Offer it only if they
-  ask, and say so.
+  every step streams it from system RAM: on a 64 GB box with RAM to spare that
+  cost about as much as the int8 model, but once RAM runs short it slows
+  sharply (measured 27–42 min a step against 4). Offer it only if they ask, and
+  say so.
 - **`seedvr2`** (9 GB), **`upscale-3b`** (4 GB) — Upscale's SeedVR2 choices,
   which invent fine texture where the default only sharpens, and take about a
   hundred times as long. Offer `seedvr2` only if they ask for it, or the

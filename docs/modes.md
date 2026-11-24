@@ -141,8 +141,9 @@ tape on `fl2va`, off is `minimax_h3_fl2va_bf16` and on is
 `minimax_h3_fl2va_pruned_fp8_scaled` — much smaller and much easier on VRAM for
 some quality. Both are non-rotated, so neither side can produce the failure
 above; it is a straight quality-for-memory trade, and the option to take if bf16
-will not fit or has not been downloaded. On `ref2va` there is no scaled fp8 build
-to offer, so the switch does not appear there at all.
+will not fit or has not been downloaded. On `ref2va` the switch does not appear:
+Comfy-Org has since published `minimax_h3_ref2va_pruned_fp8_scaled`, but it is
+not yet tested with the LoRA here.
 
 **On the reference workflows this pairing is ours, not the LoRA author's.** The
 model card lists `fl2va` bases only and says the LoRA is designed for
@@ -154,9 +155,10 @@ holding a likeness is a judgement to make from takes, so compare one before
 trusting it, exactly as with Turbo on those graphs.
 
 It is also the one thing on those graphs that loads a 66 GB checkpoint, and no
-24 GB card holds it: every step streams it from RAM, so a take with VHS tape on
-a reference graph runs for hours. It is an extra (`--extras
-vhs-tape-reference`) for that reason.
+24 GB card holds it: every step streams it from system RAM. With RAM to spare
+that is no slower than the int8 model, but it needs more RAM than most machines
+have, and when RAM runs short a step can take ten times as long. It is an extra
+(`--extras vhs-tape-reference`) for that reason.
 
 **It has a trigger, and the LoRA is inert without it.** `vh5tape` has to be the
 first thing in the prompt, followed by a damage-tier phrase, then the scene —

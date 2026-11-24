@@ -609,8 +609,9 @@ const H3_FL2VA_LORA_BASES = [
 
 /**
  * And the same for the reference backbone. Only the bf16 one: the quantised
- * `ref2va` checkpoints are `_int8_convrot`, which is the rotated basis, and
- * there is no scaled fp8 build of it to fall back to.
+ * `ref2va` checkpoints are `_int8_convrot`, which is the rotated basis.
+ * Comfy-Org has since published `minimax_h3_ref2va_pruned_fp8_scaled`, the
+ * same kind of base as the fl2va Lighter base; untested with the LoRA here.
  */
 const H3_REF2VA_LORA_BASES = ["minimax_h3_ref2va_bf16"];
 
@@ -678,10 +679,11 @@ const H3_CONTENT_LORAS: PatchChoice[] = [
          * mechanism is sound; whether the *look* is worth having on a graph
          * whose job is holding a likeness is a judgement to make from takes.
          *
-         * No alternate: there is no scaled fp8 `ref2va` checkpoint to offer.
-         * That makes this switch the one thing left on the reference graphs
-         * that loads the 66 GB bf16 checkpoint — opt-in, and slow on a 24 GB
-         * card, where it streams from RAM every step. Everything else on those
+         * No alternate yet: see H3_REF2VA_LORA_BASES. That makes this switch
+         * the one thing left on the reference graphs that loads the 66 GB bf16
+         * checkpoint — opt-in, because on a 24 GB card it streams from system
+         * RAM every step, which is fine with RAM to spare and very slow
+         * without. Everything else on those
          * graphs runs on the quantised pair; see minimax-h3-ref.ts.
          */
         forModel: ["minimax_h3_ref2va"],

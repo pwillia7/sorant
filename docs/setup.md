@@ -66,8 +66,8 @@ What helps on a smaller card:
   saving there is, and it changes nothing about memory.
 - **Keep the VHS tape look off Reference to Video and Remix.** On those two
   it needs the 66 GB bf16 checkpoint, which no 24 GB card holds: every step
-  streams it from RAM, and a take runs for hours. Everything else on them runs
-  on the 21 GB int8 model.
+  streams it from system RAM, which needs a lot of free RAM and gets very slow
+  without it. Everything else on them runs on the 21 GB int8 model.
 - **Upscale** needs under 2 GB with its default RTX Video; SeedVR2's 3B needs
   less than its 7B.
 - **Music, both upscales and the Edit button are much smaller** than the H3

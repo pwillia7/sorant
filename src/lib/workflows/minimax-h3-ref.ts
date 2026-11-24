@@ -463,10 +463,12 @@ const labelsFor = (values: Record<string, ParamValue>) =>
  * quantised pair takes a voice, a track, a clip and a clip's soundtrack with
  * turbo on — each run on a 3090 that day, minutes apiece.
  *
- * The swap cost far more than the download. Neither file fits a 24 GB card, so
- * every step streamed the weights over PCIe: a 20 s take with a voice ran at
- * 27–42 minutes a step and was cancelled after two hours at step four of
- * eight. Most cards this app runs on are 24 GB or less. If the error comes
+ * The swap cost more than the download. Neither file fits a 24 GB card, so
+ * every step streamed the weights from system RAM. On a 64 GB box that ran
+ * at about 4 minutes a step for 15 s at 1 MP while RAM was free — close to
+ * the int8 pair — but a 20 s take after a day of other runs, with RAM short,
+ * fell to 27–42 minutes a step and was cancelled after two hours. Whether the
+ * bf16 pair is worth offering back as an option is still to be retested. If the error comes
  * back, the fix is the turbo pack — `git pull` it — not bigger weights.
  */
 
