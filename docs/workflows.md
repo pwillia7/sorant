@@ -290,8 +290,10 @@ swap.
   pass-throughs (`passedThrough`, with `shotChoices[i].original`), the clip's
   own footage. A clip of 2–6 s goes through the planner too, and with no
   cuts in it is sent as the one ordinary run it would have been.
-- **Up to 8 minutes** (`MAX_SWAP_SECONDS`): the join is one
-  `ConcatenateVideo`, which takes at most 100 clips. Past a minute the clip
+- **Up to 8 minutes** (`MAX_SWAP_SECONDS`). One `ConcatenateVideo` takes
+  at most 100 clips, so a join of more is made of groups of 100 joined again
+  (`wireJoin`). That is still one remux, since a nested join hands over its
+  files. A clip split at many camera cuts can pass 100 segments. Past a minute the clip
   control warns about the wait (`warnOverSeconds`, `longClipWarning`) rather
   than refusing: about 13 minutes per 5-second segment at 1 MP on a 3090. The
   100 MB upload limit still applies. Clips up to 1080×1920 are taken, since

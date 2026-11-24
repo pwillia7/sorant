@@ -63,9 +63,9 @@ export function estimateScale(
 export const CHAIN_OVER_SECONDS = 6;
 
 /**
- * As long as a clip may be, at all. The join is one `ConcatenateVideo`, which
- * takes at most 100 clips (MAX_SEGMENTS, below), and 100
- * segments of about 123 frames is 8.5 minutes.
+ * As long as a clip may be, at all: about 100 segments of about 123 frames,
+ * 8.5 minutes. The join takes many more (MAX_SEGMENTS, below), since a clip
+ * split at its camera cuts makes shorter segments.
  */
 export const MAX_SWAP_SECONDS = 480;
 
@@ -140,8 +140,8 @@ export interface ChainSegment {
 /** A tail shorter than this is folded into the segment before it. */
 const MIN_LAST_SEGMENT = 24;
 
-/** The most segments a swap may have: the join's 100 clips (MAX_SCENES in music-video-stitch.ts). */
-export const MAX_SEGMENTS = 100;
+/** The most segments a swap may have: as many as the join takes (MAX_SCENES in music-video-stitch.ts). */
+export const MAX_SEGMENTS = 1000;
 
 /** Neither side of a cut added on a redo may be shorter than this: a second. */
 export const MIN_SPLIT_FRAMES = MIN_LAST_SEGMENT;

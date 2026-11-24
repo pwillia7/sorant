@@ -28,8 +28,45 @@ const SONG_TRIM_NODE = "song_trim";
 const JOIN_NODE = "join";
 const LIST_NODE = "scenes";
 
-/** At most as many scenes as `ConcatenateVideo` takes. */
-export const MAX_SCENES = 100;
+/** As many clips as one `ConcatenateVideo` takes. */
+const CLIPS_PER_JOIN = 100;
+
+/**
+ * The most scenes a join takes. One `ConcatenateVideo` takes 100, so past that
+ * the scenes are joined in groups and the groups joined (`wireJoin`). A long
+ * Character swap split at its camera cuts passed 100 segments (2026-11-24).
+ */
+export const MAX_SCENES = 1000;
+
+/**
+ * Feeds `clips` into the join node, in order. Up to 100 go straight in; past
+ * that, each run of 100 goes into a `ConcatenateVideo` of its own, and those
+ * into the join. That costs nothing: a join fed a join takes over its list of
+ * files (`VideoFromList` flattens a nested one), so the whole thing is still
+ * one remux of the original clips. The groups carry no `complete_audio` — the
+ * outer join's, when it has one, covers everything.
+ */
+function wireJoin(graph: ComfyGraph, clips: [string, number][]) {
+  if (clips.length <= CLIPS_PER_JOIN) {
+    clips.forEach((clip, index) => {
+      graph[JOIN_NODE].inputs[`videos.video${index}`] = clip;
+    });
+    return;
+  }
+  for (let start = 0, group = 0; start < clips.length; start += CLIPS_PER_JOIN, group++) {
+    const part = `${JOIN_NODE}_part_${group}`;
+    const inputs: Record<string, unknown> = { codec: "auto" };
+    clips.slice(start, start + CLIPS_PER_JOIN).forEach((clip, index) => {
+      inputs[`videos.video${index}`] = clip;
+    });
+    graph[part] = {
+      class_type: "ConcatenateVideo",
+      inputs,
+      _meta: { title: `Concatenate Video (scenes ${start + 1}–${Math.min(start + CLIPS_PER_JOIN, clips.length)})` },
+    };
+    graph[JOIN_NODE].inputs[`videos.video${group}`] = [part, 0];
+  }
+}
 
 export interface StitchScene {
   /** The clip, as `LoadVideo` reads it: "video/name.mp4 [output]". */
@@ -147,7 +184,8 @@ const params: ParamDef[] = [
     label: "Scenes",
     type: "textarea",
     default: "[]",
-    maxLength: 20000,
+    // About 100 characters a scene, with room for long names.
+    maxLength: MAX_SCENES * 300,
     group: "Scenes",
     targets: [{ node: LIST_NODE, input: "value" }],
   },
@@ -198,6 +236,16 @@ export const musicVideoStitch: WorkflowDef = {
       },
     },
     {
+      name: "more scenes than one join takes",
+      values: {
+        song: "song.mp3",
+        song_seconds: 1010,
+        scenes: JSON.stringify(
+          Array.from({ length: 202 }, (_, index) => ({ file: `video/s${index}.mp4 [output]`, seconds: 5 })),
+        ),
+      },
+    },
+    {
       name: "a scene list that climbs out of the output folder",
       values: {
         song: "song.mp3",
@@ -208,6 +256,7 @@ export const musicVideoStitch: WorkflowDef = {
   ],
 
   finalize(graph, values) {
+    const clips: [string, number][] = [];
     parseScenes(values.scenes).forEach((scene, index) => {
       const load = `load_${index}`;
       const trim = `trim_${index}`;
@@ -226,8 +275,9 @@ export const musicVideoStitch: WorkflowDef = {
         },
         _meta: { title: `Video Trim (scene ${index + 1})` },
       };
-      graph[JOIN_NODE].inputs[`videos.video${index}`] = [trim, 0];
+      clips.push([trim, 0]);
     });
+    wireJoin(graph, clips);
   },
 };
 
@@ -360,6 +410,19 @@ export const multiSceneStitch: WorkflowDef = {
       },
     },
     {
+      name: "a long swap with more segments than one join takes",
+      values: {
+        soundtrack: "clip.mp4",
+        scenes: JSON.stringify(
+          Array.from({ length: 150 }, (_, index) => ({
+            file: `video/s${index}.mp4 [output]`,
+            seconds: 2,
+            from: index * 2,
+          })),
+        ),
+      },
+    },
+    {
       name: "a soundtrack and each scene's own sound at once",
       values: {
         soundtrack: "clip.mp4",
@@ -435,6 +498,7 @@ export const multiSceneStitch: WorkflowDef = {
       }
     }
     let soundtrack: [string, number] | null = null;
+    const clips: [string, number][] = [];
     scenes.forEach((scene, index) => {
       const load = `load_${index}`;
       graph[load] = {
@@ -442,7 +506,7 @@ export const multiSceneStitch: WorkflowDef = {
         inputs: { file: scene.file },
         _meta: { title: `Load Video (scene ${index + 1})` },
       };
-      graph[JOIN_NODE].inputs[`videos.video${index}`] = [load, 0];
+      clips.push([load, 0]);
 
       // The scene's sound: its stretch of the soundtrack, or its own clip's
       // from the top, trimmed to the scene either way.
@@ -480,6 +544,7 @@ export const multiSceneStitch: WorkflowDef = {
       };
       soundtrack = [joined, 0];
     });
+    wireJoin(graph, clips);
     if (soundtrack) graph[JOIN_NODE].inputs.complete_audio = soundtrack;
   },
 };
