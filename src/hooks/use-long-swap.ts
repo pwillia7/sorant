@@ -486,8 +486,32 @@ function subjectValues(
   }
   // The form's box was drawn on the clip's first frame, which is not this one.
   // With no saved mask (the segment before was the clip's own footage, or ran
-  // before masks were saved), the form's rule picks.
-  return { [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: savedMask(previous, carriesOn) ?? "" };
+  // before masks were saved), the form's rule picks. The rule is the one the
+  // run of segments started with: "everyone" ignores the carried mask and
+  // detects afresh, so a carried-on segment has to know which it is.
+  const pick = runPick(project, index);
+  return {
+    ...(pick ? { [PICK_PARAM]: pick } : {}),
+    [SUBJECT_BOX_PARAM]: "",
+    [SUBJECT_MASK_PARAM]: savedMask(previous, carriesOn) ?? "",
+  };
+}
+
+/**
+ * The rule the carried-on run holding `index` started with: a redo's or a
+ * shot's own, or undefined for the form's (or where it started from a box).
+ */
+function runPick(project: LongSwapProject, index: number): string | undefined {
+  for (let j = index; j >= 0; j--) {
+    const choice = project.choices?.[j];
+    if (choice?.box) return undefined;
+    if (choice?.pick) return choice.pick;
+    if (j === 0 || project.segments[j]?.cut || project.segments[j]?.fresh) {
+      const shot = project.shotChoices?.[j];
+      return shot?.box ? undefined : shot?.pick;
+    }
+  }
+  return undefined;
 }
 
 /** Whether the mask `subjectValues` would carry into this segment is empty. */

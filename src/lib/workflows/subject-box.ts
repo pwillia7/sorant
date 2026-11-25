@@ -24,6 +24,8 @@ export const SUBJECT_BOX_PARAM = "subject_box";
 export const SUBJECT_MASK_PARAM = "subject_mask";
 /** Which rule picks between several matches. */
 export const PICK_PARAM = "pick";
+/** The rule that picks every match: see `pickEveryone` in minimax-h3-swap.ts. */
+export const EVERYONE = "everyone";
 /**
  * Where a chained segment saves the person's mask for the one after it: the
  * frame the next segment starts its source on when it carries on, and its own

@@ -13,6 +13,7 @@ import {
   boxInPixels,
   CARRY_MASK_PREFIX,
   END_MASK_PREFIX,
+  EVERYONE,
   parsePick,
   pointsInPixels,
   PICK_PARAM,
@@ -88,7 +89,7 @@ const MEGAPIXELS_PARAM = "megapixels";
 export const SEGMENT_PARAM = "segment";
 /** The previous segment's saved video, "video/name.mp4 [output]", for its history. */
 export const HISTORY_CLIP_PARAM = "history_clip";
-export { CARRY_MASK_PREFIX, END_MASK_PREFIX, PICK_PARAM, SUBJECT_BOX_PARAM, SUBJECT_MASK_PARAM };
+export { CARRY_MASK_PREFIX, END_MASK_PREFIX, EVERYONE, PICK_PARAM, SUBJECT_BOX_PARAM, SUBJECT_MASK_PARAM };
 
 /** The author's: no trigger word, and 1.0 is what it was trained at. */
 const SWAP_LORA = "h3_character_swap_v1.5.safetensors";
@@ -186,23 +187,48 @@ const text = (value: ParamValue | undefined): string =>
  * is an assignment and the last one wins. See `ParamTarget.transform`.
  */
 export function swapPrompt(values: Record<string, ParamValue>): string {
-  const who = text(values.prompt) || "the selected person";
+  // Everyone: the mask holds every match, and "the other people" would tell
+  // the model to leave some of them be.
+  const everyone = values[PICK_PARAM] === EVERYONE;
+  const who = everyone ? `every ${samNoun(values)}` : text(values.prompt) || "the selected person";
   const character = text(values.character);
   const extra = String(values.extra ?? "").trim();
   return [
     `Replace ${who} in <Video 1> with the character in <Picture 1>${character ? `, ${character}` : ""}.`,
     "Keep the reference character's face, hair and clothing.",
-    "Follow the source performance's pose, gaze, expression and movement.",
-    "Preserve the scene and the other people.",
+    everyone
+      ? "Follow each source performance's pose, gaze, expression and movement."
+      : "Follow the source performance's pose, gaze, expression and movement.",
+    everyone ? "Preserve the scene." : "Preserve the scene and the other people.",
     extra,
   ]
     .filter(Boolean)
     .join(" ");
 }
 
-/** What SAM looks for: a short noun phrase. */
+/**
+ * Up to how many matches SAM3 Detect returns. Core's SAM3 text encoder keeps
+ * one — the most confident — unless the text ends ":N", so without it the
+ * rule (biggest, leftmost, rightmost) only ever had one match to choose from,
+ * and "everyone" was one person. 32 is a crowd; the tracker's own cap is 64.
+ */
+const SAM_MAX_MATCHES = 32;
+
+/** The noun phrase alone, which is how the instruction names who is replaced. */
+export function samNoun(values: Record<string, ParamValue>): string {
+  return (
+    text(values.prompt)
+      // A comma starts another category and ":N" is a count, to SAM's encoder.
+      .replace(/[,:()]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^(the|a|an)\s+/i, "") || "person"
+  );
+}
+
+/** What SAM looks for: a short noun phrase, and how many of them to return. */
 export function samSubject(values: Record<string, ParamValue>): string {
-  return text(values.prompt).replace(/^(the|a|an)\s+/i, "") || "person";
+  return `${samNoun(values)}:${SAM_MAX_MATCHES}`;
 }
 
 const promptTarget = {
@@ -336,7 +362,16 @@ const graph: ComfyGraph = {
     inputs: { ckpt_name: SAM_MODEL },
     _meta: { title: "Load SAM 3.1" },
   },
+  // The first-frame pick asks for every match (`samSubject`), so the rule has
+  // them all to choose from. Tracking and Recover Masks get the bare phrase:
+  // the tracker ignores the count, and Recover Masks with it ran about 4.5 s
+  // per lost frame on the box (2026-11-24), re-detecting a crowd every time.
   subject: {
+    class_type: "CLIPTextEncode",
+    inputs: { clip: ["sam", 1], text: "person:32" },
+    _meta: { title: "Who to replace (SAM, every match)" },
+  },
+  subject_one: {
     class_type: "CLIPTextEncode",
     inputs: { clip: ["sam", 1], text: "person" },
     _meta: { title: "Who to replace (SAM)" },
@@ -377,7 +412,7 @@ const graph: ComfyGraph = {
       model: ["sam", 0],
       images: ["scale", 0],
       initial_mask: ["select", 0],
-      conditioning: ["subject", 0],
+      conditioning: ["subject_one", 0],
       detection_threshold: 0.5,
       max_objects: 1,
       detect_interval: 1,
@@ -396,7 +431,7 @@ const graph: ComfyGraph = {
       images: ["scale", 0],
       source_frames: ["prepare", 5],
       model: ["sam", 0],
-      conditioning: ["subject", 0],
+      conditioning: ["subject_one", 0],
       selection: ["recover_select", 1],
       recover_empty_frames: true,
     },
@@ -602,6 +637,7 @@ export const SAM_STAGE = [
   "prepare",
   "sam",
   "subject",
+  "subject_one",
   "first_frame",
   "detect",
   "select",
@@ -639,6 +675,10 @@ const CARRIED_MASK = /^swap_mask\/(carry|end)_\d{5,}_\.png \[output\]$/;
  * SAM nodes under the same names.
  */
 export function pickSubject(graph: ComfyGraph, values: Record<string, ParamValue>, megapixels: number) {
+  if (values[PICK_PARAM] === EVERYONE) {
+    pickEveryone(graph);
+    return;
+  }
   const carried = String(values[SUBJECT_MASK_PARAM] ?? "");
   if (carried) {
     if (!CARRIED_MASK.test(carried)) {
@@ -683,6 +723,30 @@ export function pickSubject(graph: ComfyGraph, values: Record<string, ParamValue
     graph.select.inputs.selection = "index";
     graph.select.inputs.index = 0;
   }
+}
+
+/**
+ * Everyone who matches the description, tracked together. SAM3 Detect already
+ * returns one mask per match; each becomes its own tracked object, the tracker
+ * keeps detecting (no object cap) so someone who walks in later is picked up
+ * too, and Track To Mask joins them all into the one mask the edit is confined
+ * to. They all become the one character in the picture.
+ *
+ * Points, a box and a carried mask are ignored: each names one person. A
+ * chained segment detects afresh from the description rather than carrying a
+ * mask, which here would be everyone merged into one blob tracked as a single
+ * object. The rule node is kept (as "largest") for Recover Masks and because
+ * Relay's Select Mask is what refuses a first frame with no one on it — the
+ * "SAM found no subject" a chain passes through on.
+ */
+function pickEveryone(graph: ComfyGraph) {
+  graph.track.inputs.initial_mask = ["detect", 0];
+  graph.track.inputs.max_objects = 0;
+  delete graph.select;
+  // Finding them again is the tracker's own job here: it detects on every
+  // frame. Recover Masks would re-detect each lost frame alone (seconds each)
+  // and keep one match by the rule.
+  graph.recover.inputs.recover_empty_frames = false;
 }
 
 /**
@@ -904,7 +968,11 @@ export const swapParams: ParamDef[] = [
     hint: "A few words SAM can find them by — or click on them in Settings.",
     help: "A few words SAM can find them by on the first frame — \"man\", \"woman in a red coat\". SAM reads short names of things, not sentences: a longer description finds no one or everyone. With several people in shot, click on them in Settings (Or point them out) instead. Only they are changed; everyone else is kept.",
     group: "Prompt",
-    targets: [promptTarget, { node: "subject", input: "text", transform: (_v, values) => samSubject(values) }],
+    targets: [
+      promptTarget,
+      { node: "subject", input: "text", transform: (_v, values) => samSubject(values) },
+      { node: "subject_one", input: "text", transform: (_v, values) => samNoun(values) },
+    ],
   },
   {
     id: PICK_PARAM,
@@ -915,12 +983,14 @@ export const swapParams: ParamDef[] = [
       { value: "largest", label: "The biggest in frame" },
       { value: "leftmost", label: "The one furthest left" },
       { value: "rightmost", label: "The one furthest right" },
+      { value: EVERYONE, label: "Everyone it matches" },
     ],
-    help: "Which match on the first frame to follow, when the description fits more than one person. Drawing a box around them is surer.",
+    help: "Which match on the first frame to follow, when the description fits more than one person. Drawing a box around them is surer. Everyone it matches turns every match into the character — \"person\" for the whole cast — including anyone who walks in later; clicks and a box are ignored then.",
     group: "Prompt",
     targets: [
-      { node: "select", input: "selection" },
-      { node: "recover_select", input: "selection" },
+      { node: "select", input: "selection", transform: (value) => (value === EVERYONE ? "largest" : value) },
+      { node: "recover_select", input: "selection", transform: (value) => (value === EVERYONE ? "largest" : value) },
+      promptTarget,
     ],
   },
   {
@@ -958,7 +1028,7 @@ export const swapParams: ParamDef[] = [
       { value: "recover", label: "Find them again" },
       { value: "stop", label: "Stop with an error" },
     ],
-    help: "When the track drops — a cut to a shot without them, someone walking in front — Leave those frames as they are keeps the clip's own footage wherever they are lost, and picks them up again when they come back; a brief drop shows the original person for a moment. Find them again looks on each lost frame alone, by the description and rule, with no memory of who you pointed out — in a crowd that swaps someone else for those frames. Stop fails the run, naming the frames.",
+    help: "When the track drops — a cut to a shot without them, someone walking in front — Leave those frames as they are keeps the clip's own footage wherever they are lost, and picks them up again when they come back; a brief drop shows the original person for a moment. Find them again looks on each lost frame alone, by the description and rule, with no memory of who you pointed out — in a crowd that swaps someone else for those frames. With Everyone it matches, lost frames are always left as they are: SAM keeps looking for new matches on every frame anyway. Stop fails the run, naming the frames.",
     group: "Prompt",
     advanced: true,
     targets: [{ node: "recover", input: "recover_empty_frames", transform: (value) => value === "recover" }],
@@ -1160,7 +1230,9 @@ export const minimaxH3Swap: WorkflowDef = {
       }
     }
     pickSubject(graph, values, frameMegapixels(values));
-    if ((values.lost_frames ?? "leave") === "leave") leaveLostFrames(graph, values);
+    // Everyone never re-picks one person on a lost frame (see `pickEveryone`).
+    const lost = values.lost_frames ?? "leave";
+    if (lost === "leave" || (lost === "recover" && values[PICK_PARAM] === EVERYONE)) leaveLostFrames(graph, values);
     if (segment && segment.frames > 0) saveMaskForNext(graph, segment);
     // At either of Prepare Source's own budgets the frames are already that
     // size, and scaling them again would only nudge the shape off by a few
@@ -1252,6 +1324,22 @@ export const minimaxH3Swap: WorkflowDef = {
         [IMAGE_PARAM]: "c.png",
         character: "a knight",
         [SUBJECT_BOX_PARAM]: '{"in":[[0.5,0.3],[0.52,0.62]],"out":[[0.2,0.5]],"sw":1920,"sh":1080}',
+      },
+    },
+    {
+      name: "everyone who matches",
+      values: { [VIDEO_PARAM]: "clip.mp4", [IMAGE_PARAM]: "c.png", character: "a knight", [PICK_PARAM]: EVERYONE },
+    },
+    {
+      name: "everyone, in a carried-on segment that was handed a mask",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [IMAGE_PARAM]: "c.png",
+        character: "a knight",
+        [PICK_PARAM]: EVERYONE,
+        [SEGMENT_PARAM]: "247:123:18",
+        [HISTORY_CLIP_PARAM]: "video/MiniMax_H3_swap_00002_.mp4 [output]",
+        [SUBJECT_MASK_PARAM]: "swap_mask/carry_00001_.png [output]",
       },
     },
     {

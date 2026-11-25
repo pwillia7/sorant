@@ -85,12 +85,13 @@ function SegmentBadge({
   }
 }
 
-type RedoMode = "carry" | "form" | "largest" | "leftmost" | "rightmost" | "box" | "original";
+type RedoMode = "carry" | "form" | "largest" | "leftmost" | "rightmost" | "everyone" | "box" | "original";
 
 const RULES: Array<{ value: RedoMode; label: string; title?: string }> = [
   { value: "largest", label: "Biggest" },
   { value: "leftmost", label: "Leftmost" },
   { value: "rightmost", label: "Rightmost" },
+  { value: "everyone", label: "Everyone", title: "Everyone who matches the description becomes the character." },
   { value: "box", label: "Point them out" },
   {
     value: "original",

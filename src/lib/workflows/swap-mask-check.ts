@@ -1,6 +1,6 @@
 import type { ComfyGraph } from "@/lib/comfy";
 import { ParamError } from "@/lib/params";
-import { pickSubject, samStage, swapParams } from "./minimax-h3-swap";
+import { pickSubject, samNoun, samStage, samSubject, swapParams } from "./minimax-h3-swap";
 import {
   CHECK_RECOVERED_COLOR,
   CHECK_SECONDS_PARAM,
@@ -140,18 +140,12 @@ const params: ParamDef[] = [
     default: "",
     maxLength: 200,
     targets: [
-      {
-        node: "subject",
-        input: "text",
-        transform: (value) =>
-          String(value ?? "")
-            .trim()
-            .replace(/[.\s]+$/, "")
-            .replace(/^(the|a|an)\s+/i, "") || "person",
-      },
+      { node: "subject", input: "text", transform: (_value, values) => samSubject(values) },
+      { node: "subject_one", input: "text", transform: (_value, values) => samNoun(values) },
     ],
   },
-  shared(PICK_PARAM),
+  // The swap's rule, less its write to the instruction, which the check has no node for.
+  { ...shared(PICK_PARAM), targets: shared(PICK_PARAM).targets.filter((target) => target.node !== "reference_conditioning") },
   shared(SUBJECT_BOX_PARAM),
   shared("lost_frames"),
   shared("sam_threshold"),
@@ -197,6 +191,10 @@ export const swapMaskCheck: WorkflowDef = {
     {
       name: "the description and rule",
       values: { source_video: "clip.mp4", prompt: "man in a red shirt", [PICK_PARAM]: "leftmost" },
+    },
+    {
+      name: "everyone who matches",
+      values: { source_video: "clip.mp4", prompt: "person", [PICK_PARAM]: "everyone" },
     },
     {
       name: "a box, partway into the clip",

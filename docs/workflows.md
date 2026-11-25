@@ -174,13 +174,28 @@ swap.
 ### How it works
 
 - **SAM finds the person.** *Who to replace* is turned into a short noun
-  phrase (`samSubject`) and given to SAM 3.1 on the first frame. *If several
-  match* picks the largest, leftmost or rightmost detection
-  (`H3RelaySelectMask`). SAM then tracks that one person through the clip,
+  phrase (`samSubject`) and given to SAM 3.1 on the first frame, with a
+  `:32` count: core's SAM3 text encoder returns only the single most
+  confident match without one, so the rule had nothing to choose between.
+  *If several match* picks the largest, leftmost or rightmost detection
+  (`H3RelaySelectMask`). Tracking and Recover Masks get the bare phrase
+  (`subject_one`) — with the count, Recover Masks re-detected a crowd on every
+  lost frame, about 4.5 s each. SAM then tracks that one person through the clip,
   Relay refills any frame where the track drops (`H3RelayRecoverMasks`), and
   grows the mask by *Mask margin* (64 px by default). The edit is confined to
   the mask: the rest of each frame comes from the source latent
   (`H3RelayApplyEditMask`).
+- **Or everyone.** *Everyone it matches* (`pickEveryone`) passes every
+  first-frame detection to the tracker as its own object, lifts the object
+  cap and leaves detection on, so people who walk in are added; Track To Mask
+  joins them into one mask and the instruction says "every …". Points, boxes
+  and carried masks are ignored — a chained segment re-detects from the text
+  — and lost frames are always left as they are. Limits: everyone becomes
+  the one character; tracking cost grows with the number of people (a 20 s
+  crowd check took 8 minutes against seconds for one person); and core's
+  tracker never drops a track and stops detecting at 64, so a long crowded
+  stretch with cuts can stop masking newcomers. Untested on a full swap as of
+  2026-11-24.
 - **Or a box picks them.** *Or draw a box around them* is drawn on the clip's
   first frame (`BoxPicker`, a `box` param read by `finalize`). It is kept as
   fractions of that frame with the frame's size (subject-box.ts), and
@@ -318,7 +333,7 @@ swap.
 - **Redoing a segment.** Each finished segment on the panel has **Redo**,
   which opens a choice of who it follows: the same person as the segment
   before (its carried mask, the default), the biggest, leftmost or rightmost,
-  or a box drawn on the frame that segment's run starts from. The redo
+  everyone, or a box drawn on the frame that segment's run starts from. The redo
   reaches to the next segment that starts at a cut or a fresh start
   (`shotEndOf`): **Redo segments N–M** swaps them again with a new seed, each
   carrying on from the one before, so no segment left alone carries on from

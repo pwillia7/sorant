@@ -85,12 +85,13 @@ async function openClip(url: string): Promise<OpenClip> {
   };
 }
 
-type Who = "form" | "largest" | "leftmost" | "rightmost" | "box" | "original";
+type Who = "form" | "largest" | "leftmost" | "rightmost" | "everyone" | "box" | "original";
 
 const RULE_LABELS: Record<string, string> = {
   largest: "Biggest in frame",
   leftmost: "Furthest left",
   rightmost: "Furthest right",
+  everyone: "Everyone it matches",
 };
 
 interface Shot {
@@ -233,6 +234,7 @@ export function ShotPlanner({ swap }: { swap: LongSwapController }) {
     { value: "largest", label: RULE_LABELS.largest },
     { value: "leftmost", label: RULE_LABELS.leftmost },
     { value: "rightmost", label: RULE_LABELS.rightmost },
+    { value: "everyone", label: RULE_LABELS.everyone },
     { value: "box", label: "Point them out" },
     ...(shots && shots.length > 1 ? [{ value: "original", label: "No one: leave it as it is" }] : []),
   ];
