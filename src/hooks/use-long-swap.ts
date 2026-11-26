@@ -24,6 +24,8 @@ import {
   CARRY_MASK_PREFIX,
   END_MASK_PREFIX,
   PICK_PARAM,
+  pointedOut,
+  ruleBesidePoints,
   SUBJECT_BOX_PARAM,
   SUBJECT_MASK_PARAM,
 } from "@/lib/workflows/subject-box";
@@ -472,7 +474,7 @@ function subjectValues(
   previous: Job | undefined,
 ): Record<string, ParamValue> {
   const choice = project.choices?.[index];
-  if (choice?.box) return { [SUBJECT_BOX_PARAM]: choice.box, [SUBJECT_MASK_PARAM]: "" };
+  if (choice?.box) return { ...pointedOut(project.values, choice.box), [SUBJECT_MASK_PARAM]: "" };
   if (choice?.pick) return { [PICK_PARAM]: choice.pick, [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: "" };
   // A cut added on a redo carries no mask: the take before it may run past it.
   if (project.segments[index]?.fresh) return { [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: "" };
@@ -480,7 +482,7 @@ function subjectValues(
     // A shot's own choice, or the form's rule. The form's box was drawn on the
     // clip's first frame, so it is the first shot's alone.
     const shot = project.shotChoices?.[index];
-    if (shot?.box) return { [SUBJECT_BOX_PARAM]: shot.box, [SUBJECT_MASK_PARAM]: "" };
+    if (shot?.box) return { ...pointedOut(project.values, shot.box), [SUBJECT_MASK_PARAM]: "" };
     if (shot?.pick) return { [PICK_PARAM]: shot.pick, [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: "" };
     return index === 0 ? { [SUBJECT_MASK_PARAM]: "" } : { [SUBJECT_BOX_PARAM]: "", [SUBJECT_MASK_PARAM]: "" };
   }
@@ -504,11 +506,11 @@ function subjectValues(
 function runPick(project: LongSwapProject, index: number): string | undefined {
   for (let j = index; j >= 0; j--) {
     const choice = project.choices?.[j];
-    if (choice?.box) return undefined;
+    if (choice?.box) return ruleBesidePoints(project.values[PICK_PARAM]);
     if (choice?.pick) return choice.pick;
     if (j === 0 || project.segments[j]?.cut || project.segments[j]?.fresh) {
       const shot = project.shotChoices?.[j];
-      return shot?.box ? undefined : shot?.pick;
+      return shot?.box ? ruleBesidePoints(project.values[PICK_PARAM]) : shot?.pick;
     }
   }
   return undefined;
@@ -1078,7 +1080,7 @@ export function useLongSwap({
             workflow,
             {
               ...project.values,
-              ...(shot.box ? { [SUBJECT_BOX_PARAM]: shot.box } : {}),
+              ...(shot.box ? pointedOut(project.values, shot.box) : {}),
               ...(shot.pick ? { [PICK_PARAM]: shot.pick, [SUBJECT_BOX_PARAM]: "" } : {}),
             },
             project.modes,

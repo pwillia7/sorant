@@ -26,6 +26,24 @@ export const SUBJECT_MASK_PARAM = "subject_mask";
 export const PICK_PARAM = "pick";
 /** The rule that picks every match: see `pickEveryone` in minimax-h3-swap.ts. */
 export const EVERYONE = "everyone";
+
+/**
+ * The rule to send beside points or a box chosen for one shot, segment or
+ * redo: the form's, or the biggest when the form says everyone. Everyone
+ * drops points and a box (`pickSubject`), so left as it is, a shot pointed out
+ * in the planner would swap every match, the people clicked to leave out
+ * among them. The rule only matters again where the track drops.
+ */
+export function ruleBesidePoints(formRule: unknown): string | undefined {
+  return formRule === EVERYONE ? "largest" : undefined;
+}
+
+/** Values for a run that follows these points or this box, the form's values under them. */
+export function pointedOut(formValues: Record<string, unknown>, box: string): Record<string, string> {
+  const rule = ruleBesidePoints(formValues[PICK_PARAM]);
+  return { [SUBJECT_BOX_PARAM]: box, ...(rule ? { [PICK_PARAM]: rule } : {}) };
+}
+
 /**
  * Where a chained segment saves the person's mask for the one after it: the
  * frame the next segment starts its source on when it carries on, and its own

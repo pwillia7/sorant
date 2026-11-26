@@ -10,7 +10,7 @@ import { frameSeekTime } from "@/lib/scene-cuts";
 import { CHAIN_HISTORY, MAX_SEGMENTS, segmentFrames, SLICE_FPS, splitRange } from "@/lib/workflows/slices";
 import type { ParamValue } from "@/lib/workflows/types";
 import { ShotPlanner } from "./shot-planner";
-import { MAX_CHECK_SECONDS, PICK_PARAM, SUBJECT_BOX_PARAM } from "@/lib/workflows/subject-box";
+import { MAX_CHECK_SECONDS, PICK_PARAM, pointedOut, SUBJECT_BOX_PARAM } from "@/lib/workflows/subject-box";
 import { BoxPicker, inputVideoUrl } from "./ui/box-picker";
 import { ClipPlayer, type ClipItem } from "./ui/clip-player";
 import { JobRunTime, RunTime } from "./ui/run-time";
@@ -127,7 +127,7 @@ const LOST_OPTIONS: Array<{ value: string; label: string; title: string }> = [
 function planned(project: LongSwapController["project"] & object, index: number): Record<string, string> {
   if (index === 0 || project.segments[index]?.cut) {
     const shot = project.shotChoices?.[index];
-    if (shot?.box) return { [SUBJECT_BOX_PARAM]: shot.box };
+    if (shot?.box) return pointedOut(project.values, shot.box);
     if (shot?.pick) return { [PICK_PARAM]: shot.pick, [SUBJECT_BOX_PARAM]: "" };
     if (index === 0) return {};
   }
@@ -208,7 +208,7 @@ function PartControls({
             ...values,
             lost_frames: part.lost,
             ...(part.mode === "box"
-              ? { [SUBJECT_BOX_PARAM]: part.box }
+              ? pointedOut(values, part.box)
               : part.mode === "form"
                 ? {}
                 : { [PICK_PARAM]: part.mode, [SUBJECT_BOX_PARAM]: "" }),

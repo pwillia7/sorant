@@ -14,7 +14,7 @@ import {
   type Thumb,
 } from "@/lib/scene-cuts";
 import { CHAIN_OVER_SECONDS, shotSegments } from "@/lib/workflows/slices";
-import { MAX_CHECK_SECONDS, PICK_PARAM, SUBJECT_BOX_PARAM } from "@/lib/workflows/subject-box";
+import { MAX_CHECK_SECONDS, PICK_PARAM, pointedOut, SUBJECT_BOX_PARAM } from "@/lib/workflows/subject-box";
 import { BoxPicker, inputVideoUrl } from "./ui/box-picker";
 import { MaskCheck } from "./ui/mask-check";
 import { Button, Spinner } from "./ui/button";
@@ -330,7 +330,7 @@ export function ShotPlanner({ swap }: { swap: LongSwapController }) {
                   // the form's box is drawn on the clip's first frame, so it is
                   // the first shot's only.
                   ...(shot.who === "box"
-                    ? { [SUBJECT_BOX_PARAM]: shot.box }
+                    ? pointedOut(project.values, shot.box)
                     : shot.who === "form"
                       ? index === 0
                         ? {}
