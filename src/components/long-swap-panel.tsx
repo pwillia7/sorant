@@ -26,13 +26,16 @@ import { Segmented, Slider } from "./ui/inputs";
 
 const icon = { className: "size-3 shrink-0 stroke-2", "aria-hidden": true } as const;
 
-function SegmentBadge({
+export function SegmentBadge({
   state,
   job,
   original,
   chosen,
+  running = "swapping",
 }: {
   state: SegmentState;
+  /** What a running segment is doing. */
+  running?: string;
   job: Job | undefined;
   original: boolean;
   /** Left as it is because its shot was set to no one, rather than SAM finding no one. */
@@ -67,7 +70,7 @@ function SegmentBadge({
     case "running":
       return (
         <Badge tone="accent">
-          <LoaderCircle {...icon} className="size-3 shrink-0 stroke-2 motion-safe:animate-spin" /> swapping
+          <LoaderCircle {...icon} className="size-3 shrink-0 stroke-2 motion-safe:animate-spin" /> {running}
         </Badge>
       );
     case "done":
@@ -503,10 +506,10 @@ function RedoEditor({
 }
 
 /** "1:05" from seconds. */
-const clock = (seconds: number) =>
+export const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
-function videoUrl(job: Job | undefined): string | undefined {
+export function videoUrl(job: Job | undefined): string | undefined {
   return job?.phase === "done"
     ? job.outputs.find((file) => (file.type || "output") === "output" && /\.(mp4|webm|mov)$/i.test(file.filename))?.url
     : undefined;
@@ -584,7 +587,7 @@ function upscaledName(at: { size: number; frameRate: number } | undefined): stri
   return `Upscaled, ${sizeName(at.size)}${at.frameRate > 1 ? ` at ${24 * at.frameRate} fps` : ""}`;
 }
 
-function JoinedVideo({
+export function JoinedVideo({
   url,
   label,
   download,

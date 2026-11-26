@@ -527,6 +527,24 @@ export function validateWorkflow(workflow: WorkflowDef): string[] {
     problems.push(`slicedBy names "${workflow.slicedBy}", which is not a measured param.`);
   }
 
+  // The page writes these by id; a stale one would send every window as the
+  // whole clip.
+  if (workflow.chain) {
+    const { lengthParam, segmentParam, clipParam, keepsClipSound } = workflow.chain;
+    const has = (id: string, type: string) =>
+      workflow.params.some((param) => param.id === id && param.type === type);
+    if (!has(lengthParam, "measured")) problems.push(`chain.lengthParam "${lengthParam}" is not a measured param.`);
+    if (!has(segmentParam, "written")) problems.push(`chain.segmentParam "${segmentParam}" is not a written param.`);
+    if (!has(clipParam, "video")) problems.push(`chain.clipParam "${clipParam}" is not a video param.`);
+    if (keepsClipSound) {
+      const select = workflow.params.find((param) => param.id === keepsClipSound.param);
+      const values = select?.type === "select" ? select.options.map((option) => option.value) : [];
+      if (!values.includes(keepsClipSound.value) || !values.includes(keepsClipSound.fallback)) {
+        problems.push(`chain.keepsClipSound names a select or answer "${keepsClipSound.param}" does not have.`);
+      }
+    }
+  }
+
   for (const param of workflow.params) {
     if (seenIds.has(param.id)) {
       problems.push(`Duplicate param id "${param.id}".`);

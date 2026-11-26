@@ -1,3 +1,4 @@
+import type { ClipChain } from "./chain";
 import type { ComfyGraph } from "@/lib/comfy";
 import { toClientPatch, type ClientPatch, type PatchDef } from "./patches";
 import type { DirectorBypass } from "./director";
@@ -717,6 +718,11 @@ export interface WorkflowDef {
    * `estimateBy` value.
    */
   slicedBy?: string;
+  /**
+   * A clip past one window is sent as a chain of runs, one window each, and
+   * joined at the end: Remix's long clips. See chain.ts.
+   */
+  chain?: ClipChain;
   /**
    * Nodes in the graph that only a choice other than the default keeps —
    * `finalize` deletes them otherwise. The classes and model files they name

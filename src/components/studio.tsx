@@ -17,6 +17,7 @@ import { NotifyToggle } from "@/components/notify-toggle";
 import { RewriteKeyButton } from "@/components/rewrite-key";
 import { MusicVideoPanel } from "@/components/music-video-panel";
 import { LongSwapPanel } from "@/components/long-swap-panel";
+import { ClipChainPanel } from "@/components/clip-chain-panel";
 import { GenerationStage } from "@/components/generation-stage";
 import { ParamForm } from "@/components/param-form";
 import { SettingsModal } from "@/components/settings-modal";
@@ -40,6 +41,8 @@ import { SorantMark } from "@/components/sorant-logo";
 import { useJobs } from "@/hooks/use-jobs";
 import { useMusicVideo } from "@/hooks/use-music-video";
 import { useLongSwap } from "@/hooks/use-long-swap";
+import { useClipChain } from "@/hooks/use-clip-chain";
+import { isChained } from "@/lib/workflows/chain";
 import { useCompat } from "@/hooks/use-compat";
 import { isActive, isRerunnable, isRetryable, lostTrackOf, type Job } from "@/lib/jobs";
 import { restoreFrom } from "@/lib/restore";
@@ -1045,6 +1048,13 @@ function Workbench({
     upscaleWorkflow: workflows.find((workflow) => workflow.clipTarget?.action === "upscale"),
     jobs,
   });
+  // A Remix of a clip past one window, sent as a chain of windows and joined
+  // here. Always mounted, like the swap's. See use-clip-chain.ts.
+  const clipChain = useClipChain({
+    workflow: workflows.find((workflow) => workflow.chain !== undefined),
+    stitchWorkflow: SWAP_STITCH,
+    jobs,
+  });
   /** The planned video on screen, or the music video's when neither is. */
   const musicVideo = picked?.scenes?.kind === "story" ? multiScene : musicVideoKind;
   // The takes and upscales the music video is using, so its entry in the
@@ -1084,6 +1094,13 @@ function Workbench({
       showTab("result");
       return;
     }
+    // Remix's equivalent: a clip past one window goes as a chain of windows.
+    if (selected.chain && isChained(values[selected.chain.lengthParam])) {
+      clipChain.start(values, { ...modes, lowVram, localDirector: runDirector, rewriteModel });
+      setClipNotice(null);
+      showTab("result");
+      return;
+    }
     void jobs.submit(selected, values, {
       ...modes,
       lowVram,
@@ -1102,7 +1119,7 @@ function Workbench({
     // On a phone the run shows on the Result tab, and submitting from the
     // form would otherwise give no visible sign of anything happening.
     showTab("result");
-  }, [selected, values, jobs, clipSource, modes, lowVram, runDirector, rewriteModel, musicVideo, longSwap]);
+  }, [selected, values, jobs, clipSource, modes, lowVram, runDirector, rewriteModel, musicVideo, longSwap, clipChain]);
 
   /**
    * Run a failed generation again, exactly as it was.
@@ -1434,10 +1451,11 @@ function Workbench({
         className={`mx-auto w-full max-w-[1800px] px-4 pb-64 pt-6 transition-[padding] duration-300 sm:px-8 sm:pt-8
           ${settingsOpen ? "xl:pr-[476px]" : ""}`}
       >
-        {selected?.scenes || (selected?.slicedBy && longSwap.project) ? (
+        {selected?.scenes || (selected?.slicedBy && longSwap.project) || (selected?.chain && clipChain.project) ? (
           <section aria-label={selected.name} className="mb-10">
             {selected.scenes ? <MusicVideoPanel video={musicVideo} /> : null}
             {selected.slicedBy && longSwap.project ? <LongSwapPanel swap={longSwap} /> : null}
+            {selected.chain && clipChain.project ? <ClipChainPanel chain={clipChain} /> : null}
           </section>
         ) : null}
 

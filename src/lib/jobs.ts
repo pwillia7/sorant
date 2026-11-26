@@ -169,9 +169,9 @@ export interface MusicVideoTag {
   /**
    * Set on a multi-scene video's runs, and on a long Character swap's, whose
    * "scenes" are the segments of one clip (use-long-swap.ts). A music video's
-   * runs have none.
+   * runs have none. A long Remix's are "remix" (use-clip-chain.ts).
    */
-  kind?: "story" | "swap";
+  kind?: "story" | "swap" | "remix";
 }
 
 export type MusicVideoPart = "plan" | "scene" | "join" | "upscale" | "upscaled-join";
@@ -915,7 +915,13 @@ function musicVideoGroup(projectId: string, members: Job[]): MusicVideoGroup {
   parts.upscale.sort((a, b) => sceneOf(a) - sceneOf(b));
   const kind = newestFirst.find((job) => job.musicVideo?.kind)?.musicVideo?.kind;
   const label =
-    kind === "swap" ? "Character swap" : kind === "story" ? "Multi-scene video" : "Music video";
+    kind === "swap"
+      ? "Character swap"
+      : kind === "remix"
+        ? "Remix"
+        : kind === "story"
+          ? "Multi-scene video"
+          : "Music video";
   const title = newestFirst.find((job) => job.musicVideo?.title)?.musicVideo?.title?.trim() || label;
   const sceneCount = newestFirst.find((job) => job.musicVideo?.scenes)?.musicVideo?.scenes;
   return {
@@ -923,7 +929,7 @@ function musicVideoGroup(projectId: string, members: Job[]): MusicVideoGroup {
     label,
     title,
     sceneCount,
-    noun: kind === "swap" ? "segment" : "scene",
+    noun: kind === "swap" || kind === "remix" ? "segment" : "scene",
     jobs: newestFirst,
     parts,
     untagged,

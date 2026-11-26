@@ -1,4 +1,5 @@
 import { isSilentClip } from "@/lib/audio-track";
+import { CHAIN_FPS, chainPartOf, MAX_CHAIN_SECONDS } from "./chain";
 import type { ComfyGraph } from "@/lib/comfy";
 import { hideDirectorOnly } from "./director";
 import { latentTailNodes } from "./latent-tail";
@@ -90,6 +91,9 @@ const DIRECTOR_FRAMES = 5;
 const VIDEO_PARAM = "reference_video";
 const WORDS_PARAM = "clip_words";
 const AUDIO_KEEP_PARAM = "clip_audio_keep";
+/** One window of a long clip, written by the page. See chain.ts. */
+const SEGMENT_PARAM = "segment";
+const LENGTH_PARAM = "source_seconds";
 /** A remix keeps its clip whole unless told otherwise. */
 const AUDIO_KEEP_DEFAULT = "exact" as const;
 
@@ -127,6 +131,28 @@ const silentClipBlock = (values: Record<string, ParamValue>): string =>
     : `THE SOURCE IS SILENT
 
 This clip has no audio track, so there is no <Audio 1> this run, whatever is said above. Nothing about the sound carries over and nothing in it can be preserved. Write the soundtrack the new video should have — what is heard, and when — from the picture and the user's instruction, as you would for a video made from nothing.`;
+
+/**
+ * What the director is told when this run is one window of a longer clip.
+ *
+ * Each window is remixed on its own and the takes are joined end to end, so
+ * the one thing that shows at a join is a change made two different ways — a
+ * coat that is red here and maroon there. The director cannot see the other
+ * windows, so the most it can do is describe the change the same way every
+ * time: plainly, from the user's words, without inventing particulars a
+ * neighbour would invent differently.
+ */
+const segmentBlock = (values: Record<string, ParamValue>): string => {
+  const part = chainPartOf(values[SEGMENT_PARAM]);
+  if (!part) return "";
+  const from = part.start / CHAIN_FPS;
+  const words = keepsClipSpeech(values) && String(values[WORDS_PARAM] ?? "").trim()
+    ? " The words typed out for the clip cover the whole of it, not only this part: keep to the ones this part's frames show being spoken, and leave the rest out rather than squeezing them in."
+    : "";
+  return `ONE PART OF A LONGER CLIP
+
+This video is part ${part.part} of ${part.parts} of a longer clip, starting ${from.toFixed(1)} seconds in. Every part is remixed separately with the same instruction, and the parts are joined end to end — so whatever the instruction changes has to come out the same in every part. Describe the change in the user's own terms and no more specifically than they did: the colour, garment, creature or place they named, as they named it. Do not add particulars of your own to it — an exact shade, a pattern, a make, a hairstyle — because the other parts will invent different ones, and the difference shows at the join. Do not open or close as though this were a whole video: no establishing shot, no ending beat; it begins and ends mid-action, as the source does here.${words}`;
+};
 
 const graph: ComfyGraph = {
   "92": {
@@ -299,8 +325,9 @@ const graph: ComfyGraph = {
   // whose sample tables are empty. See minimax-h3-ref.ts, where that is what
   // reduced a fifteen-second clip to a single frame.
   //
-  // No `frame_load_cap`: a remix is the whole clip by definition, which is what
-  // separates it from a clip attached as a reference.
+  // No `frame_load_cap` of its own: a remix is the whole clip by definition,
+  // which is what separates it from a clip attached as a reference. The one
+  // exception is a window of a long clip, which `segment` writes into it.
   //
   // Outputs: 0 is the frames, 1 is how many there are, 2 is the soundtrack.
   "154": {
@@ -392,6 +419,8 @@ const director = directorTarget(ids, REMIX_DIRECTOR, [
     attached: clipHasAudio,
   }),
   silentClipBlock,
+  // After the words, which it narrows to this part of the clip.
+  segmentBlock,
 ]);
 
 /** Written by the prompt and by the words below. See `promptTarget`. */
@@ -406,12 +435,44 @@ const params: ParamDef[] = [
     type: "video",
     default: "",
     required: true,
-    help: "Its size and length become the new video's. Up to 768×1344, 20s, 100 MB.",
+    help: `Its size and length become the new video's. Up to 768×1344, ${MAX_CHAIN_SECONDS / 60} minutes, 100 MB. Over 20 seconds it is remixed in parts of about 10–13 seconds, joined at the end — each part is its own run, so expect a small jump at each join.`,
     group: "Source",
     targets: [{ node: VIDEO_NODE, input: "video" }],
     // The clip is the only thing that knows how long the output will be, so
     // the control that loads it reports that onward to the param below.
-    measures: "source_seconds",
+    measures: LENGTH_PARAM,
+    maxSeconds: MAX_CHAIN_SECONDS,
+    warnOverSeconds: 60,
+    longClipWarning:
+      "A long clip is many runs, each about as long as a 13-second remix. They are all queued at once.",
+  },
+
+  // One window of a long clip, written by the page for each run of the chain
+  // (use-clip-chain.ts) and empty for an ordinary run. The loader reads only
+  // that stretch, picture and sound — checked on the box 2026-11-26: a
+  // 24-frame skip and 48-frame cap came back 2.0 s of both, the sound starting
+  // exactly 1.0 s in — and node 163 then measures the window, so the take is
+  // the window's length.
+  {
+    id: SEGMENT_PARAM,
+    label: "Part of the clip",
+    type: "written",
+    default: "",
+    maxLength: 32,
+    group: "Source",
+    targets: [
+      {
+        node: VIDEO_NODE,
+        input: "skip_first_frames",
+        transform: (v) => chainPartOf(v)?.start ?? 0,
+      },
+      {
+        node: VIDEO_NODE,
+        input: "frame_load_cap",
+        transform: (v) => chainPartOf(v)?.frames ?? 0,
+      },
+      director,
+    ],
   },
 
   // No control of its own: filled in by the clip above, and read only by the
@@ -540,6 +601,17 @@ export const minimaxH3ReferenceVideo: WorkflowDef = {
    * from the generation being remixed. See ClipTarget for what deliberately
    * does not.
    */
+  /**
+   * Past one window the page sends the clip as a chain of windows and joins
+   * them. "Keep it exactly" joins under the clip's own soundtrack, so the
+   * sound has no seams; anything else keeps each take's own.
+   */
+  chain: {
+    lengthParam: LENGTH_PARAM,
+    segmentParam: SEGMENT_PARAM,
+    clipParam: VIDEO_PARAM,
+    keepsClipSound: { param: AUDIO_KEEP_PARAM, value: "exact", fallback: AUDIO_KEEP_DEFAULT },
+  },
   clipTarget: {
     action: "remix",
     accepts: "video",
@@ -563,6 +635,15 @@ export const minimaxH3ReferenceVideo: WorkflowDef = {
     {
       name: "a silent clip",
       values: { [VIDEO_PARAM]: "noaudio--clip.mp4" },
+    },
+    {
+      name: "one window of a long clip",
+      values: { [VIDEO_PARAM]: "clip.mp4", [SEGMENT_PARAM]: "2/3:243:243", [LENGTH_PARAM]: 10.125 },
+    },
+    {
+      name: "the last window of a long silent clip, turbo",
+      values: { [VIDEO_PARAM]: "noaudio--clip.mp4", [SEGMENT_PARAM]: "3/3:486:0", [LENGTH_PARAM]: 4 },
+      mode: { turbo: true },
     },
     {
       name: "a silent clip, turbo",
