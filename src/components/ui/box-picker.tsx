@@ -65,6 +65,7 @@ export function BoxPicker({
   label?: string;
 }) {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const [failed, setFailed] = useState(false);
   const [draft, setDraft] = useState<SubjectBox | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -79,6 +80,7 @@ export function BoxPicker({
   // A new moment of a clip already loaded fires no loadedmetadata, so it is
   // measured here; a new clip is measured when its metadata comes.
   useEffect(() => {
+    setFailed(false);
     const element = video.current;
     if (element && element.readyState >= 1 && element.videoWidth && element.videoHeight) {
       setSize({ w: element.videoWidth, h: element.videoHeight });
@@ -159,7 +161,9 @@ export function BoxPicker({
 
   const ratio = size ? size.w / size.h : 16 / 9;
 
-  const hint = !size
+  const hint = failed
+    ? "The frame could not be loaded. Check the ComfyUI machine is up, then choose this shot again."
+    : !size
     ? "Loading the frame…"
     : tool === "box"
       ? box
@@ -200,8 +204,10 @@ export function BoxPicker({
             src={src}
             muted
             playsInline
-            preload="auto"
+            // One frame is all it shows: no reading ahead through the clip.
+            preload="metadata"
             aria-label={label}
+            onError={() => setFailed(true)}
             onLoadedMetadata={(event) => {
               const element = event.currentTarget;
               if (element.videoWidth && element.videoHeight) {

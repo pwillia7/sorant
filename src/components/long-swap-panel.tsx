@@ -234,7 +234,7 @@ function FramePreview({ src, frame }: { src: string; frame: number }) {
       src={src}
       muted
       playsInline
-      preload="auto"
+      preload="metadata"
       onLoadedMetadata={(event) => {
         event.currentTarget.currentTime = frameSeekTime(frame);
       }}
