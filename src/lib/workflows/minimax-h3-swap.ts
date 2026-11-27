@@ -489,7 +489,12 @@ const graph: ComfyGraph = {
       width: ["dimensions", 0],
       height: ["dimensions", 1],
       length: ["window", 8],
-      ref_image_size: "match",
+      // "max", not the template's "match": match shrinks the character
+      // picture to the frame's short edge, max keeps it up to 2048. In an A/B
+      // at 0.5 MP (same seed) max held the face closer to the picture, with
+      // less of the source actor's expression leaking through, at no cost
+      // in time.
+      ref_image_size: "max",
       "ref_videos.ref_video_0": ["window", 5],
       "ref_images.ref_image_0": ["reference", 0],
       vae: ["video_vae", 0],
@@ -1149,7 +1154,7 @@ export const swapParams: ParamDef[] = [
     label: "Seed",
     type: "seed",
     default: -1,
-    help: "Reuse one to get the same take again. Every window uses it.",
+    help: "Reuse one to get the same take again, at the same frame size. Every window uses it.",
     group: "Sampling",
     targets: [{ node: "plan", input: "seed" }],
   },

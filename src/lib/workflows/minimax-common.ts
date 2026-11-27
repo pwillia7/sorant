@@ -2357,7 +2357,7 @@ export function samplingParams(
       label: "Seed",
       type: "seed",
       default: -1,
-      help: "Reuse one to get the same take again.",
+      help: "Reuse one to get the same take again, at the same frame size and length. Change either and the same seed makes a different take, so try ideas with fewer steps rather than a smaller frame.",
       group: "Sampling",
       targets: [{ node: ids.noise, input: "noise_seed" }],
     },
