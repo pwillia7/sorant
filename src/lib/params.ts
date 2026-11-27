@@ -536,6 +536,13 @@ export function validateWorkflow(workflow: WorkflowDef): string[] {
     if (!has(lengthParam, "measured")) problems.push(`chain.lengthParam "${lengthParam}" is not a measured param.`);
     if (!has(segmentParam, "written")) problems.push(`chain.segmentParam "${segmentParam}" is not a written param.`);
     if (!has(clipParam, "video")) problems.push(`chain.clipParam "${clipParam}" is not a video param.`);
+    const continuous = workflow.chain.continuous;
+    if (continuous && !has(continuous.param, "toggle")) {
+      problems.push(`chain.continuous.param "${continuous.param}" is not a toggle.`);
+    }
+    if (continuous && !has(continuous.tailParam, "written")) {
+      problems.push(`chain.continuous.tailParam "${continuous.tailParam}" is not a written param.`);
+    }
     if (keepsClipSound) {
       const select = workflow.params.find((param) => param.id === keepsClipSound.param);
       const values = select?.type === "select" ? select.options.map((option) => option.value) : [];

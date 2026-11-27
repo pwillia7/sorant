@@ -48,18 +48,23 @@ export function ClipChainPanel({ chain }: { chain: ClipChainController }) {
   const joinFailed = joinJob !== undefined && ["error", "cancelled", "unknown"].includes(joinJob.phase);
   const stopped = Boolean(project.paused) || failed;
 
+  const continuous = Boolean(project.continuous);
   const hint = joined
-    ? "Joined. Redo any part with a new seed and it is joined again on its own."
+    ? continuous
+      ? "Joined. Redo a part with a new seed and it and every part after it are remixed again, then joined."
+      : "Joined. Redo any part with a new seed and it is joined again on its own."
     : joining
       ? "Every part is done. Joining them…"
       : stopped && !active
         ? "Stopped. Resume sends the parts that are not done; the finished ones are kept."
-        : "Every part is queued at once and remixed on its own, then joined. Closing this tab does not stop the queue; the join is sent when the page next sees every part done.";
+        : continuous
+          ? "Continuous: each part carries on from the end of the one before, so they run one after another, then are joined. The next part is sent from this page, so keep it open until they are done."
+          : "Every part is queued at once and remixed on its own, then joined. Closing this tab does not stop the queue; the join is sent when the page next sees every part done.";
 
   return (
     <Panel padded>
       <PanelHeader
-        title={`Remix · ${clock(project.seconds)} in ${total} parts`}
+        title={`Remix · ${clock(project.seconds)} in ${total}${continuous ? " continuous" : ""} parts`}
         hint={hint}
         action={
           <Button
@@ -159,7 +164,11 @@ export function ClipChainPanel({ chain }: { chain: ClipChainController }) {
                     className="ml-auto"
                     onClick={() => chain.redo(index)}
                     aria-label={`Redo part ${index + 1}`}
-                    title={`Remix part ${index + 1} again with a new seed. The parts are joined again once it is done.`}
+                    title={
+                      continuous && index < total - 1
+                        ? `Remix part ${index + 1} again with a new seed, and every part after it, since they carry on from it. The parts are joined again once they are done.`
+                        : `Remix part ${index + 1} again with a new seed. The parts are joined again once it is done.`
+                    }
                   >
                     <RotateCcw {...icon} /> Redo
                   </Button>

@@ -1,8 +1,8 @@
 import { isSilentClip } from "@/lib/audio-track";
-import { CHAIN_FPS, chainPartOf, MAX_CHAIN_SECONDS } from "./chain";
+import { CHAIN_FPS, CHAIN_LEAD, CHAIN_OVER_FRAMES, chainPartOf, MAX_CHAIN_SECONDS } from "./chain";
 import type { ComfyGraph } from "@/lib/comfy";
 import { hideDirectorOnly } from "./director";
-import { latentTailNodes } from "./latent-tail";
+import { latentTailNodes, TAIL_TOKENS, tailFileFor } from "./latent-tail";
 import { rewriteModelParam, rewriteNode } from "./rewrite-model";
 import type { ParamDef, ParamValue, WorkflowDef, TextParam } from "./types";
 import {
@@ -94,6 +94,10 @@ const AUDIO_KEEP_PARAM = "clip_audio_keep";
 /** One window of a long clip, written by the page. See chain.ts. */
 const SEGMENT_PARAM = "segment";
 const LENGTH_PARAM = "source_seconds";
+/** Whether a long clip's parts carry on from one another. See chain.ts. */
+const CONTINUOUS_PARAM = "continuous_parts";
+/** The previous part's latent tail, for a continuous part. Written by the page. */
+const PART_TAIL_PARAM = "part_tail";
 /** A remix keeps its clip whole unless told otherwise. */
 const AUDIO_KEEP_DEFAULT = "exact" as const;
 
@@ -145,13 +149,15 @@ This clip has no audio track, so there is no <Audio 1> this run, whatever is sai
 const segmentBlock = (values: Record<string, ParamValue>): string => {
   const part = chainPartOf(values[SEGMENT_PARAM]);
   if (!part) return "";
-  const from = part.start / CHAIN_FPS;
   const words = keepsClipSpeech(values) && String(values[WORDS_PARAM] ?? "").trim()
     ? " The words typed out for the clip cover the whole of it, not only this part: keep to the ones this part's frames show being spoken, and leave the rest out rather than squeezing them in."
     : "";
+  const carried = part.lead
+    ? ` Its first ${(part.lead / CHAIN_FPS).toFixed(1)} seconds are the end of the part before it, already remixed and held fixed: carry straight on from them, the same people, look and light, with no change at that point.`
+    : "";
   return `ONE PART OF A LONGER CLIP
 
-This video is part ${part.part} of ${part.parts} of a longer clip, starting ${from.toFixed(1)} seconds in. Every part is remixed separately with the same instruction, and the parts are joined end to end — so whatever the instruction changes has to come out the same in every part. Describe the change in the user's own terms and no more specifically than they did: the colour, garment, creature or place they named, as they named it. Do not add particulars of your own to it — an exact shade, a pattern, a make, a hairstyle — because the other parts will invent different ones, and the difference shows at the join. Do not open or close as though this were a whole video: no establishing shot, no ending beat; it begins and ends mid-action, as the source does here.${words}`;
+This video is part ${part.part} of ${part.parts} of a longer clip, starting ${((part.start - part.lead) / CHAIN_FPS).toFixed(1)} seconds in.${carried} Every part is remixed separately with the same instruction, and the parts are joined end to end — so whatever the instruction changes has to come out the same in every part. Describe the change in the user's own terms and no more specifically than they did: the colour, garment, creature or place they named, as they named it. Do not add particulars of your own to it — an exact shade, a pattern, a make, a hairstyle — because the other parts will invent different ones, and the difference shows at the join. Do not open or close as though this were a whole video: no establishing shot, no ending beat; it begins and ends mid-action, as the source does here.${words}`;
 };
 
 const graph: ComfyGraph = {
@@ -377,10 +383,114 @@ const graph: ComfyGraph = {
     _meta: { title: "Get Image Size & Count" },
   },
 
-  // The run's last 0.9 s of latents, for Extend to carry on from. See
-  // latent-tail.ts.
+  // The run's last 0.9 s of latents, for Extend — and the next continuous
+  // part of a long clip — to carry on from. See latent-tail.ts.
   ...latentTailNodes("125"),
+
+  // The continuous seam: a part of a long clip that carries on from the part
+  // before it (chain.ts). Present in every stored graph, and wired in or
+  // deleted by `finalize`, so check:nodes and the requirements see the
+  // classes it needs. The same nodes as Extend's latent seam
+  // (minimax-h3-extend.ts, 141–152), measured off this clip instead: such a
+  // part is loaded 22 frames early, so those 22 are the previous take's tail.
+  //
+  // The two tail files, by name. `part_tail` writes both.
+  "170": {
+    class_type: "LoadLatent",
+    inputs: { latent: "" },
+    _meta: { title: "Load Latent (video tail)" },
+  },
+  "171": {
+    class_type: "LoadLatent",
+    inputs: { latent: "" },
+    _meta: { title: "Load Latent (audio tail)" },
+  },
+  // Where the mask ends, in H3 tokens at the mask node's nominal 8 fps: the
+  // token count of the clip's length rounded up to the grid, as the reference
+  // node rounds it, less the 7 carried. Tokens are 5 per 17 frames, plus 2.
+  "172": {
+    class_type: "ComfyMathExpression",
+    inputs: {
+      expression: "((a + 11) // 17) * 5 + 2 - 0.875",
+      "values.a": ["163", 3],
+    },
+    _meta: { title: "Math Expression (mask end)" },
+  },
+  // Generate from the token after the tail onward; the tail itself and nothing
+  // else is held.
+  "173": {
+    class_type: "LTXVAudioVideoMask",
+    inputs: {
+      video_latent: ["170", 0],
+      video_fps: 8,
+      video_start_time: (8 * (TAIL_TOKENS - 1) + 1) / 8,
+      video_end_time: ["172", 0],
+      audio_start_time: 0,
+      audio_end_time: 0,
+      max_length: "pad",
+      existing_mask_mode: "add",
+    },
+    _meta: { title: "LTXV Audio Video Mask" },
+  },
+  // An empty AV latent of this part's length, for its audio stream's shape.
+  "174": {
+    class_type: "EmptyMiniMaxH3LatentAV",
+    inputs: { width: ["163", 1], height: ["163", 2], length: ["163", 3] },
+    _meta: { title: "Empty MiniMax H3 Latent AV" },
+  },
+  "175": {
+    class_type: "LTXVSeparateAVLatent",
+    inputs: { av_latent: ["174", 0] },
+    _meta: { title: "Separate AV Latent" },
+  },
+  "176": {
+    class_type: "LTXVFreezeLatent",
+    inputs: { latent: ["171", 0] },
+    _meta: { title: "LTXV Freeze Latent (audio tail)" },
+  },
+  "177": {
+    class_type: "LTXVConcatAVLatent",
+    inputs: { video_latent: ["173", 0], audio_latent: ["175", 1] },
+    _meta: { title: "Concat AV Latent" },
+  },
+  "178": {
+    class_type: "LTXVConcatAVLatent",
+    inputs: { video_latent: ["177", 0], audio_latent: ["176", 0] },
+    _meta: { title: "Concat AV Latent (audio tail)" },
+  },
+  // A part of a long clip, cut to exactly the frames it was loaded with:
+  // the 22 re-read frames of a continuous part off the front, and off the
+  // end whatever H3 added rounding the length up to its grid — the last
+  // part runs to the end of the clip, off the grid, and the join lays each
+  // take down whole. `finalize` writes the lead into all four.
+  "179": {
+    class_type: "ImageFromBatch",
+    inputs: { image: ["122", 0], batch_index: CHAIN_LEAD, length: ["181", 1] },
+    _meta: { title: "Image From Batch (the part's own frames)" },
+  },
+  "180": {
+    class_type: "TrimAudioDuration",
+    inputs: { audio: ["121", 0], start_index: CHAIN_LEAD / SOURCE_FPS, duration: ["182", 0] },
+    _meta: { title: "Trim Audio Duration (the part's own sound)" },
+  },
+  // Output 1 is the INT.
+  "181": {
+    class_type: "ComfyMathExpression",
+    inputs: { expression: `a - ${CHAIN_LEAD}`, "values.a": ["163", 3] },
+    _meta: { title: "Math Expression (part frames)" },
+  },
+  // Output 0 is the FLOAT.
+  "182": {
+    class_type: "ComfyMathExpression",
+    inputs: { expression: `(a - ${CHAIN_LEAD}) / ${SOURCE_FPS}`, "values.a": ["163", 3] },
+    _meta: { title: "Math Expression (part seconds)" },
+  },
 };
+
+/** The nodes only the continuous seam uses. See `finalize`. */
+const SEAM = ["170", "171", "172", "173", "174", "175", "176", "177", "178"];
+/** The nodes that cut a part of a long clip to its own frames. */
+const PART_CUT = ["179", "180", "181", "182"];
 
 /**
  * The single target every control that shapes the director's instructions
@@ -435,7 +545,7 @@ const params: ParamDef[] = [
     type: "video",
     default: "",
     required: true,
-    help: `Its size and length become the new video's. Up to 768×1344, ${MAX_CHAIN_SECONDS / 60} minutes, 100 MB. Over 20 seconds it is remixed in parts of about 10–13 seconds, joined at the end — each part is its own run, so expect a small jump at each join.`,
+    help: `Its size and length become the new video's. Up to 768×1344, ${MAX_CHAIN_SECONDS / 60} minutes, 100 MB. Over 20 seconds it is remixed in parts of about 10–13 seconds, joined at the end — each part is its own run, so expect a small jump at each join unless Continuous parts is on.`,
     group: "Source",
     targets: [{ node: VIDEO_NODE, input: "video" }],
     // The clip is the only thing that knows how long the output will be, so
@@ -461,17 +571,51 @@ const params: ParamDef[] = [
     maxLength: 32,
     group: "Source",
     targets: [
+      // A continuous part starts its lead-in early. See chain.ts.
       {
         node: VIDEO_NODE,
         input: "skip_first_frames",
-        transform: (v) => chainPartOf(v)?.start ?? 0,
+        transform: (v) => {
+          const part = chainPartOf(v);
+          return part ? part.start - part.lead : 0;
+        },
       },
       {
         node: VIDEO_NODE,
         input: "frame_load_cap",
-        transform: (v) => chainPartOf(v)?.frames ?? 0,
+        transform: (v) => {
+          const part = chainPartOf(v);
+          return part?.frames ? part.frames + part.lead : 0;
+        },
       },
       director,
+    ],
+  },
+
+  {
+    id: CONTINUOUS_PARAM,
+    label: "Continuous parts",
+    type: "toggle",
+    default: false,
+    help: "Each part carries on from the end of the one before it, as Extend does, so the joins hold: no jump in the change, the light or the sound. The parts then run one after another rather than all at once, so a long clip takes longer, and redoing a part redoes every part after it.",
+    group: "Source",
+    // Only once the clip is long enough to be cut into parts.
+    revealedBy: { param: LENGTH_PARAM, over: CHAIN_OVER_FRAMES / CHAIN_FPS },
+    scope: "browser",
+    targets: [],
+  },
+  // The previous part's latent tail, for a continuous part: written by the
+  // page after copying it across (use-clip-chain.ts), empty otherwise.
+  {
+    id: PART_TAIL_PARAM,
+    label: "Previous part's ending",
+    type: "written",
+    default: "",
+    maxLength: 512,
+    group: "Source",
+    targets: [
+      { node: "170", input: "latent", transform: (v) => (v ? tailFileFor(String(v), "video") : "") },
+      { node: "171", input: "latent", transform: (v) => (v ? tailFileFor(String(v), "audio") : "") },
     ],
   },
 
@@ -611,6 +755,7 @@ export const minimaxH3ReferenceVideo: WorkflowDef = {
     segmentParam: SEGMENT_PARAM,
     clipParam: VIDEO_PARAM,
     keepsClipSound: { param: AUDIO_KEEP_PARAM, value: "exact", fallback: AUDIO_KEEP_DEFAULT },
+    continuous: { param: CONTINUOUS_PARAM, tailParam: PART_TAIL_PARAM },
   },
   clipTarget: {
     action: "remix",
@@ -625,10 +770,33 @@ export const minimaxH3ReferenceVideo: WorkflowDef = {
    * Reference to Video sends a clip with no sound the same way, through the
    * same node class, so this is a combination the model already takes.
    */
+  /**
+   * A part of a long clip is cut to the frames it loaded before saving — a
+   * continuous one less its lead-in — and when the previous take's tail came
+   * across, a continuous part starts from it: the sampler
+   * takes the seam's latent, with the tail held, in place of the reference
+   * node's empty one. Without the tail — ComfyUI forgot the run — it is an
+   * ordinary part that happens to start 22 frames early.
+   */
   finalize(graph, values) {
     if (!clipHasAudio(values)) {
       delete graph[REFERENCE_NODE].inputs[CLIP_AUDIO_INPUT];
     }
+    const part = chainPartOf(values[SEGMENT_PARAM]);
+    const lead = part?.lead ?? 0;
+    const tail = lead > 0 && String(values[PART_TAIL_PARAM] ?? "") !== "";
+    if (tail) graph["125"].inputs.latent_image = ["178", 0];
+    else for (const id of SEAM) delete graph[id];
+    if (!part) {
+      for (const id of PART_CUT) delete graph[id];
+      return;
+    }
+    graph["179"].inputs.batch_index = lead;
+    graph["180"].inputs.start_index = lead / SOURCE_FPS;
+    graph["181"].inputs.expression = `a - ${lead}`;
+    graph["182"].inputs.expression = `(a - ${lead}) / ${SOURCE_FPS}`;
+    graph["130"].inputs.images = ["179", 0];
+    graph["130"].inputs.audio = ["180", 0];
   },
   finalizeCases: [
     { name: "a clip with sound", values: { [VIDEO_PARAM]: "clip.mp4" } },
@@ -644,6 +812,29 @@ export const minimaxH3ReferenceVideo: WorkflowDef = {
       name: "the last window of a long silent clip, turbo",
       values: { [VIDEO_PARAM]: "noaudio--clip.mp4", [SEGMENT_PARAM]: "3/3:486:0", [LENGTH_PARAM]: 4 },
       mode: { turbo: true },
+    },
+    {
+      name: "a continuous part, carrying on from the one before",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [SEGMENT_PARAM]: "2/3:243:238:22",
+        [PART_TAIL_PARAM]: "part1.mp4",
+        [LENGTH_PARAM]: 10.833,
+      },
+    },
+    {
+      name: "the last continuous part, turbo",
+      values: {
+        [VIDEO_PARAM]: "clip.mp4",
+        [SEGMENT_PARAM]: "3/3:481:0:22",
+        [PART_TAIL_PARAM]: "part2.mp4",
+        [LENGTH_PARAM]: 11.3,
+      },
+      mode: { turbo: true },
+    },
+    {
+      name: "a continuous part whose tail was forgotten",
+      values: { [VIDEO_PARAM]: "clip.mp4", [SEGMENT_PARAM]: "2/3:243:238:22", [LENGTH_PARAM]: 10.833 },
     },
     {
       name: "a silent clip, turbo",

@@ -185,7 +185,11 @@ interface ParamBase {
  * every use wants, and writing `{ param: "reference_image_1" }` four times over
  * would be ceremony around the common case.
  */
-export type ParamCondition = string | { param: string; is: ParamValue };
+export type ParamCondition =
+  | string
+  | { param: string; is: ParamValue }
+  /** That param holds a number above this — a measured clip past a length. */
+  | { param: string; over: number };
 
 /** See `pinnedBy`. */
 export interface ParamPin {
@@ -984,9 +988,9 @@ function holds(
   condition: ParamCondition,
   values: Record<string, ParamValue>,
 ): boolean {
-  return typeof condition === "string"
-    ? isSet(values[condition])
-    : values[condition.param] === condition.is;
+  if (typeof condition === "string") return isSet(values[condition]);
+  if ("over" in condition) return Number(values[condition.param]) > condition.over;
+  return values[condition.param] === condition.is;
 }
 
 export function defaultValuesFor(

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JobsController } from "@/hooks/use-jobs";
 import { clipRef } from "@/hooks/use-long-swap";
 import { isSilentClip } from "@/lib/audio-track";
+import { api } from "@/lib/client";
 import type { Job, MusicVideoPart, MusicVideoTag } from "@/lib/jobs";
 import type { RunModes } from "@/lib/workflows/modes";
 import { CHAIN_FPS, chainValue, chainWindows, type ChainWindow } from "@/lib/workflows/chain";
@@ -23,6 +24,12 @@ import type { ParamValue, WorkflowSummary } from "@/lib/workflows/types";
  *
  * A window that failed is sent again by Resume; a finished one can be redone
  * with a new seed, and the join follows on its own.
+ *
+ * With **continuous parts** on, a window carries on from the one before it
+ * (chain.ts), so it waits for that one's take: when it is done, its latent
+ * tail is copied into ComfyUI's input folder — the hand-off Extend makes —
+ * and the next window is sent with it. Redoing a window then redoes every
+ * window after it, since each was made from the take before.
  */
 
 const STORAGE_KEY = "sorant-clip-chain";
@@ -49,6 +56,8 @@ export interface ClipChainProject {
   redoneAt?: Record<number, number>;
   /** The seed a redone window runs with, in place of the project's. */
   seeds?: Record<number, number>;
+  /** Each window carries on from the take before it. See chain.ts. */
+  continuous?: boolean;
 }
 
 export interface ClipChainController {
@@ -172,22 +181,47 @@ export function useClipChain({
   const joinJob = runs.joins[0] && runs.joins[0].submittedAt >= newestTake ? runs.joins[0] : undefined;
 
   const submitWindow = useCallback(
-    (current: ClipChainProject, index: number) => {
+    (current: ClipChainProject, index: number, tail = "") => {
       if (!workflow || !chain) return Promise.resolve(null);
+      const lead = current.windows[index].lead ?? 0;
       return jobs.submit(
         workflow,
         {
           ...current.values,
           seed: current.seeds?.[index] ?? current.values.seed,
           [chain.segmentParam]: chainValue(current.windows, index),
-          // What the director is told the clip runs: this window's length.
-          [chain.lengthParam]: windowFrames(current, index) / CHAIN_FPS,
+          ...(chain.continuous ? { [chain.continuous.tailParam]: tail } : {}),
+          // What the director is told the clip runs: what this window loads.
+          [chain.lengthParam]: (windowFrames(current, index) + lead) / CHAIN_FPS,
         },
         { ...current.modes, musicVideo: tagFor(current, "scene", index) },
       );
     },
     [workflow, chain, jobs, tagFor],
   );
+
+  /**
+   * The take a continuous window carries on from, copied into ComfyUI's input
+   * folder with its latent tail beside it. Empty when ComfyUI no longer has
+   * the tail (a restart forgets run history): the window then runs without
+   * the held frames, an ordinary part.
+   */
+  const tailOf = useCallback(async (job: Job): Promise<string> => {
+    const saved = job.outputs.find(
+      (file) => (file.type || "output") === "output" && /\.(mp4|webm|mov|mkv)$/i.test(file.filename),
+    );
+    if (!saved) return "";
+    const { tail } = await api<{ ref: string; tail?: string | null }>("/api/remix", {
+      method: "POST",
+      body: JSON.stringify({
+        filename: saved.filename,
+        subfolder: saved.subfolder,
+        type: saved.type || "output",
+        tailOf: job.promptId,
+      }),
+    });
+    return tail ?? "";
+  }, []);
 
   // Send every window that has no take, in order, one submit at a time. The
   // ref holds the windows sent but not yet in the history, so a re-render
@@ -197,9 +231,14 @@ export function useClipChain({
   useEffect(() => {
     if (!project || project.paused || !workflow || busy.current) return;
     for (const index of [...pending.current]) if (windowJobs[index]) pending.current.delete(index);
-    const waiting = states.flatMap((state, index) =>
+    let waiting = states.flatMap((state, index) =>
       state === "waiting" && !pending.current.has(index) ? [index] : [],
     );
+    // A continuous window goes only once the take before it is done: the
+    // first that is ready, and the rest on a later pass.
+    if (project.continuous) {
+      waiting = waiting.filter((index) => index === 0 || states[index - 1] === "done").slice(0, 1);
+    }
     if (waiting.length === 0) return;
     busy.current = true;
     setSending(true);
@@ -209,7 +248,18 @@ export function useClipChain({
         for (const index of waiting) {
           if (live.current?.id !== project.id || live.current.paused) return;
           pending.current.add(index);
-          const promptId = await submitWindow(project, index);
+          let tail = "";
+          if (project.continuous && index > 0) {
+            try {
+              tail = await tailOf(windowJobs[index - 1]!);
+            } catch {
+              pending.current.delete(index);
+              setError(`Part ${index} could not be handed on to part ${index + 1}. Press Resume to try again.`);
+              setProject((current) => (current ? { ...current, paused: true } : current));
+              return;
+            }
+          }
+          const promptId = await submitWindow(project, index, tail);
           if (!promptId) {
             pending.current.delete(index);
             setError(`Part ${index + 1} was refused. See the message above, then press Resume.`);
@@ -222,7 +272,7 @@ export function useClipChain({
         setSending(false);
       }
     })();
-  }, [project, workflow, states, windowJobs, submitWindow]);
+  }, [project, workflow, states, windowJobs, submitWindow, tailOf]);
 
   const start = useCallback(
     (values: Record<string, ParamValue>, modes: SubmitModes) => {
@@ -234,6 +284,7 @@ export function useClipChain({
       }
       const seed = Number(values.seed);
       const prompt = String(values.prompt ?? "").trim();
+      const continuous = chain.continuous !== undefined && values[chain.continuous.param] === true;
       setError(null);
       pending.current.clear();
       setProject({
@@ -243,8 +294,9 @@ export function useClipChain({
         // make each part a different remix.
         values: { ...values, seed: Number.isInteger(seed) && seed >= 0 ? seed : randomSeed() },
         modes,
-        windows: chainWindows(seconds),
+        windows: chainWindows(seconds, continuous),
         seconds,
+        continuous,
         title: prompt ? prompt.slice(0, 80) : "Remix",
         createdAt: Date.now(),
       });
@@ -273,17 +325,28 @@ export function useClipChain({
     }
   }, [project, windowJobs, jobs]);
 
+  // A continuous window's takes after it were made from the take being
+  // replaced, so they go too, and follow it again in order.
   const redo = useCallback(
     (index: number) => {
       if (!project) return;
+      const now = Date.now();
+      const redoneAt = { ...project.redoneAt, [index]: now };
+      if (project.continuous) {
+        for (let later = index + 1; later < project.windows.length; later += 1) {
+          redoneAt[later] = now;
+          const job = windowJobs[later];
+          if (job && (job.phase === "queued" || job.phase === "running")) void jobs.cancel(job.promptId);
+        }
+      }
       setProject({
         ...project,
         paused: false,
-        redoneAt: { ...project.redoneAt, [index]: Date.now() },
+        redoneAt,
         seeds: { ...project.seeds, [index]: randomSeed() },
       });
     },
-    [project],
+    [project, windowJobs, jobs],
   );
 
   const join = useCallback(async () => {
@@ -300,8 +363,9 @@ export function useClipChain({
     const clips = windowJobs.map((job, index) => {
       const file = clipRef(job);
       if (!file) return null;
-      // A take on H3's grid can run a frame or two past its window; the join
-      // keeps the window, so the next part starts where this one should end.
+      // The graph cuts each take to its window, and the sound is cut to
+      // match here; a take measured short (a frame lost in the encode) is
+      // timed as what it is, so the sound does not run ahead of the picture.
       const planned = windowFrames(project, index) / CHAIN_FPS;
       const saved = job?.outputs.find((output) => clipRef(job)?.endsWith(`${output.filename} [output]`));
       const measured = saved?.metadata?.duration;
